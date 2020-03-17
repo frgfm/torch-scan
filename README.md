@@ -1,7 +1,7 @@
 
 # Torchscan: meaningful module insights
 
-[![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/c38368837c2b4a91a59bed8b95c1c19c)](https://www.codacy.com/manual/frgfm/torch-scan?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade)  ![Build Status](<https://github.com/frgfm/torch-scan/workflows/python-package/badge.svg) [![codecov](https://codecov.io/gh/frgfm/torch-scan/branch/master/graph/badge.svg)](https://codecov.io/gh/frgfm/torch-scan) [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://frgfm.github.io/torch-scan)
+[![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/c38368837c2b4a91a59bed8b95c1c19c)](https://www.codacy.com/manual/frgfm/torch-scan?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade)  ![Build Status](https://github.com/frgfm/torch-scan/workflows/python-package/badge.svg) [![codecov](https://codecov.io/gh/frgfm/torch-scan/branch/master/graph/badge.svg)](https://codecov.io/gh/frgfm/torch-scan) [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://frgfm.github.io/torch-scan)
 
 The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
 
@@ -13,7 +13,8 @@ The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Mo
   * [Prerequisites](#prerequisites)
   * [Installation](#installation)
 * [Usage](#usage)
-* [References](#references)
+* [Benchmark](#benchmark)
+* [Technical Roadmap](#technical-roadmap)
 * [Documentation](#documentation)
 * [Contributing](#contributing)
 * [Credits](#credits)
@@ -136,11 +137,11 @@ The above results were produced using the `scripts/benchmark.py` script.
 
 
 
-## Implementation roadmap
+## Technical roadmap
 
 The project is currently under development, here are the objectives for the next releases:
 
-- Stat support: number of parameters, RAM usage, backward pass.
+- Stat support: RAM usage for each layer, backward pass.
 - Layer support: scripted modules, RNN layers, Transformer layers, functional API operations
 - Result exporting
 - I/O handling: multiple inputs or outputs, non-tensor I/O

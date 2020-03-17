@@ -20,7 +20,7 @@ jobs:
           cache-name: cache-pkg-requirements
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-install-${{ env.cache-name }}-${{ hashFiles('./requirements.txt') }}
+          key: ${{ runner.os }}-install-${{ env.cache-name }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-install-${{ env.cache-name }}-
             ${{ runner.os }}-install-
@@ -46,7 +46,7 @@ jobs:
           cache-name: cache-pkg-requirements
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-install-${{ env.cache-name }}-${{ hashFiles('./requirements.txt') }}
+          key: ${{ runner.os }}-install-${{ env.cache-name }}-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-install-${{ env.cache-name }}-
             ${{ runner.os }}-install-

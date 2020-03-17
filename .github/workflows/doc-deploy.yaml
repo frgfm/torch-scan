@@ -38,9 +38,8 @@ jobs:
         run: |
           sphinx-build docs/source docs/build -a
 
-      - run:
-          name: Disable jekyll builds
-          command: touch docs/build/.nojekyll
+      - name: Disable jekyll builds
+        run: touch docs/build/.nojekyll
 
       - name: Install SSH Client 🔑
         uses: webfactory/ssh-agent@v0.2.0

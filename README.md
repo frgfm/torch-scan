@@ -155,7 +155,7 @@ The above results were produced using the `scripts/benchmark.py` script.
 
 The project is currently under development, here are the objectives for the next releases:
 
-- Stat support: number of parameters, RAM usage.
+- Stat support: number of parameters, RAM usage, backward pass.
 - Layer support: scripted modules, RNN layers, Transformer layers, functional API operations
 - Result exporting
 - I/O handling: multiple inputs or outputs, non-tensor I/O

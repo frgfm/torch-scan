@@ -38,7 +38,7 @@ jobs:
           pip install -e .
           pip uninstall numpy
           pip install -U numpy
-          pip install -r .circleci/requirements.txt
+          pip install -r .github/workflows/requirements.txt
           coverage run -m unittest discover test/
           coverage xml
           python-codacy-coverage -r coverage.xml

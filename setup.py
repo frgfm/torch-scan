@@ -6,7 +6,6 @@ Package installation setup
 """
 
 import os
-import sys
 import subprocess
 from setuptools import setup, find_packages
 

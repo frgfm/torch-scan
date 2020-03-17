@@ -90,7 +90,7 @@ def format_info(module_info, wrap_mode='mid'):
     info_str += thick_line
 
     # Layer information
-    for idx, layer in enumerate(module_info['layers']):
+    for layer in module_info['layers']:
         # name, type, output_shape, nb_params
         info_str += (f"{wrap_string(format_name(layer['name'], layer['depth']), 30, mode=wrap_mode):<27.25}  "
                      f"{layer['type']:<20}  {str(layer['output_shape']):<25} "

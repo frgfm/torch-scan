@@ -104,10 +104,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
             torch.cuda.synchronize()
             torch.cuda.empty_cache()
 
-            # RAM
-            # alloc_ram = torch.cuda.memory_allocated()
-            # reserved_ram = torch.cuda.memory_reserved()
-
             call_idxs[id(module)] = len(info)
 
             info.append(dict(name=name,
@@ -123,9 +119,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                              flops=0,
                              macs=0,
                              dmas=0,
-                             # ram=dict(pre=dict(allocated=alloc_ram, reserved=reserved_ram),
-                             #          fwd=dict(allocated=None, reserved=None),
-                             #          bwd=dict(allocated=None, reserved=None)),
                              is_shared=is_shared,
                              is_leaf=not any(module.children())))
 
@@ -145,8 +138,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                 tot_flops = module_flops(module, input[0], output)
                 tot_macs = module_macs(module, input[0], output)
                 tot_dmas = module_dmas(module, input[0], output)
-            # alloc_ram = torch.cuda.memory_allocated()
-            # reserved_ram = torch.cuda.memory_reserved()
             torch.cuda.synchronize()
 
             # Update layer information
@@ -155,7 +146,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
             info[fw_idx]['flops'] = tot_flops
             info[fw_idx]['macs'] = tot_macs
             info[fw_idx]['dmas'] = tot_dmas
-            # info[fw_idx]['ram']['fwd'] = dict(allocated=alloc_ram, reserved=reserved_ram)
 
             # Remove the hook by using its handle
             post_fw_handle.remove()
@@ -173,10 +163,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     # Forward
     with torch.no_grad():
         module(*input_ts)
-
-    # out = module(*input_ts)
-    # loss = out.sum()
-    # loss.backward()
 
     reserved_ram = torch.cuda.memory_reserved() / 1024 ** 2
     diff_ram = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2

@@ -1,4 +1,4 @@
-name: pkg-docs
+name: doc-deploy
 on:
   push:
     branches: master
@@ -51,7 +51,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@3.4.1
         with:
           BRANCH: gh-pages
-          FOLDER: docs/build
+          FOLDER: 'docs/build'
           COMMIT_MESSAGE: '[skip ci] Documentation updates'
           CLEAN: true
           SSH: true

@@ -56,6 +56,6 @@ jobs:
         with:
           BRANCH: gh-pages
           FOLDER: docs/build
-          COMMIT_MESSAGE: [skip ci] Updates
+          COMMIT_MESSAGE: [skip ci] Documentation updates
           CLEAN: true
           SSH: true

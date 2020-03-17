@@ -1,22 +1,7 @@
 
 # Torchscan: meaningful module insights
 
-<p align="center">
-    <a href="LICENSE" alt="License">
-        <img src="https://img.shields.io/badge/License-MIT-brightgreen.svg" /></a>
-    <a href="https://www.codacy.com/manual/frgfm/torch-scan?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade">
-        <img src="https://api.codacy.com/project/badge/Grade/c38368837c2b4a91a59bed8b95c1c19c"/></a>
-    <a href="https://circleci.com/gh/frgfm/torch-scan">
-        <img src="https://circleci.com/gh/frgfm/torch-scan.svg?style=shield" /></a>
-    <a href="https://codecov.io/gh/frgfm/torch-scan">
-  		<img src="https://codecov.io/gh/frgfm/torch-scan/branch/master/graph/badge.svg" /></a>
-    <a href="https://frgfm.github.io/torch-scan">
-  		<img src="https://img.shields.io/badge/docs-available-blue.svg" /></a>
-    <a href="https://pypi.org/project/torch-scan/" alt="Pypi">
-        <img src="https://img.shields.io/badge/pypi-v0.1.0-blue.svg" /></a>
-</p>
-
-
+[![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/c38368837c2b4a91a59bed8b95c1c19c)](https://www.codacy.com/manual/frgfm/torch-scan?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade)  ![Build Status](<https://github.com/frgfm/torch-scan/workflows/python-package/badge.svg) [![codecov](https://codecov.io/gh/frgfm/torch-scan/branch/master/graph/badge.svg)](https://codecov.io/gh/frgfm/torch-scan) [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://frgfm.github.io/torch-scan)
 
 The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
 

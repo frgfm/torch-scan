@@ -28,11 +28,11 @@ class Tester(unittest.TestCase):
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 388800)
 
-    def test_module_maccs(self):
+    def test_module_macs(self):
 
         # Check for unknown module that it returns 0 and throws a warning
         self.assertEqual(modules.module_macs(MyModule(), None, None), 0)
-        self.assertWarns(UserWarning, modules.module_maccs, MyModule(), None, None)
+        self.assertWarns(UserWarning, modules.module_macs, MyModule(), None, None)
 
         # Common unit tests
         input_t = torch.rand((1, 3, 32, 32))

@@ -14,6 +14,7 @@ The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Mo
   * [Installation](#installation)
 * [Usage](#usage)
 * [Benchmark](#benchmark)
+* [Technical Roadmap](#technical-roadmap)
 * [Documentation](#documentation)
 * [Contributing](#contributing)
 * [Credits](#credits)
@@ -136,7 +137,7 @@ The above results were produced using the `scripts/benchmark.py` script.
 
 
 
-## Implementation roadmap
+## Technical roadmap
 
 The project is currently under development, here are the objectives for the next releases:
 

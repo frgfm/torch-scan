@@ -28,6 +28,7 @@ class UtilsTester(unittest.TestCase):
         self.assertEqual(utils.unit_scale(3e14), (300, 'T'))
         self.assertEqual(utils.unit_scale(3e10), (30, 'G'))
         self.assertEqual(utils.unit_scale(3e7), (30, 'M'))
+        self.assertEqual(utils.unit_scale(15e3), (15, 'k'))
         self.assertEqual(utils.unit_scale(500), (500, ''))
 
 

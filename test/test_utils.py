@@ -12,12 +12,23 @@ class UtilsTester(unittest.TestCase):
 
     def test_wrap_string(self):
 
-        string = '.'.join(['a' for _ in range(10)])
+        example = '.'.join(['a' for _ in range(10)])
         max_len = 10
         wrap = '[...]'
 
-        self.assertEqual(utils.wrap_string(string, max_len, mode='end'), string[:max_len - len(wrap)] + wrap)
-        self.assertEqual(utils.wrap_string(string, max_len, mode='mid'), f"{string[:max_len - 2 - len(wrap)]}{wrap}.a")
+        self.assertEqual(utils.wrap_string(example, max_len, mode='end'),
+                         example[:max_len - len(wrap)] + wrap)
+        self.assertEqual(utils.wrap_string(example, max_len, mode='mid'),
+                         f"{example[:max_len - 2 - len(wrap)]}{wrap}.a")
+        self.assertEqual(utils.wrap_string(example, len(example), mode='end'), example)
+        self.assertRaises(ValueError, utils.wrap_string, example, max_len, mode='test')
+
+    def test_unit_scale(self):
+
+        self.assertEqual(utils.unit_scale(3e14), (300, 'T'))
+        self.assertEqual(utils.unit_scale(3e10), (30, 'G'))
+        self.assertEqual(utils.unit_scale(3e7), (30, 'M'))
+        self.assertEqual(utils.unit_scale(500), (500, ''))
 
 
 if __name__ == '__main__':

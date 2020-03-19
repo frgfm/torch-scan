@@ -45,6 +45,8 @@ def module_flops(module, input, output):
         return flops_tanh(module, input, output)
     elif isinstance(module, nn.Sigmoid):
         return flops_sigmoid(module, input, output)
+    elif isinstance(module, _ConvTransposeNd):
+        return flops_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return flops_convnd(module, input, output)
     elif isinstance(module, _BatchNorm):
@@ -124,6 +126,19 @@ def flops_dropout(module, input, output):
         return input.numel()
     else:
         return 0
+
+
+def flops_convtransposend(module, input, output):
+    """FLOPs estimation for `torch.nn.modules.conv._ConvTranposeNd`"""
+
+    # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
+    # Define min and max sizes
+    padding_flops = len(module.kernel_size) * 8
+
+    # Once padding is determined, the operations are almost identical to those of a convolution
+    conv_flops = flops_convnd(module, input, output)
+
+    return padding_flops + conv_flops
 
 
 def flops_convnd(module, input, output):

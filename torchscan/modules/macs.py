@@ -32,6 +32,8 @@ def module_macs(module, input, output):
         return macs_linear(module, input, output)
     elif isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid)):
         return 0
+    elif isinstance(module, _ConvTransposeNd):
+        return macs_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return macs_convnd(module, input, output)
     elif isinstance(module, _BatchNorm):
@@ -58,6 +60,19 @@ def macs_linear(module, input, output):
     mm_mac = input.shape[0] * output.shape[1] * input.shape[1]
 
     return mm_mac
+
+
+def macs_convtransposend(module, input, output):
+    """MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
+
+    # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
+    # Define min and max sizes, then subtract them
+    padding_flops = len(module.kernel_size) * 4
+
+    # Rest of the operations are almost identical to a convolution (given the padding)
+    conv_macs = macs_convnd(module, input, output)
+
+    return padding_macs + conv_macs
 
 
 def macs_convnd(module, input, output):

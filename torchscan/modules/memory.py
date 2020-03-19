@@ -42,6 +42,8 @@ def module_dmas(module, input, output):
         return dmas_sigmoid(module, input, output)
     elif isinstance(module, nn.Tanh):
         return dmas_tanh(module, input, output)
+    elif isinstance(module, _ConvTransposeNd):
+        return dmas_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return dmas_convnd(module, input, output)
     elif isinstance(module, _BatchNorm):
@@ -139,7 +141,21 @@ def dmas_dropout(module, input, output):
     return input_dma + ops_dma + output_dma
 
 
-def dma_convnd(module, input, output):
+def dmas_convtransposend(module, input, output):
+    """DMAs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
+
+    # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
+    # Access stride, padding and kernel_size
+    in_padding = len(module.kernel_size) * 4
+    out_padding = len(module.kernel_size)
+
+    # The rest is like a classic convolution
+    conv_dmas = dmas_convnd(module, input, output)
+
+    return in_padding + out_padding + conv_dmas
+
+
+def dmas_convnd(module, input, output):
     """DMAs estimation for `torch.nn.modules.conv._ConvNd`"""
 
     # Each output element required K ** 2 memory access of each input channel

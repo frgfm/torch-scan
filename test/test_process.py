@@ -9,7 +9,7 @@ class Tester(unittest.TestCase):
     def test_get_process_gpu_ram(self):
 
         if torch.cuda.is_initialized:
-            self.assertGreater(process.get_process_gpu_ram(os.getpid()), 0)
+            self.assertGreaterEqual(process.get_process_gpu_ram(os.getpid()), 0)
         else:
             self.assertEqual(process.get_process_gpu_ram(os.getpid()), 0)
 

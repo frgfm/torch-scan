@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.utils &mdash; torchscan 0.1.0a0+f869f4a-git documentation</title>
+  <title>torchscan.utils &mdash; torchscan 0.1.0a0+9b69c45-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.0a0+f869f4a
+                0.1.0a0+9b69c45
               </div>
             
           
@@ -229,6 +229,8 @@
         <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span>
     <span class="k">elif</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e6</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e6</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span>
+    <span class="k">elif</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e3</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e3</span><span class="p">,</span> <span class="s1">&#39;k&#39;</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">val</span><span class="p">,</span> <span class="s1">&#39;&#39;</span>
 

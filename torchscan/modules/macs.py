@@ -10,7 +10,7 @@ from operator import mul
 from functools import reduce
 
 from torch import nn
-from torch.nn.modules.conv import _ConvNd
+from torch.nn.modules.conv import _ConvNd, _ConvTransposeMixin  # renamed to _ConvTransposeNd in next release
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
 
@@ -32,7 +32,7 @@ def module_macs(module, input, output):
         return macs_linear(module, input, output)
     elif isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid)):
         return 0
-    elif isinstance(module, _ConvTransposeNd):
+    elif isinstance(module, _ConvTransposeMixin):
         return macs_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return macs_convnd(module, input, output)

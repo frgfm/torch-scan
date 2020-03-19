@@ -9,10 +9,10 @@ import warnings
 from operator import mul
 from functools import reduce
 
-from torch.nn.modules.conv import _ConvNd
+from torch import nn
+from torch.nn.modules.conv import _ConvNd, _ConvTransposeMixin  # renamed to _ConvTransposeNd in next release
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
-from torch.nn import Linear, ReLU, ELU, LeakyReLU, ReLU6, Tanh, Sigmoid, Dropout
 
 
 __all__ = ['module_flops']
@@ -29,20 +29,24 @@ def module_flops(module, input, output):
         int: number of FLOPs
     """
 
-    if isinstance(module, Linear):
+    if isinstance(module, nn.Identity):
+        return 0
+    elif isinstance(module, nn.Linear):
         return flops_linear(module, input, output)
-    elif isinstance(module, ReLU):
+    elif isinstance(module, nn.ReLU):
         return flops_relu(module, input, output)
-    elif isinstance(module, ELU):
+    elif isinstance(module, nn.ELU):
         return flops_elu(module, input, output)
-    elif isinstance(module, LeakyReLU):
+    elif isinstance(module, nn.LeakyReLU):
         return flops_leakyrelu(module, input, output)
-    elif isinstance(module, ReLU6):
+    elif isinstance(module, nn.ReLU6):
         return flops_relu6(module, input, output)
-    elif isinstance(module, Tanh):
+    elif isinstance(module, nn.Tanh):
         return flops_tanh(module, input, output)
-    elif isinstance(module, Sigmoid):
+    elif isinstance(module, nn.Sigmoid):
         return flops_sigmoid(module, input, output)
+    elif isinstance(module, _ConvTransposeMixin):
+        return flops_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return flops_convnd(module, input, output)
     elif isinstance(module, _BatchNorm):
@@ -55,7 +59,7 @@ def module_flops(module, input, output):
         return flops_adaptive_maxpool(module, input, output)
     elif isinstance(module, _AdaptiveAvgPoolNd):
         return flops_adaptive_avgpool(module, input, output)
-    elif isinstance(module, Dropout):
+    elif isinstance(module, nn.Dropout):
         return flops_dropout(module, input, output)
     else:
         warnings.warn(f'Module type not supported: {module.__class__.__name__}')
@@ -122,6 +126,19 @@ def flops_dropout(module, input, output):
         return input.numel()
     else:
         return 0
+
+
+def flops_convtransposend(module, input, output):
+    """FLOPs estimation for `torch.nn.modules.conv._ConvTranposeNd`"""
+
+    # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
+    # Define min and max sizes
+    padding_flops = len(module.kernel_size) * 8
+
+    # Once padding is determined, the operations are almost identical to those of a convolution
+    conv_flops = flops_convnd(module, input, output)
+
+    return padding_flops + conv_flops
 
 
 def flops_convnd(module, input, output):

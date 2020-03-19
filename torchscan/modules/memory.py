@@ -6,7 +6,6 @@ Module DMAs
 """
 
 import warnings
-from sys import getsizeof
 from operator import mul
 from functools import reduce
 

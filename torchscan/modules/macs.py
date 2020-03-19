@@ -67,7 +67,7 @@ def macs_convtransposend(module, input, output):
 
     # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
     # Define min and max sizes, then subtract them
-    padding_flops = len(module.kernel_size) * 4
+    padding_macs = len(module.kernel_size) * 4
 
     # Rest of the operations are almost identical to a convolution (given the padding)
     conv_macs = macs_convnd(module, input, output)

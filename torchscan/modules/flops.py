@@ -191,7 +191,7 @@ def flops_adaptive_maxpool(module, input, output):
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
 
     # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size - o_size * (i_size // o_size) + 1
+    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], module.output_size))
 
     # for each spatial output element, check max element in kernel scope
@@ -202,7 +202,7 @@ def flops_adaptive_avgpool(module, input, output):
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
 
     # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size - o_size * (i_size // o_size) + 1
+    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], module.output_size))
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size

@@ -54,10 +54,12 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     p = next(module.parameters())
     device = p.device
 
-    # Process RAM - allocator RAM
-    cuda_overhead = get_process_gpu_ram(os.getpid()) - (torch.cuda.memory_reserved() / 1024 ** 2)
-    # Allocator RAM - Used RAM
-    framework_overhead = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2
+    cuda_overhead, framework_overhead = 0, 0
+    if torch.cuda.is_available():
+        # Process RAM - allocator RAM
+        cuda_overhead = get_process_gpu_ram(os.getpid()) - (torch.cuda.memory_reserved() / 1024 ** 2)
+        # Allocator RAM - Used RAM
+        framework_overhead = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2
 
     # input
     if isinstance(input_shape[0], int):
@@ -101,9 +103,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                     else:
                         is_shared = True
 
-            torch.cuda.synchronize()
-            torch.cuda.empty_cache()
-
             call_idxs[id(module)] = len(info)
 
             info.append(dict(name=name,
@@ -138,7 +137,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                 tot_flops = module_flops(module, input[0], output)
                 tot_macs = module_macs(module, input[0], output)
                 tot_dmas = module_dmas(module, input[0], output)
-            torch.cuda.synchronize()
 
             # Update layer information
             info[fw_idx]['output_shape'] = (-1, *output.shape[1:])
@@ -164,11 +162,12 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     with torch.no_grad():
         module(*input_ts)
 
-    reserved_ram = torch.cuda.memory_reserved() / 1024 ** 2
-    diff_ram = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2
-
-    torch.cuda.synchronize()
-    torch.cuda.empty_cache()
+    reserved_ram, diff_ram = 0, 0
+    if torch.cuda.is_available():
+        reserved_ram = torch.cuda.memory_reserved() / 1024 ** 2
+        diff_ram = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
 
     grad_params, nograd_params, param_size = 0, 0, 0
     num_buffers, buffer_size = 0, 0

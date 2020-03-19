@@ -66,6 +66,8 @@ def unit_scale(val):
         return val / 1e9, 'G'
     elif val // 1e6 > 0:
         return val / 1e6, 'M'
+    elif val // 1e3 > 0:
+        return val / 1e3, 'k'
     else:
         return val, ''
 

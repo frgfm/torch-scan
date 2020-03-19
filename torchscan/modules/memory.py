@@ -190,7 +190,7 @@ def dma_adaptive_pool(module, input, output):
     """DMAs estimation for adaptive spatial pooling modules"""
 
     # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size - o_size * (i_size // o_size) + 1
+    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], module.output_size))
     # Each output element required K ** 2 memory accesses
     input_dma = reduce(mul, kernel_size) * output.numel()

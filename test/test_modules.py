@@ -92,13 +92,31 @@ class Tester(unittest.TestCase):
         self.assertWarns(UserWarning, modules.module_dmas, MyModule(), None, None)
 
         # Common unit tests
-        input_t = torch.rand((1, 3, 32, 32))
+        # Linear
         self.assertEqual(modules.module_dmas(nn.Linear(8, 4), torch.zeros((1, 8)), torch.zeros((1, 4))),
                          4 * (8 + 1) + 8 + 4)
+        # Activation
         self.assertEqual(modules.module_dmas(nn.ReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 8 * 2)
         self.assertEqual(modules.module_dmas(nn.ReLU(inplace=True), torch.zeros((1, 8)), None), 8)
+        self.assertEqual(modules.module_dmas(nn.ELU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 17)
+        self.assertEqual(modules.module_dmas(nn.Sigmoid(), torch.zeros((1, 8)), torch.zeros((1, 8))), 16)
+        self.assertEqual(modules.module_dmas(nn.Tanh(), torch.zeros((1, 8)), torch.zeros((1, 8))), 24)
+        # Conv
+        input_t = torch.rand((1, 3, 32, 32))
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_dmas(mod, input_t, mod(input_t)), 201824)
+        # BN
+        self.assertEqual(modules.module_dmas(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
+                         32 + 17 + 1 + 16 + 17 + 32)
+
+        # Pooling
+        self.assertEqual(modules.module_dmas(nn.MaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         4 * 32 + 32)
+        self.assertEqual(modules.module_dmas(nn.AdaptiveMaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         4 * 32 + 32)
+
+        # Dropout
+        self.assertEqual(modules.module_dmas(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 17)
 
 
 if __name__ == '__main__':

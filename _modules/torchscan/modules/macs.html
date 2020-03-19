@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules.macs &mdash; torchscan 0.1.0a0+9b69c45-git documentation</title>
+  <title>torchscan.modules.macs &mdash; torchscan 0.1.0a0+16b7077-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.0a0+9b69c45
+                0.1.0a0+16b7077
               </div>
             
           
@@ -172,10 +172,10 @@
 <span class="kn">from</span> <span class="nn">operator</span> <span class="kn">import</span> <span class="n">mul</span>
 <span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">reduce</span>
 
-<span class="kn">from</span> <span class="nn">torch.nn.modules.conv</span> <span class="kn">import</span> <span class="n">_ConvNd</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">torch.nn.modules.conv</span> <span class="kn">import</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="n">_ConvTransposeMixin</span>  <span class="c1"># renamed to _ConvTransposeNd in next release</span>
 <span class="kn">from</span> <span class="nn">torch.nn.modules.batchnorm</span> <span class="kn">import</span> <span class="n">_BatchNorm</span>
 <span class="kn">from</span> <span class="nn">torch.nn.modules.pooling</span> <span class="kn">import</span> <span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span>
-<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">Linear</span><span class="p">,</span> <span class="n">ReLU</span><span class="p">,</span> <span class="n">ELU</span><span class="p">,</span> <span class="n">LeakyReLU</span><span class="p">,</span> <span class="n">ReLU6</span><span class="p">,</span> <span class="n">Tanh</span><span class="p">,</span> <span class="n">Sigmoid</span><span class="p">,</span> <span class="n">Dropout</span>
 
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;module_macs&#39;</span><span class="p">]</span>
@@ -191,11 +191,12 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        int: number of MACs</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">Linear</span><span class="p">):</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">ELU</span><span class="p">,</span> <span class="n">LeakyReLU</span><span class="p">,</span> <span class="n">ReLU6</span><span class="p">,</span> <span class="n">Tanh</span><span class="p">,</span> <span class="n">Sigmoid</span><span class="p">)):</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">)):</span>
         <span class="k">return</span> <span class="mi">0</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_ConvTransposeMixin</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_ConvNd</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_BatchNorm</span><span class="p">):</span>
@@ -208,7 +209,7 @@
         <span class="k">return</span> <span class="n">macs_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">macs_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">Dropout</span><span class="p">):</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">):</span>
         <span class="k">return</span> <span class="mi">0</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
@@ -222,6 +223,19 @@
     <span class="n">mm_mac</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
 
     <span class="k">return</span> <span class="n">mm_mac</span>
+
+
+<span class="k">def</span> <span class="nf">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`&quot;&quot;&quot;</span>
+
+    <span class="c1"># Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)</span>
+    <span class="c1"># Define min and max sizes, then subtract them</span>
+    <span class="n">padding_macs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span>
+
+    <span class="c1"># Rest of the operations are almost identical to a convolution (given the padding)</span>
+    <span class="n">conv_macs</span> <span class="o">=</span> <span class="n">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">padding_macs</span> <span class="o">+</span> <span class="n">conv_macs</span>
 
 
 <span class="k">def</span> <span class="nf">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>

@@ -23,8 +23,33 @@ class Tester(unittest.TestCase):
                          4 * (2 * 8 - 1) + 4)
         self.assertEqual(modules.module_flops(nn.Linear(8, 4, bias=False), torch.zeros((1, 8)), torch.zeros((1, 4))),
                          4 * (2 * 8 - 1))
-        self.assertEqual(modules.module_flops(nn.ReLU(), torch.zeros((1, 8)), torch.zeros((1, 4))),
-                         8)
+        # Activations
+        self.assertEqual(modules.module_flops(nn.ReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 8)
+        self.assertEqual(modules.module_flops(nn.ELU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 48)
+        self.assertEqual(modules.module_flops(nn.LeakyReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 32)
+        self.assertEqual(modules.module_flops(nn.ReLU6(), torch.zeros((1, 8)), torch.zeros((1, 8))), 16)
+        self.assertEqual(modules.module_flops(nn.Tanh(), torch.zeros((1, 8)), torch.zeros((1, 8))), 48)
+        self.assertEqual(modules.module_flops(nn.Sigmoid(), torch.zeros((1, 8)), torch.zeros((1, 8))), 32)
+
+        # BN
+        self.assertEqual(modules.module_flops(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
+                         144 + 32 + 32 * 3 + 48)
+
+        # Pooling
+        self.assertEqual(modules.module_flops(nn.MaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         3 * 32)
+        self.assertEqual(modules.module_flops(nn.AvgPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         5 * 32)
+        self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         3 * 32)
+        self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         5 * 32)
+
+        # Dropout
+        self.assertEqual(modules.module_flops(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 8)
+        self.assertEqual(modules.module_flops(nn.Dropout(p=0), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
+
+        # Conv
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 388800)
 

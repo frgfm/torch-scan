@@ -9,10 +9,10 @@ import warnings
 from operator import mul
 from functools import reduce
 
+from torch import nn
 from torch.nn.modules.conv import _ConvNd
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
-from torch.nn import Linear, ReLU, ELU, LeakyReLU, ReLU6, Tanh, Sigmoid, Dropout
 
 
 __all__ = ['module_macs']
@@ -28,10 +28,9 @@ def module_macs(module, input, output):
     Returns:
         int: number of MACs
     """
-
-    if isinstance(module, Linear):
+    if isinstance(module, nn.Linear):
         return macs_linear(module, input, output)
-    elif isinstance(module, (ReLU, ELU, LeakyReLU, ReLU6, Tanh, Sigmoid)):
+    elif isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid)):
         return 0
     elif isinstance(module, _ConvNd):
         return macs_convnd(module, input, output)
@@ -45,7 +44,7 @@ def module_macs(module, input, output):
         return macs_adaptive_maxpool(module, input, output)
     elif isinstance(module, _AdaptiveAvgPoolNd):
         return macs_adaptive_avgpool(module, input, output)
-    elif isinstance(module, Dropout):
+    elif isinstance(module, nn.Dropout):
         return 0
     else:
         warnings.warn(f'Module type not supported: {module.__class__.__name__}')

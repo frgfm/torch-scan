@@ -35,13 +35,17 @@ class Tester(unittest.TestCase):
                          144 + 32 + 32 * 3 + 48)
 
         # Pooling
-        self.assertEqual(modules.module_flops(nn.MaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_flops(nn.MaxPool2d((2, 2)),
+                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
-        self.assertEqual(modules.module_flops(nn.AvgPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_flops(nn.AvgPool2d((2, 2)),
+                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
-        self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d((2, 2)),
+                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
-        self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d((2, 2)),
+                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
 
         # Dropout
@@ -73,13 +77,17 @@ class Tester(unittest.TestCase):
                          64 + 24 + 56 + 32)
 
         # Pooling
-        self.assertEqual(modules.module_macs(nn.MaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_macs(nn.MaxPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
-        self.assertEqual(modules.module_macs(nn.AvgPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_macs(nn.AvgPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
-        self.assertEqual(modules.module_macs(nn.AdaptiveMaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_macs(nn.AdaptiveMaxPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
-        self.assertEqual(modules.module_macs(nn.AdaptiveAvgPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_macs(nn.AdaptiveAvgPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
 
         # Dropout
@@ -110,9 +118,11 @@ class Tester(unittest.TestCase):
                          32 + 17 + 1 + 16 + 17 + 32)
 
         # Pooling
-        self.assertEqual(modules.module_dmas(nn.MaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_dmas(nn.MaxPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          4 * 32 + 32)
-        self.assertEqual(modules.module_dmas(nn.AdaptiveMaxPool2d((2, 2)), torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+        self.assertEqual(modules.module_dmas(nn.AdaptiveMaxPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          4 * 32 + 32)
 
         # Dropout

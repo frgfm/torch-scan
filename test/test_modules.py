@@ -57,6 +57,9 @@ class Tester(unittest.TestCase):
         input_t = torch.rand((1, 3, 32, 32))
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 388800)
+        # ConvTranspose
+        mod = nn.ConvTranspose2d(3, 8, 3)
+        self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 499408)
 
     def test_module_macs(self):
 
@@ -73,6 +76,9 @@ class Tester(unittest.TestCase):
         input_t = torch.rand((1, 3, 32, 32))
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_macs(mod, input_t, mod(input_t)), 194400)
+        # ConvTranspose
+        mod = nn.ConvTranspose2d(3, 8, 3)
+        self.assertEqual(modules.module_macs(mod, input_t, mod(input_t)), 249704)
         # BN
         self.assertEqual(modules.module_macs(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
                          64 + 24 + 56 + 32)
@@ -115,6 +121,9 @@ class Tester(unittest.TestCase):
         input_t = torch.rand((1, 3, 32, 32))
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_dmas(mod, input_t, mod(input_t)), 201824)
+        # ConvTranspose
+        mod = nn.ConvTranspose2d(3, 8, 3)
+        self.assertEqual(modules.module_dmas(mod, input_t, mod(input_t)), 259178)
         # BN
         self.assertEqual(modules.module_dmas(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
                          32 + 17 + 1 + 16 + 17 + 32)

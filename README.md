@@ -147,15 +147,27 @@ The above results were produced using the `scripts/benchmark.py` script.
 
 The project is currently under development, here are the objectives for the next releases:
 
-- Stat support: RAM usage for each layer, backward pass.
-- Support of `torch.nn.Module` layers: ConvTranspose, Identity, Upsample, PixelShuffle, GroupNorm, recurrent layers, Embedding, Transformers
-- Support of `torch.nn.functional` operations
-- Support of scripted modules 
-- Result exporting
-- I/O handling: multiple inputs or outputs, non-tensor I/O
-- Package distribution: add a conda package
-- Add computational graph (cf. [pytorchviz](https://github.com/szagoruyko/pytorchviz))
-- Shared parameter support (cf. [discussion](https://discuss.pytorch.org/t/repeated-model-layers-real-or-torchsummary-bug/26489))
+- [x] Support of `torch.nn.Module` layers: ConvTranspose, Identity.
+
+- [ ] Package distribution: add a conda package.
+
+- [ ] Shared parameter support (cf. [discussion](https://discuss.pytorch.org/t/repeated-model-layers-real-or-torchsummary-bug/26489))
+
+- [ ] Result exporting: add a csv export option.
+
+- [ ] Forward pass stat support: RAM usage for each layer, on forward pass.
+
+- [ ] Backward pass stat support: RAM usage for each layer, on backward pass.
+
+- [ ] Support of `torch.nn.Module` layers: GroupNorm, Upsample, PixelShuffle, RNN, LSTM, GRU, Embedding, Transformer.
+
+- [ ] Support of scripted modules
+
+- [ ] Support of `torch.nn` functional API
+
+- [ ] I/O handling: multiple inputs or outputs, non-tensor I/O
+
+- [ ] Add computational graph (cf. [pytorchviz](https://github.com/szagoruyko/pytorchviz))
 
 
 

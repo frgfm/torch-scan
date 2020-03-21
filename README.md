@@ -89,6 +89,12 @@ ________________________________________________________________________________
 
 Results are aggregated to the selected depth for improved readability.
 
+For reference, here are explanations of a few acronyms:
+
+- **FLOPs**: floating-point operations (not to be confused with FLOPS which is FLOPs per second)
+- **MACs**: mutiply-accumulate operations (cf. [wikipedia](https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation))
+- **DMAs**: direct memory accesses (many argue that it is more relevant than FLOPs or MACs to compare model inference speeds cf. [wikipedia](https://en.wikipedia.org/wiki/Direct_memory_access))
+
 
 
 ## Benchmark

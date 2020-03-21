@@ -10,7 +10,7 @@ import subprocess
 from setuptools import setup, find_packages
 
 
-version = '0.1.0a0'
+version = '0.2.0a0'
 sha = 'Unknown'
 package_name = 'torchscan'
 
@@ -39,8 +39,9 @@ write_version_file()
 with open('README.md') as f:
     readme = f.read()
 
-with open('requirements.txt') as f:
-    requirements = f.read().splitlines()
+requirements = [
+    'torch>=1.1.0'
+]
 
 setup(
     # Metadata

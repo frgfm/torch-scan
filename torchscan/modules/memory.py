@@ -32,7 +32,7 @@ def module_dmas(module, input, output):
 
     if isinstance(module, nn.Identity):
         return dmas_identity(module, input, output)
-    if isinstance(module, nn.Linear):
+    elif isinstance(module, nn.Linear):
         return dmas_linear(module, input, output)
     elif isinstance(module, (nn.ReLU, nn.ReLU6)):
         return dmas_relu(module, input, output)

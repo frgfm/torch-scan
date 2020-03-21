@@ -39,8 +39,9 @@ write_version_file()
 with open('README.md') as f:
     readme = f.read()
 
-with open('requirements.txt') as f:
-    requirements = f.read().splitlines()
+requirements = [
+    'torch>=1.1.0'
+]
 
 setup(
     # Metadata

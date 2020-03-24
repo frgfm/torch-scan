@@ -1,11 +1,12 @@
-import unittest
 import os
-from torchscan import process
+import unittest
+
 import torch
+
+from torchscan import process
 
 
 class Tester(unittest.TestCase):
-
     def test_get_process_gpu_ram(self):
 
         if torch.cuda.is_initialized:

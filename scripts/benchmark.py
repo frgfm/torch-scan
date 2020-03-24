@@ -7,8 +7,8 @@ Torchvision benchmark
 
 import torch
 from torchvision import models
-from torchscan import crawl_module
 
+from torchscan import crawl_module
 
 TORCHVISION_MODELS = [
     'alexnet',

@@ -6,8 +6,8 @@ Module MACs
 """
 
 import warnings
-from operator import mul
 from functools import reduce
+from operator import mul
 
 from torch import nn
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeMixin  # renamed to _ConvTransposeNd in next release

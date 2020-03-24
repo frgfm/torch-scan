@@ -1,12 +1,13 @@
-import unittest
 import io
 import sys
+import unittest
+
 import torch.nn as nn
+
 from torchscan import crawler
 
 
 class UtilsTester(unittest.TestCase):
-
     def test_apply(self):
         multi_convs = nn.Sequential(nn.Conv2d(16, 32, 3), nn.Conv2d(32, 64, 3))
         mod = nn.Sequential(nn.Conv2d(3, 16, 3), multi_convs)

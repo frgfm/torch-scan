@@ -131,3 +131,5 @@ dmypy.json
 
 # Package version
 /torchscan/version.py
+# Conda distribution
+conda-dist/

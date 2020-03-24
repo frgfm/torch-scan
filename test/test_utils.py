@@ -1,9 +1,9 @@
 import unittest
+
 from torchscan import utils
 
 
 class UtilsTester(unittest.TestCase):
-
     def test_format_name(self):
         name = 'mymodule'
         self.assertEqual(utils.format_name(name), name)

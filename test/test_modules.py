@@ -1,6 +1,8 @@
 import unittest
+
 import torch
 from torch import nn
+
 from torchscan import modules
 
 
@@ -10,7 +12,6 @@ class MyModule(nn.Module):
 
 
 class Tester(unittest.TestCase):
-
     def test_module_flops(self):
 
         # Check for unknown module that it returns 0 and throws a warning

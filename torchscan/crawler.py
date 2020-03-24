@@ -6,9 +6,10 @@ Module crawler
 """
 
 import os
+
 import torch
 
-from .modules import module_flops, module_macs, module_dmas
+from .modules import module_dmas, module_flops, module_macs
 from .process import get_process_gpu_ram
 from .utils import aggregate_info, format_info
 

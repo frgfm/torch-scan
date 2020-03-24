@@ -37,6 +37,12 @@ You can install the package using [pypi](https://pypi.org/project/torch-scan/) a
 pip install torchscan
 ```
 
+or using [conda](https://anaconda.org/frgfm/torchscan):
+
+```shell
+conda install -c frgfm torchscan
+```
+
 
 
 ## Usage

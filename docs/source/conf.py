@@ -76,6 +76,7 @@ html_theme_options = {
     'collapse_navigation': False,
     'display_version': True,
     'logo_only': False,
+    'analytics_id': 'UA-148140560-3',
 }
 
 

@@ -143,26 +143,26 @@ def aggregate_info(info, max_depth):
     """
 
     if not any(layer['depth'] == max_depth for layer in info['layers']):
-        raise ValueError(f"The `max_depth` argument cannot be higher than module depth.")
+        raise ValueError("The `max_depth` argument cannot be higher than module depth.")
 
     for fw_idx, layer in enumerate(info['layers']):
         # Need to aggregate information
         if not layer['is_leaf'] and layer['depth'] == max_depth:
             grad_p, nograd_p, p_size, num_buffers, b_size = 0, 0, 0, 0, 0
             flops, macs, dmas = 0, 0, 0
-            for l in info['layers'][fw_idx + 1:]:
+            for _layer in info['layers'][fw_idx + 1:]:
                 # Children have superior depth and were hooked after parent
-                if l['depth'] <= max_depth:
+                if _layer['depth'] <= max_depth:
                     break
                 # Aggregate all information (flops, macc, ram)
-                flops += l['flops']
-                macs += l['macs']
-                dmas += l['dmas']
-                grad_p += l['grad_params']
-                nograd_p += l['nograd_params']
-                p_size += l['param_size']
-                num_buffers += l['num_buffers']
-                b_size += l['buffer_size']
+                flops += _layer['flops']
+                macs += _layer['macs']
+                dmas += _layer['dmas']
+                grad_p += _layer['grad_params']
+                nograd_p += _layer['nograd_params']
+                p_size += _layer['param_size']
+                num_buffers += _layer['num_buffers']
+                b_size += _layer['buffer_size']
 
             # Update info
             info['layers'][fw_idx]['flops'] = flops

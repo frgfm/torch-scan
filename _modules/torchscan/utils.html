@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.utils &mdash; torchscan 0.1.1a0+c351567-git documentation</title>
+  <title>torchscan.utils &mdash; torchscan 0.1.1a0+f4dd805-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1a0+c351567
+                0.1.1a0+f4dd805
               </div>
             
           
@@ -161,8 +161,7 @@
            <div itemprop="articleBody">
             
   <h1>Source code for torchscan.utils</h1><div class="highlight"><pre>
-<span></span><span class="ch">#!usr/bin/python</span>
-<span class="c1"># -*- coding: utf-8 -*-</span>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
 
 <span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Utils</span>
@@ -306,26 +305,26 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">max_depth</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The `max_depth` argument cannot be higher than module depth.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The `max_depth` argument cannot be higher than module depth.&quot;</span><span class="p">)</span>
 
     <span class="k">for</span> <span class="n">fw_idx</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]):</span>
         <span class="c1"># Need to aggregate information</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;is_leaf&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">max_depth</span><span class="p">:</span>
             <span class="n">grad_p</span><span class="p">,</span> <span class="n">nograd_p</span><span class="p">,</span> <span class="n">p_size</span><span class="p">,</span> <span class="n">num_buffers</span><span class="p">,</span> <span class="n">b_size</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
             <span class="n">flops</span><span class="p">,</span> <span class="n">macs</span><span class="p">,</span> <span class="n">dmas</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
-            <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:]:</span>
+            <span class="k">for</span> <span class="n">_layer</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:]:</span>
                 <span class="c1"># Children have superior depth and were hooked after parent</span>
-                <span class="k">if</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">max_depth</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">max_depth</span><span class="p">:</span>
                     <span class="k">break</span>
                 <span class="c1"># Aggregate all information (flops, macc, ram)</span>
-                <span class="n">flops</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span>
-                <span class="n">macs</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span>
-                <span class="n">dmas</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span>
-                <span class="n">grad_p</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span>
-                <span class="n">nograd_p</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span>
-                <span class="n">p_size</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span>
-                <span class="n">num_buffers</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span>
-                <span class="n">b_size</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">]</span>
+                <span class="n">flops</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span>
+                <span class="n">macs</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span>
+                <span class="n">dmas</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span>
+                <span class="n">grad_p</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span>
+                <span class="n">nograd_p</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span>
+                <span class="n">p_size</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span>
+                <span class="n">num_buffers</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span>
+                <span class="n">b_size</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">]</span>
 
             <span class="c1"># Update info</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">flops</span>
@@ -378,6 +377,18 @@
 
   
   
+    
+    <!-- Theme Analytics -->
+    <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-148140560-3', 'auto');
+    ga('send', 'pageview');
+    </script>
+
     
    
 

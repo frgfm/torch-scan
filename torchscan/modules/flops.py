@@ -11,7 +11,7 @@ from operator import mul
 
 from torch import nn
 from torch.nn.modules.batchnorm import _BatchNorm
-from torch.nn.modules.conv import _ConvNd, _ConvTransposeMixin  # renamed to _ConvTransposeNd in next release
+from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
 
 
@@ -45,7 +45,7 @@ def module_flops(module, input, output):
         return flops_tanh(module, input, output)
     elif isinstance(module, nn.Sigmoid):
         return flops_sigmoid(module, input, output)
-    elif isinstance(module, _ConvTransposeMixin):
+    elif isinstance(module, _ConvTransposeNd):
         return flops_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return flops_convnd(module, input, output)

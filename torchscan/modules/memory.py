@@ -11,7 +11,7 @@ from operator import mul
 
 from torch import nn
 from torch.nn.modules.batchnorm import _BatchNorm
-from torch.nn.modules.conv import _ConvNd, _ConvTransposeMixin  # renamed to _ConvTransposeNd in next release
+from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
 
 
@@ -42,7 +42,7 @@ def module_dmas(module, input, output):
         return dmas_sigmoid(module, input, output)
     elif isinstance(module, nn.Tanh):
         return dmas_tanh(module, input, output)
-    elif isinstance(module, _ConvTransposeMixin):
+    elif isinstance(module, _ConvTransposeNd):
         return dmas_convtransposend(module, input, output)
     elif isinstance(module, _ConvNd):
         return dmas_convnd(module, input, output)

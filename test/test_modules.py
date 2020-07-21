@@ -115,7 +115,6 @@ class Tester(unittest.TestCase):
                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
 
-
         # Dropout
         self.assertEqual(modules.module_macs(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
 

@@ -107,6 +107,13 @@ class Tester(unittest.TestCase):
         self.assertEqual(modules.module_macs(nn.AdaptiveAvgPool2d((2, 2)),
                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
+        # Test support integer output-size support
+        self.assertEqual(modules.module_macs(nn.AdaptiveMaxPool2d(2),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         3 * 32)
+        self.assertEqual(modules.module_macs(nn.AdaptiveAvgPool2d(2),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         5 * 32)
 
         # Dropout
         self.assertEqual(modules.module_macs(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
@@ -144,6 +151,13 @@ class Tester(unittest.TestCase):
                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          4 * 32 + 32)
         self.assertEqual(modules.module_dmas(nn.AdaptiveMaxPool2d((2, 2)),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         4 * 32 + 32)
+        # Integer output size support
+        self.assertEqual(modules.module_dmas(nn.MaxPool2d(2),
+                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         4 * 32 + 32)
+        self.assertEqual(modules.module_dmas(nn.AdaptiveMaxPool2d(2),
                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          4 * 32 + 32)
 

@@ -136,9 +136,10 @@ def macs_avgpool(module, input, output):
 def macs_adaptive_maxpool(module, input, output):
     """MACs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
 
+    o_sizes = module.output_size if isinstance(module.output_size, tuple) else (module.output_size,) * (input.ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(input.shape[2:], module.output_size))
+                        for i_size, o_size in zip(input.shape[2:], o_sizes))
 
     # for each spatial output element, check max element in kernel scope
     return output.numel() * (reduce(mul, kernel_size) - 1)
@@ -147,9 +148,10 @@ def macs_adaptive_maxpool(module, input, output):
 def macs_adaptive_avgpool(module, input, output):
     """MACs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
 
+    o_sizes = module.output_size if isinstance(module.output_size, tuple) else (module.output_size,) * (input.ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(input.shape[2:], module.output_size))
+                        for i_size, o_size in zip(input.shape[2:], o_sizes))
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return output.numel() * (reduce(mul, kernel_size) - 1 + len(kernel_size))

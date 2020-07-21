@@ -48,7 +48,15 @@ class Tester(unittest.TestCase):
         self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d((2, 2)),
                                               torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
+        # Check that single integer output size is supported
+        self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d(2),
+                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         3 * 32)
         self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d((2, 2)),
+                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         5 * 32)
+        # Check that single integer output size is supported
+        self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d(2),
                                               torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
 

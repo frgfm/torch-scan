@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules.flops &mdash; torchscan 0.1.1a0+f4dd805-git documentation</title>
+  <title>torchscan.modules.flops &mdash; torchscan 0.1.1a0+22b7868-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1a0+f4dd805
+                0.1.1a0+22b7868
               </div>
             
           
@@ -369,9 +369,10 @@
 <span class="k">def</span> <span class="nf">flops_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;FLOPs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`&quot;&quot;&quot;</span>
 
+    <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
     <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
     <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">))</span>
+                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">o_sizes</span><span class="p">))</span>
 
     <span class="c1"># for each spatial output element, check max element in kernel scope</span>
     <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
@@ -380,9 +381,10 @@
 <span class="k">def</span> <span class="nf">flops_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;FLOPs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`&quot;&quot;&quot;</span>
 
+    <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
     <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
     <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">))</span>
+                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">o_sizes</span><span class="p">))</span>
 
     <span class="c1"># for each spatial output element, sum elements in kernel scope and div by kernel size</span>
     <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_size</span><span class="p">))</span>

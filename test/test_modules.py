@@ -142,7 +142,6 @@ class Tester(unittest.TestCase):
         # Dropout
         self.assertEqual(modules.module_dmas(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 17)
 
-
     def test_module_rf(self):
 
         # Check for unknown module that it returns 0 and throws a warning
@@ -172,10 +171,10 @@ class Tester(unittest.TestCase):
 
         # Pooling
         self.assertEqual(modules.module_rf(nn.MaxPool2d((2, 2)),
-                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                           torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          (2, 2, 0))
         self.assertEqual(modules.module_rf(nn.AdaptiveMaxPool2d((2, 2)),
-                                             torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                           torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
                          (2, 2, 0))
 
         # Dropout

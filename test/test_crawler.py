@@ -54,5 +54,6 @@ class UtilsTester(unittest.TestCase):
         self.assertEqual(captured_output.getvalue().split('\n')[1].rpartition('  ')[-1], 'Receptive field')
         self.assertEqual(captured_output.getvalue().split('\n')[3].split()[-1], '3')
 
+
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,7 @@ import os
 
 import torch
 
-from .modules import module_dmas, module_flops, module_macs
+from .modules import module_dmas, module_flops, module_macs, module_rf
 from .process import get_process_gpu_ram
 from .utils import aggregate_info, format_info
 
@@ -118,6 +118,9 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                              flops=0,
                              macs=0,
                              dmas=0,
+                             rf=1,
+                             s=1,
+                             p=0,
                              is_shared=is_shared,
                              is_leaf=not any(module.children())))
 
@@ -132,11 +135,13 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
 
             if any(module.children()):
                 tot_flops, tot_macs, tot_dmas = 0, 0, 0
+                current_rf, current_stride, current_padding = 1, 1, 0
             else:
                 # Compute stats for standalone layers
                 tot_flops = module_flops(module, input[0], output)
                 tot_macs = module_macs(module, input[0], output)
                 tot_dmas = module_dmas(module, input[0], output)
+                current_rf, current_stride, current_padding = module_rf(module, input[0], output)
 
             # Update layer information
             info[fw_idx]['output_shape'] = (-1, *output.shape[1:])
@@ -144,6 +149,10 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
             info[fw_idx]['flops'] = tot_flops
             info[fw_idx]['macs'] = tot_macs
             info[fw_idx]['dmas'] = tot_dmas
+            # Compute receptive field
+            info[fw_idx]['rf'] = current_rf
+            info[fw_idx]['s'] = current_stride
+            info[fw_idx]['p'] = current_padding
 
             # Remove the hook by using its handle
             post_fw_handle.remove()

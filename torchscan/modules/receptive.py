@@ -4,6 +4,7 @@
 Module receptive field
 """
 
+import math
 import warnings
 from torch import nn
 from torch.nn.modules.batchnorm import _BatchNorm
@@ -48,8 +49,8 @@ def module_rf(module, input, output):
 
 def rf_adaptive_poolnd(module, input, output):
 
-    stride = input.shape[-1] // output.shape[-1]
-    kernel_size = 2 * (input.shape[-1] % output.shape[-1]) + 1
-    padding = (stride * (output.shape[-1] - 1) - input.shape[-1] - kernel_size) / 2
+    stride = math.ceil(input.shape[-1] / output.shape[-1])
+    kernel_size = stride
+    padding = (input.shape[-1] - kernel_size * stride) / 2
 
     return kernel_size, stride, padding

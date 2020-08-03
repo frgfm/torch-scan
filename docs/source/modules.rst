@@ -25,3 +25,10 @@ DMAs
 Related to the number of direct memory accesses during model inference
 
 .. autofunction:: module_dmas
+
+
+Receptive field
+---------------
+Related to the effective receptive field of a layer
+
+.. autofunction:: module_rf

@@ -103,6 +103,20 @@ For reference, here are explanations of a few acronyms:
 
 
 
+Additionally, for highway nets (models without multiple branches / skip connections), `torchscan` supports receptive field estimation.
+
+```python
+from torchvision.models import vgg16
+from torchscan import summary
+
+model = vgg16().eval().cuda()
+summary(model, (3, 224, 224), receptive_field=True, max_depth=1)
+```
+
+which will add the layer's receptive field (relatively to the last convolutional layer) to the summary.
+
+
+
 ## Benchmark
 
 Below are the results for classification models supported by `torchvision` for a single image with 3 color channels of size `224x224` (apart from  `inception_v3`   which uses `299x299`).
@@ -155,7 +169,7 @@ The project is currently under development, here are the objectives for the next
 
 - [x] Support of `torch.nn.Module` layers: ConvTranspose, Identity.
 
-- [ ] Package distribution: add a conda package.
+- [x] Package distribution: add a conda package.
 
 - [ ] Shared parameter support (cf. [discussion](https://discuss.pytorch.org/t/repeated-model-layers-real-or-torchsummary-bug/26489))
 

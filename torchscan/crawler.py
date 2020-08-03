@@ -215,7 +215,7 @@ def summary(module, input_shape, wrap_mode='mid', max_depth=None, receptive_fiel
         >>> import torch.nn as nn
         >>> from torchscan import summary
         >>> mod = nn.Conv2d(3, 8, 3)
-        >>> summary(mod, (3, 224, 224))
+        >>> summary(mod, (3, 224, 224), receptive_field=True)
 
     Args:
         module (torch.nn.Module): module to inspect

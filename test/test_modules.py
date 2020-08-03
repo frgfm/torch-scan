@@ -164,6 +164,44 @@ class Tester(unittest.TestCase):
         # Dropout
         self.assertEqual(modules.module_dmas(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 17)
 
+    def test_module_rf(self):
+
+        # Check for unknown module that it returns 0 and throws a warning
+        self.assertEqual(modules.module_rf(MyModule(), None, None), (1, 1, 0))
+        self.assertWarns(UserWarning, modules.module_rf, MyModule(), None, None)
+
+        # Common unit tests
+        # Linear
+        self.assertEqual(modules.module_rf(nn.Linear(8, 4), torch.zeros((1, 8)), torch.zeros((1, 4))),
+                         (1, 1, 0))
+        # Activation
+        self.assertEqual(modules.module_rf(nn.Identity(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+        self.assertEqual(modules.module_rf(nn.ReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+        self.assertEqual(modules.module_rf(nn.ELU(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+        self.assertEqual(modules.module_rf(nn.Sigmoid(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+        self.assertEqual(modules.module_rf(nn.Tanh(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+        # Conv
+        input_t = torch.rand((1, 3, 32, 32))
+        mod = nn.Conv2d(3, 8, 3)
+        self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (3, 1, 0))
+        # ConvTranspose
+        mod = nn.ConvTranspose2d(3, 8, 3)
+        self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (-3, 1, 0))
+        # BN
+        self.assertEqual(modules.module_rf(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
+                         (1, 1, 0))
+
+        # Pooling
+        self.assertEqual(modules.module_rf(nn.MaxPool2d((2, 2)),
+                                           torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         (2, 2, 0))
+        self.assertEqual(modules.module_rf(nn.AdaptiveMaxPool2d((2, 2)),
+                                           torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                         (2, 2, 0))
+
+        # Dropout
+        self.assertEqual(modules.module_rf(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+
 
 if __name__ == '__main__':
     unittest.main()

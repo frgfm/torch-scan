@@ -8,7 +8,7 @@ import os
 
 import torch
 
-from .modules import module_dmas, module_flops, module_macs
+from .modules import module_dmas, module_flops, module_macs, module_rf
 from .process import get_process_gpu_ram
 from .utils import aggregate_info, format_info
 
@@ -118,6 +118,9 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                              flops=0,
                              macs=0,
                              dmas=0,
+                             rf=1,
+                             s=1,
+                             p=0,
                              is_shared=is_shared,
                              is_leaf=not any(module.children())))
 
@@ -132,11 +135,13 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
 
             if any(module.children()):
                 tot_flops, tot_macs, tot_dmas = 0, 0, 0
+                current_rf, current_stride, current_padding = 1, 1, 0
             else:
                 # Compute stats for standalone layers
                 tot_flops = module_flops(module, input[0], output)
                 tot_macs = module_macs(module, input[0], output)
                 tot_dmas = module_dmas(module, input[0], output)
+                current_rf, current_stride, current_padding = module_rf(module, input[0], output)
 
             # Update layer information
             info[fw_idx]['output_shape'] = (-1, *output.shape[1:])
@@ -144,6 +149,10 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
             info[fw_idx]['flops'] = tot_flops
             info[fw_idx]['macs'] = tot_macs
             info[fw_idx]['dmas'] = tot_dmas
+            # Compute receptive field
+            info[fw_idx]['rf'] = current_rf
+            info[fw_idx]['s'] = current_stride
+            info[fw_idx]['p'] = current_padding
 
             # Remove the hook by using its handle
             post_fw_handle.remove()
@@ -181,6 +190,17 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
         num_buffers += b.numel()
         buffer_size += b.numel() * b.element_size()
 
+    # Update cumulative receptive field
+    _rf, _s, _p = 1, 1, 0
+    for fw_idx, _layer in enumerate(info[::-1]):
+        _rf = _layer['s'] * (_rf - 1) + _layer['rf']
+        _s *= _layer['s']
+        _p = _layer['s'] * _p + _layer['p']
+
+        info[len(info) - 1 - fw_idx]['rf'] = _rf
+        info[len(info) - 1 - fw_idx]['s'] = _s
+        info[len(info) - 1 - fw_idx]['p'] = _p
+
     return dict(overheads=dict(cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
                                framework=dict(pre=framework_overhead, fwd=diff_ram)),
                 layers=info,
@@ -188,7 +208,7 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                              num_buffers=num_buffers, buffer_size=buffer_size))
 
 
-def summary(module, input_shape, wrap_mode='mid', max_depth=None):
+def summary(module, input_shape, wrap_mode='mid', max_depth=None, receptive_field=False):
     """Print module summary for an expected input tensor shape
 
     Example::
@@ -202,6 +222,7 @@ def summary(module, input_shape, wrap_mode='mid', max_depth=None):
         input_shape (tuple<int>): expected input shapes
         wrap_mode (str, optional): if a value is too long, where the wrapping should be performed
         max_depth (int, optional): maximum depth of layer information
+        receptive_field (bool, optional): whether receptive field estimation should be performed
     """
 
     # Get the summary dict
@@ -210,4 +231,4 @@ def summary(module, input_shape, wrap_mode='mid', max_depth=None):
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)
     # Format it and print it
-    print(format_info(module_info, wrap_mode))
+    print(format_info(module_info, wrap_mode, receptive_field))

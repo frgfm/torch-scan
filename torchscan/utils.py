@@ -71,7 +71,7 @@ def unit_scale(val):
         return val, ''
 
 
-def format_info(module_info, wrap_mode='mid'):
+def format_info(module_info, wrap_mode='mid', receptive_field=False):
     """Print module summary for an expected input tensor shape
 
     Args:
@@ -81,21 +81,26 @@ def format_info(module_info, wrap_mode='mid'):
 
     # Define separating lines
     line_length = 90
+    if receptive_field:
+        line_length += 18
     thin_line = ('_' * line_length) + '\n'
     thick_line = ('=' * line_length) + '\n'
     dot_line = ('-' * line_length) + '\n'
 
     # Header
     info_str = thin_line
-    info_str += f"{'Layer':<27}  {'Type':<20}  {'Output Shape':<25} {'Param #':<15}\n"
+    if receptive_field:
+        info_str += f"{'Layer':<27}  {'Type':<20}  {'Output Shape':<25} {'Param #':<15} {'Receptive field':<15}\n"
+    else:
+        info_str += f"{'Layer':<27}  {'Type':<20}  {'Output Shape':<25} {'Param #':<15}\n"
     info_str += thick_line
 
-    # Layer information
     for layer in module_info['layers']:
         # name, type, output_shape, nb_params
         info_str += (f"{wrap_string(format_name(layer['name'], layer['depth']), 30, mode=wrap_mode):<27.25}  "
                      f"{layer['type']:<20}  {str(layer['output_shape']):<25} "
-                     f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:<15,}\n")
+                     f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:<15,}")
+        info_str += (f" {layer['rf']:<15}\n" if receptive_field else '\n')
 
     # Parameter information
     info_str += thick_line
@@ -167,6 +172,9 @@ def aggregate_info(info, max_depth):
             info['layers'][fw_idx]['flops'] = flops
             info['layers'][fw_idx]['macs'] = macs
             info['layers'][fw_idx]['dmas'] = dmas
+            info['layers'][fw_idx]['rf'] = info['layers'][fw_idx + 1]['rf']
+            info['layers'][fw_idx]['s'] = info['layers'][fw_idx + 1]['s']
+            info['layers'][fw_idx]['p'] = info['layers'][fw_idx + 1]['p']
             info['layers'][fw_idx]['grad_params'] = grad_p
             info['layers'][fw_idx]['nograd_params'] = nograd_p
             info['layers'][fw_idx]['param_size'] = p_size

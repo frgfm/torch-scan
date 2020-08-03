@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules &mdash; torchscan 0.1.1a0+56cadfb-git documentation</title>
+  <title>torchscan.modules &mdash; torchscan 0.1.1a0+4b5228b-git documentation</title>
   
 
   
@@ -62,7 +62,7 @@
             
             
               <div class="version">
-                0.1.1a0+56cadfb
+                0.1.1a0+4b5228b
               </div>
             
           
@@ -96,6 +96,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#flops">FLOPs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#macs">MACs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dmas">DMAs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#receptive-field">Receptive field</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="process.html">torchscan.process</a></li>
@@ -235,6 +236,33 @@ The implementation overhead is neglected</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>number of DMAs</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="section" id="receptive-field">
+<h2>Receptive field<a class="headerlink" href="#receptive-field" title="Permalink to this headline">¶</a></h2>
+<p>Related to the effective receptive field of a layer</p>
+<dl class="py function">
+<dt id="torchscan.modules.module_rf">
+<code class="sig-prename descclassname">torchscan.modules.</code><code class="sig-name descname">module_rf</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span></em>, <em class="sig-param"><span class="n">input</span></em>, <em class="sig-param"><span class="n">output</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/modules/receptive.html#module_rf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.modules.module_rf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Estimate the spatial receptive field of the module</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>module</strong> (<em>torch.nn.Module</em>) – PyTorch module</p></li>
+<li><p><strong>input</strong> (<em>torch.Tensor</em>) – input to the module</p></li>
+<li><p><strong>output</strong> (<em>torch.Tensor</em>) – output of the module</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>receptive field
+int: effective stride
+int: effective padding</p>
 </dd>
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p>int</p>

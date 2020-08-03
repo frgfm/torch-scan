@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.crawler &mdash; torchscan 0.1.1a0+eef08d9-git documentation</title>
+  <title>torchscan.crawler &mdash; torchscan 0.1.1a0+56cadfb-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1a0+eef08d9
+                0.1.1a0+56cadfb
               </div>
             
           
@@ -171,7 +171,7 @@
 
 <span class="kn">import</span> <span class="nn">torch</span>
 
-<span class="kn">from</span> <span class="nn">.modules</span> <span class="kn">import</span> <span class="n">module_dmas</span><span class="p">,</span> <span class="n">module_flops</span><span class="p">,</span> <span class="n">module_macs</span>
+<span class="kn">from</span> <span class="nn">.modules</span> <span class="kn">import</span> <span class="n">module_dmas</span><span class="p">,</span> <span class="n">module_flops</span><span class="p">,</span> <span class="n">module_macs</span><span class="p">,</span> <span class="n">module_rf</span>
 <span class="kn">from</span> <span class="nn">.process</span> <span class="kn">import</span> <span class="n">get_process_gpu_ram</span>
 <span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">aggregate_info</span><span class="p">,</span> <span class="n">format_info</span>
 
@@ -281,6 +281,9 @@
                              <span class="n">flops</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
                              <span class="n">macs</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
                              <span class="n">dmas</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                             <span class="n">rf</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                             <span class="n">s</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                             <span class="n">p</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
                              <span class="n">is_shared</span><span class="o">=</span><span class="n">is_shared</span><span class="p">,</span>
                              <span class="n">is_leaf</span><span class="o">=</span><span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">children</span><span class="p">())))</span>
 
@@ -295,11 +298,13 @@
 
             <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">children</span><span class="p">()):</span>
                 <span class="n">tot_flops</span><span class="p">,</span> <span class="n">tot_macs</span><span class="p">,</span> <span class="n">tot_dmas</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+                <span class="n">current_rf</span><span class="p">,</span> <span class="n">current_stride</span><span class="p">,</span> <span class="n">current_padding</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="c1"># Compute stats for standalone layers</span>
                 <span class="n">tot_flops</span> <span class="o">=</span> <span class="n">module_flops</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">output</span><span class="p">)</span>
                 <span class="n">tot_macs</span> <span class="o">=</span> <span class="n">module_macs</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">output</span><span class="p">)</span>
                 <span class="n">tot_dmas</span> <span class="o">=</span> <span class="n">module_dmas</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">output</span><span class="p">)</span>
+                <span class="n">current_rf</span><span class="p">,</span> <span class="n">current_stride</span><span class="p">,</span> <span class="n">current_padding</span> <span class="o">=</span> <span class="n">module_rf</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">output</span><span class="p">)</span>
 
             <span class="c1"># Update layer information</span>
             <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;output_shape&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
@@ -307,6 +312,10 @@
             <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tot_flops</span>
             <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tot_macs</span>
             <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">tot_dmas</span>
+            <span class="c1"># Compute receptive field</span>
+            <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_rf</span>
+            <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_stride</span>
+            <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">current_padding</span>
 
             <span class="c1"># Remove the hook by using its handle</span>
             <span class="n">post_fw_handle</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
@@ -344,6 +353,17 @@
         <span class="n">num_buffers</span> <span class="o">+=</span> <span class="n">b</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
         <span class="n">buffer_size</span> <span class="o">+=</span> <span class="n">b</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="n">b</span><span class="o">.</span><span class="n">element_size</span><span class="p">()</span>
 
+    <span class="c1"># Update cumulative receptive field</span>
+    <span class="n">_rf</span><span class="p">,</span> <span class="n">_s</span><span class="p">,</span> <span class="n">_p</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">fw_idx</span><span class="p">,</span> <span class="n">_layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">info</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">_rf</span> <span class="o">=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">_rf</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span>
+        <span class="n">_s</span> <span class="o">*=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span>
+        <span class="n">_p</span> <span class="o">=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">_p</span> <span class="o">+</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">]</span>
+
+        <span class="n">info</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_rf</span>
+        <span class="n">info</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_s</span>
+        <span class="n">info</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_p</span>
+
     <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">overheads</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">cuda</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">pre</span><span class="o">=</span><span class="n">cuda_overhead</span><span class="p">,</span> <span class="n">fwd</span><span class="o">=</span><span class="n">get_process_gpu_ram</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">())</span> <span class="o">-</span> <span class="n">reserved_ram</span><span class="p">),</span>
                                <span class="n">framework</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">pre</span><span class="o">=</span><span class="n">framework_overhead</span><span class="p">,</span> <span class="n">fwd</span><span class="o">=</span><span class="n">diff_ram</span><span class="p">)),</span>
                 <span class="n">layers</span><span class="o">=</span><span class="n">info</span><span class="p">,</span>
@@ -351,7 +371,7 @@
                              <span class="n">num_buffers</span><span class="o">=</span><span class="n">num_buffers</span><span class="p">,</span> <span class="n">buffer_size</span><span class="o">=</span><span class="n">buffer_size</span><span class="p">))</span></div>
 
 
-<div class="viewcode-block" id="summary"><a class="viewcode-back" href="../../torchscan.html#torchscan.summary">[docs]</a><span class="k">def</span> <span class="nf">summary</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">input_shape</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="s1">&#39;mid&#39;</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="viewcode-block" id="summary"><a class="viewcode-back" href="../../torchscan.html#torchscan.summary">[docs]</a><span class="k">def</span> <span class="nf">summary</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">input_shape</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="s1">&#39;mid&#39;</span><span class="p">,</span> <span class="n">max_depth</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">receptive_field</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Print module summary for an expected input tensor shape</span>
 
 <span class="sd">    Example::</span>
@@ -365,6 +385,7 @@
 <span class="sd">        input_shape (tuple&lt;int&gt;): expected input shapes</span>
 <span class="sd">        wrap_mode (str, optional): if a value is too long, where the wrapping should be performed</span>
 <span class="sd">        max_depth (int, optional): maximum depth of layer information</span>
+<span class="sd">        receptive_field (bool, optional): whether receptive field estimation should be performed</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Get the summary dict</span>
@@ -373,7 +394,7 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">max_depth</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
         <span class="n">module_info</span> <span class="o">=</span> <span class="n">aggregate_info</span><span class="p">(</span><span class="n">module_info</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">)</span>
     <span class="c1"># Format it and print it</span>
-    <span class="nb">print</span><span class="p">(</span><span class="n">format_info</span><span class="p">(</span><span class="n">module_info</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="p">))</span></div>
+    <span class="nb">print</span><span class="p">(</span><span class="n">format_info</span><span class="p">(</span><span class="n">module_info</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="p">,</span> <span class="n">receptive_field</span><span class="p">))</span></div>
 </pre></div>
 
            </div>

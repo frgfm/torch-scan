@@ -72,6 +72,8 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     input_ts = [torch.rand(1, *in_shape).to(dtype=_dtype, device=device)
                 for in_shape, _dtype in zip(input_shape, dtype)]
 
+    pre_fw_handles, post_fw_handles = [], []
+
     # Hook definition
     def _hook_info(module, depth, name):
 
@@ -124,9 +126,6 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                              is_shared=is_shared,
                              is_leaf=not any(module.children())))
 
-            # Remove the hook by using its handle
-            pre_fw_handle.remove()
-
         def _fwd_hook(module, input, output):
             """Post-forward hook"""
 
@@ -154,12 +153,9 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
             info[fw_idx]['s'] = current_stride
             info[fw_idx]['p'] = current_padding
 
-            # Remove the hook by using its handle
-            post_fw_handle.remove()
-
         # Hook only leaf children
-        pre_fw_handle = module.register_forward_pre_hook(_pre_hook)
-        post_fw_handle = module.register_forward_hook(_fwd_hook)
+        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
+        post_fw_handles.append(module.register_forward_hook(_fwd_hook))
 
     # Hook model
     info = []
@@ -170,6 +166,12 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     # Forward
     with torch.no_grad():
         module(*input_ts)
+
+    # Removes all hooks using their handles
+    for handle in pre_fw_handles:
+        handle.remove()
+    for handle in post_fw_handles:
+        handle.remove()
 
     reserved_ram, diff_ram = 0, 0
     if torch.cuda.is_available():

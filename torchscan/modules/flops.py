@@ -28,7 +28,7 @@ def module_flops(module, input, output):
         int: number of FLOPs
     """
 
-    if isinstance(module, nn.Identity):
+    if isinstance(module, (nn.Identity, nn.Flatten)):
         return 0
     elif isinstance(module, nn.Linear):
         return flops_linear(module, input, output)

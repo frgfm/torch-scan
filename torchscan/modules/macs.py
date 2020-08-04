@@ -29,7 +29,7 @@ def module_macs(module, input, output):
     """
     if isinstance(module, nn.Linear):
         return macs_linear(module, input, output)
-    elif isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid)):
+    elif isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid, nn.Flatten)):
         return 0
     elif isinstance(module, _ConvTransposeNd):
         return macs_convtransposend(module, input, output)

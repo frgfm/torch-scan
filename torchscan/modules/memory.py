@@ -31,6 +31,8 @@ def module_dmas(module, input, output):
 
     if isinstance(module, nn.Identity):
         return dmas_identity(module, input, output)
+    elif isinstance(module, nn.Flatten):
+        return dmas_flatten(module, input, output)
     elif isinstance(module, nn.Linear):
         return dmas_linear(module, input, output)
     elif isinstance(module, (nn.ReLU, nn.ReLU6)):
@@ -74,6 +76,12 @@ def dmas_identity(module, input, output):
     """DMAs estimation for `torch.nn.Identity`"""
 
     return input.numel()
+
+
+def dmas_flatten(module, input, output):
+    """DMAs estimation for `torch.nn.Flatten`"""
+
+    return 2 * input.numel()
 
 
 def dmas_linear(module, input, output):

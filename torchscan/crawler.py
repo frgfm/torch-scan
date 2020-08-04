@@ -105,7 +105,10 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                     else:
                         is_shared = True
 
-            call_idxs[id(module)] = len(info)
+            if call_idxs.get(id(module)) is None:
+                call_idxs[id(module)] = [len(info)]
+            else:
+                call_idxs[id(module)].append(len(info))
 
             info.append(dict(name=name,
                              depth=depth,
@@ -131,6 +134,14 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
 
             # Retrieve forward index
             fw_idx = call_idxs[id(module)]
+            if len(fw_idx) == 1:
+                fw_idx = fw_idx[0]
+            else:
+                # The first dictionary with output_shape=None is the correct one
+                for _idx in fw_idx:
+                    if info[_idx]['output_shape'] is None:
+                        fw_idx = _idx
+                        break
 
             if any(module.children()):
                 tot_flops, tot_macs, tot_dmas = 0, 0, 0
@@ -154,8 +165,10 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
             info[fw_idx]['p'] = current_padding
 
         # Hook only leaf children
-        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
-        post_fw_handles.append(module.register_forward_hook(_fwd_hook))
+        if len(module._forward_pre_hooks) == 0:
+            pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
+        if len(module._forward_hooks) == 0:
+            post_fw_handles.append(module.register_forward_hook(_fwd_hook))
 
     # Hook model
     info = []

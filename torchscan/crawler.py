@@ -15,21 +15,20 @@ from .utils import aggregate_info, format_info
 __all__ = ['crawl_module', 'summary']
 
 
-def apply(module, fn, depth=0, name=None):
+def apply(module, fn, name=None):
     """Modified version of `torch.nn.Module.apply` method
 
     Args:
         module (torch.nn.Module): target module
         fn (callable): function to apply to each module
-        depth (int, optional): current depth of `module`
         name (str, optional): name of the current module
     """
 
     if name is None:
         name = module.__class__.__name__.lower()
-    fn(module, depth, name)
+    fn(module, name)
     for n, m in module.named_children():
-        apply(m, fn, depth + 1, n)
+        apply(m, fn, f"{name}.{n}")
 
 
 def crawl_module(module, input_shape, dtype=None, max_depth=None):
@@ -75,7 +74,7 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     pre_fw_handles, post_fw_handles = [], []
 
     # Hook definition
-    def _hook_info(module, depth, name):
+    def _hook_info(module, name):
 
         def _pre_hook(module, input):
             """Pre-forward hook"""
@@ -111,7 +110,7 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                 call_idxs[id(module)].append(len(info))
 
             info.append(dict(name=name,
-                             depth=depth,
+                             depth=len(name.split('.')) - 1,
                              type=module.__class__.__name__,
                              input_shape=(-1, *input[0][0].shape[1:]),
                              output_shape=None,

@@ -192,6 +192,42 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
 
+    # Name & depth checker
+    names = []
+    name_handles = []
+    hook_tracker = {}
+    def _name_info(module, name):
+        def _name_hook(module, input):
+            # Check that another hook has not been triggered at this forward stage
+            if not hook_tracker[id(module)]['is_used'] and \
+               (hook_tracker[id(module)]['target'] == hook_tracker[id(module)]['current']):
+                names.append(name)
+                # Mark the next hook for execution
+                hook_tracker[id(module)]['target'] += 1
+                # Current pass already used one of the hooks
+                hook_tracker[id(module)]['is_used'] = True
+            hook_tracker[id(module)]['current'] += 1
+            # All the hooks have been checked, reset the temporary values
+            if hook_tracker[id(module)]['current'] == len(module._forward_pre_hooks):
+                hook_tracker[id(module)]['current'] = 0
+                hook_tracker[id(module)]['is_used'] = False
+
+        name_handles.append(module.register_forward_pre_hook(_name_hook))
+
+        hook_tracker[id(module)] = dict(current=0, target=0, is_used=False)
+
+
+    apply(module, _name_info)
+    with torch.no_grad():
+        module(*input_ts)
+
+    for handle in name_handles:
+        handle.remove()
+
+    for idx, name in enumerate(names):
+        info[idx]['name'] = name.rpartition('.')[-1]
+        info[idx]['depth'] = len(name.split('.')) - 1
+
     grad_params, nograd_params, param_size = 0, 0, 0
     num_buffers, buffer_size = 0, 0
     for p in module.parameters():

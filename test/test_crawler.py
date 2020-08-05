@@ -15,9 +15,9 @@ class UtilsTester(unittest.TestCase):
         mod = nn.Sequential(nn.Conv2d(3, 16, 3), multi_convs)
 
         # Tag module attributes
-        def tag_name(mod, depth, name):
-            mod.__depth__ = depth
-            mod.__name__ = name
+        def tag_name(mod, name):
+            mod.__depth__ = len(name.split('.')) - 1
+            mod.__name__ = name.rpartition('.')[-1]
 
         crawler.apply(mod, tag_name)
 

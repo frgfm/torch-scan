@@ -15,21 +15,20 @@ from .utils import aggregate_info, format_info
 __all__ = ['crawl_module', 'summary']
 
 
-def apply(module, fn, depth=0, name=None):
+def apply(module, fn, name=None):
     """Modified version of `torch.nn.Module.apply` method
 
     Args:
         module (torch.nn.Module): target module
         fn (callable): function to apply to each module
-        depth (int, optional): current depth of `module`
         name (str, optional): name of the current module
     """
 
     if name is None:
         name = module.__class__.__name__.lower()
-    fn(module, depth, name)
+    fn(module, name)
     for n, m in module.named_children():
-        apply(m, fn, depth + 1, n)
+        apply(m, fn, f"{name}.{n}")
 
 
 def crawl_module(module, input_shape, dtype=None, max_depth=None):
@@ -72,94 +71,131 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     input_ts = [torch.rand(1, *in_shape).to(dtype=_dtype, device=device)
                 for in_shape, _dtype in zip(input_shape, dtype)]
 
+    pre_fw_handles, post_fw_handles = [], []
+    pre_hook_tracker = {}
+    post_hook_tracker = {}
+
     # Hook definition
-    def _hook_info(module, depth, name):
+    def _hook_info(module, name):
 
         def _pre_hook(module, input):
             """Pre-forward hook"""
-
-            # Params
-            grad_params, nograd_params, param_size = 0, 0, 0
-            num_buffers, buffer_size = 0, 0
-            is_shared = False
-            if not any(module.children()):
-                # Parameters
-                for p in module.parameters():
-                    if id(p) not in param_ids:
-                        if p.requires_grad:
-                            grad_params += p.data.numel()
+            # Check that another hook has not been triggered at this forward stage
+            if not pre_hook_tracker[id(module)]['is_used'] and \
+               (pre_hook_tracker[id(module)]['target'] == pre_hook_tracker[id(module)]['current']):
+                # Add information
+                # Params
+                grad_params, nograd_params, param_size = 0, 0, 0
+                num_buffers, buffer_size = 0, 0
+                is_shared = False
+                if not any(module.children()):
+                    # Parameters
+                    for p in module.parameters():
+                        if id(p) not in param_ids:
+                            if p.requires_grad:
+                                grad_params += p.data.numel()
+                            else:
+                                nograd_params += p.data.numel()
+                            param_size += p.data.numel() * p.data.element_size()
+                            param_ids.append(id(p))
                         else:
-                            nograd_params += p.data.numel()
-                        param_size += p.data.numel() * p.data.element_size()
-                        param_ids.append(id(p))
-                    else:
-                        is_shared = True
-                # Buffers
-                for b in module.buffers():
-                    if id(b) not in param_ids:
-                        num_buffers += b.numel()
-                        buffer_size += b.numel() * b.element_size()
-                        param_ids.append(id(b))
-                    else:
-                        is_shared = True
+                            is_shared = True
+                    # Buffers
+                    for b in module.buffers():
+                        if id(b) not in param_ids:
+                            num_buffers += b.numel()
+                            buffer_size += b.numel() * b.element_size()
+                            param_ids.append(id(b))
+                        else:
+                            is_shared = True
 
-            call_idxs[id(module)] = len(info)
+                if call_idxs.get(id(module)) is None:
+                    call_idxs[id(module)] = [len(info)]
+                else:
+                    call_idxs[id(module)].append(len(info))
 
-            info.append(dict(name=name,
-                             depth=depth,
-                             type=module.__class__.__name__,
-                             input_shape=(-1, *input[0][0].shape[1:]),
-                             output_shape=None,
-                             grad_params=grad_params,
-                             nograd_params=nograd_params,
-                             param_size=param_size,
-                             num_buffers=num_buffers,
-                             buffer_size=buffer_size,
-                             flops=0,
-                             macs=0,
-                             dmas=0,
-                             rf=1,
-                             s=1,
-                             p=0,
-                             is_shared=is_shared,
-                             is_leaf=not any(module.children())))
-
-            # Remove the hook by using its handle
-            pre_fw_handle.remove()
+                info.append(dict(name=name.rpartition('.')[-1],
+                                 depth=len(name.split('.')) - 1,
+                                 type=module.__class__.__name__,
+                                 input_shape=(-1, *input[0][0].shape[1:]),
+                                 output_shape=None,
+                                 grad_params=grad_params,
+                                 nograd_params=nograd_params,
+                                 param_size=param_size,
+                                 num_buffers=num_buffers,
+                                 buffer_size=buffer_size,
+                                 flops=0,
+                                 macs=0,
+                                 dmas=0,
+                                 rf=1,
+                                 s=1,
+                                 p=0,
+                                 is_shared=is_shared,
+                                 is_leaf=not any(module.children())))
+                # Mark the next hook for execution
+                pre_hook_tracker[id(module)]['target'] += 1
+                # Current pass already used one of the hooks
+                pre_hook_tracker[id(module)]['is_used'] = True
+            pre_hook_tracker[id(module)]['current'] += 1
+            # All the hooks have been checked, reset the temporary values
+            if pre_hook_tracker[id(module)]['current'] == len(module._forward_pre_hooks):
+                pre_hook_tracker[id(module)]['current'] = 0
+                pre_hook_tracker[id(module)]['is_used'] = False
 
         def _fwd_hook(module, input, output):
             """Post-forward hook"""
 
-            # Retrieve forward index
-            fw_idx = call_idxs[id(module)]
+            # Check that another hook has not been triggered at this forward stage
+            if not post_hook_tracker[id(module)]['is_used'] and \
+               (post_hook_tracker[id(module)]['target'] == post_hook_tracker[id(module)]['current']):
+                # Write information
+                # Retrieve forward index
+                fw_idx = call_idxs[id(module)]
+                if len(fw_idx) == 1:
+                    fw_idx = fw_idx[0]
+                else:
+                    # The first dictionary with output_shape=None is the correct one
+                    for _idx in fw_idx:
+                        if info[_idx]['output_shape'] is None:
+                            fw_idx = _idx
+                            break
 
-            if any(module.children()):
-                tot_flops, tot_macs, tot_dmas = 0, 0, 0
-                current_rf, current_stride, current_padding = 1, 1, 0
-            else:
-                # Compute stats for standalone layers
-                tot_flops = module_flops(module, input[0], output)
-                tot_macs = module_macs(module, input[0], output)
-                tot_dmas = module_dmas(module, input[0], output)
-                current_rf, current_stride, current_padding = module_rf(module, input[0], output)
+                if any(module.children()):
+                    tot_flops, tot_macs, tot_dmas = 0, 0, 0
+                    current_rf, current_stride, current_padding = 1, 1, 0
+                else:
+                    # Compute stats for standalone layers
+                    tot_flops = module_flops(module, input[0], output)
+                    tot_macs = module_macs(module, input[0], output)
+                    tot_dmas = module_dmas(module, input[0], output)
+                    current_rf, current_stride, current_padding = module_rf(module, input[0], output)
 
-            # Update layer information
-            info[fw_idx]['output_shape'] = (-1, *output.shape[1:])
-            # Add them, since some modules can be used several times
-            info[fw_idx]['flops'] = tot_flops
-            info[fw_idx]['macs'] = tot_macs
-            info[fw_idx]['dmas'] = tot_dmas
-            # Compute receptive field
-            info[fw_idx]['rf'] = current_rf
-            info[fw_idx]['s'] = current_stride
-            info[fw_idx]['p'] = current_padding
+                # Update layer information
+                info[fw_idx]['output_shape'] = (-1, *output.shape[1:])
+                # Add them, since some modules can be used several times
+                info[fw_idx]['flops'] = tot_flops
+                info[fw_idx]['macs'] = tot_macs
+                info[fw_idx]['dmas'] = tot_dmas
+                # Compute receptive field
+                info[fw_idx]['rf'] = current_rf
+                info[fw_idx]['s'] = current_stride
+                info[fw_idx]['p'] = current_padding
 
-            # Remove the hook by using its handle
-            post_fw_handle.remove()
+                # Mark the next hook for execution
+                post_hook_tracker[id(module)]['target'] += 1
+                # Current pass already used one of the hooks
+                post_hook_tracker[id(module)]['is_used'] = True
+            post_hook_tracker[id(module)]['current'] += 1
+            # All the hooks have been checked, reset the temporary values
+            if post_hook_tracker[id(module)]['current'] == len(module._forward_pre_hooks):
+                post_hook_tracker[id(module)]['current'] = 0
+                post_hook_tracker[id(module)]['is_used'] = False
 
-        # Hook only leaf children
-        pre_fw_handle = module.register_forward_pre_hook(_pre_hook)
-        post_fw_handle = module.register_forward_hook(_fwd_hook)
+        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
+        post_fw_handles.append(module.register_forward_hook(_fwd_hook))
+        # Handle modules that are used multiple times (with several hooks)
+        pre_hook_tracker[id(module)] = dict(current=0, target=0, is_used=False)
+        post_hook_tracker[id(module)] = dict(current=0, target=0, is_used=False)
 
     # Hook model
     info = []
@@ -170,6 +206,12 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     # Forward
     with torch.no_grad():
         module(*input_ts)
+
+    # Removes all hooks using their handles
+    for handle in pre_fw_handles:
+        handle.remove()
+    for handle in post_fw_handles:
+        handle.remove()
 
     reserved_ram, diff_ram = 0, 0
     if torch.cuda.is_available():

@@ -27,7 +27,8 @@ def module_rf(module, input, output):
         int: effective stride
         int: effective padding
     """
-    if isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid, _BatchNorm)):
+    if isinstance(module, (nn.Identity, nn.Flatten, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid,
+                           _BatchNorm)):
         return 1, 1, 0
     elif isinstance(module, _ConvTransposeNd):
         k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size

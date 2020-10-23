@@ -1,14 +1,10 @@
-# -*- coding: utf-8 -*-
-
-"""
-Module FLOPs
-"""
-
 import warnings
 from functools import reduce
 from operator import mul
 
 from torch import nn
+from torch import Tensor
+from torch.nn import Module
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
@@ -17,15 +13,15 @@ from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd,
 __all__ = ['module_flops']
 
 
-def module_flops(module, input, output):
+def module_flops(module: Module, input: Tensor, output: Tensor) -> int:
     """Estimate the number of floating point operations performed by the module
 
     Args:
-        module (torch.nn.Module): PyTorch module
-        input (torch.Tensor): input to the module
-        output (torch.Tensor): output of the module
+        module: PyTorch module
+        input: input to the module
+        output: output of the module
     Returns:
-        int: number of FLOPs
+        number of FLOPs
     """
 
     if isinstance(module, (nn.Identity, nn.Flatten)):
@@ -65,7 +61,7 @@ def module_flops(module, input, output):
         return 0
 
 
-def flops_linear(module, input, output):
+def flops_linear(module: nn.Linear, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * in_chan
@@ -75,49 +71,49 @@ def flops_linear(module, input, output):
     return mm_flops + bias_flops
 
 
-def flops_sigmoid(module, input, output):
+def flops_sigmoid(module: nn.Sigmoid, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.Sigmoid`"""
 
     # For each element, mul by -1, exp it, add 1, div
     return input.numel() * 4
 
 
-def flops_relu(module, input, output):
+def flops_relu(module: nn.ReLU, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.ReLU`"""
 
     # Each element is compared to 0
     return input.numel()
 
 
-def flops_elu(module, input, output):
+def flops_elu(module: nn.ELU, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.ELU`"""
 
     # For each element, compare it to 0, exp it, sub 1, mul by alpha, compare it to 0 and sum both
     return input.numel() * 6
 
 
-def flops_leakyrelu(module, input, output):
+def flops_leakyrelu(module: nn.LeakyReLU, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.LeakyReLU`"""
 
     # For each element, compare it to 0 (max), compare it to 0 (min), mul by slope and sum both
     return input.numel() * 4
 
 
-def flops_relu6(module, input, output):
+def flops_relu6(module: nn.ReLU6, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.ReLU6`"""
 
     # For each element, compare it to 0 (max), compare it to 0 (min), mul by slope and sum both
     return input.numel() * 2
 
 
-def flops_tanh(module, input, output):
+def flops_tanh(module: nn.Tanh, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.Tanh`"""
 
     # For each element, exp it, mul by -1 and exp it, divide the sub by the add
     return input.numel() * 6
 
 
-def flops_dropout(module, input, output):
+def flops_dropout(module: nn.Dropout, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.Dropout`"""
 
     if module.p > 0:
@@ -127,7 +123,7 @@ def flops_dropout(module, input, output):
         return 0
 
 
-def flops_convtransposend(module, input, output):
+def flops_convtransposend(module: _ConvTransposeNd, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.conv._ConvTranposeNd`"""
 
     # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
@@ -140,7 +136,7 @@ def flops_convtransposend(module, input, output):
     return padding_flops + conv_flops
 
 
-def flops_convnd(module, input, output):
+def flops_convnd(module: _ConvNd, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.conv._ConvNd`"""
 
     # For each position, # mult = kernel size, # adds = kernel size - 1
@@ -157,7 +153,7 @@ def flops_convnd(module, input, output):
     return conv_flops + bias_flops
 
 
-def flops_bn(module, input, output):
+def flops_bn(module: _BatchNorm, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
 
     # for each channel, add eps and running_var, sqrt it
@@ -176,16 +172,16 @@ def flops_bn(module, input, output):
         if module.momentum is None:
             tracking_flops += 1
         # running_mean: by channel, sum values and div by batch size
-        tracking_flops += module.num_features * (input.shape[0] * input.shape[2:].numel())
+        tracking_flops += module.num_features * (input.shape[0] * input.shape[2:].numel())  # type: ignore[attr-defined]
         # running_var: by channel, sub mean and square values, sum them, divide by batch size
-        tracking_flops += 3 * input.numel()
+        tracking_flops += 3 * input.numel()  # type: ignore[attr-defined]
         # Update both runnning stat: rescale previous value (mul by N), add it the new one, then div by (N + 1)
         tracking_flops += 2 * module.num_features * 3
 
     return bn_flops + tracking_flops
 
 
-def flops_maxpool(module, input, output):
+def flops_maxpool(module: _MaxPoolNd, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
 
     k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
@@ -194,19 +190,22 @@ def flops_maxpool(module, input, output):
     return output.numel() * (k_size - 1)
 
 
-def flops_avgpool(module, input, output):
+def flops_avgpool(module: _AvgPoolNd, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
 
     k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return output.numel() * (k_size - 1 + input.ndim - 2)
+    return output.numel() * (k_size - 1 + input.ndim - 2)  # type: ignore[attr-defined]
 
 
-def flops_adaptive_maxpool(module, input, output):
+def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
 
-    o_sizes = module.output_size if isinstance(module.output_size, tuple) else (module.output_size,) * (input.ndim - 2)
+    if isinstance(module.output_size, tuple):
+        o_sizes = module.output_size
+    else:
+        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], o_sizes))
@@ -215,10 +214,13 @@ def flops_adaptive_maxpool(module, input, output):
     return output.numel() * (reduce(mul, kernel_size) - 1)
 
 
-def flops_adaptive_avgpool(module, input, output):
+def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, input: Tensor, output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
 
-    o_sizes = module.output_size if isinstance(module.output_size, tuple) else (module.output_size,) * (input.ndim - 2)
+    if isinstance(module.output_size, tuple):
+        o_sizes = module.output_size
+    else:
+        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], o_sizes))

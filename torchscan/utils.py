@@ -1,18 +1,14 @@
-# -*- coding: utf-8 -*-
-
-"""
-Utils
-"""
+from typing import Tuple, Dict, Any
 
 
-def format_name(name, depth=0):
+def format_name(name: str, depth: int = 0) -> str:
     """Format a string for nested data printing
 
     Args:
-        name (str): input string
-        depth (int, optional): depth of the nested information
+        name: input string
+        depth: depth of the nested information
     Returns:
-        str: formatted string
+        formatted string
     """
 
     if depth == 0:
@@ -23,17 +19,17 @@ def format_name(name, depth=0):
         return f"{'|    ' * (depth - 1)}└─{name}"
 
 
-def wrap_string(s, max_len, delimiter='.', wrap='[...]', mode='end'):
+def wrap_string(s: str, max_len: int, delimiter: str = '.', wrap: str = '[...]', mode: str = 'end') -> str:
     """Wrap a string into a given length
 
     Args:
-        s (str): input string
-        max_len (int): maximum string length
-        delimiter (str, optional): character used for delimiting information categories
-        wrap (str, optional): wrapping sequence used
-        mode (str, optional): wrapping mode
+        s: input string
+        max_len: maximum string length
+        delimiter: character used for delimiting information categories
+        wrap: wrapping sequence used
+        mode: wrapping mode
     Returns:
-        str: wrapped string
+        wrapped string
     """
 
     if len(s) <= max_len or mode is None:
@@ -49,14 +45,13 @@ def wrap_string(s, max_len, delimiter='.', wrap='[...]', mode='end'):
         raise ValueError("received an unexpected value of argument `mode`")
 
 
-def unit_scale(val):
+def unit_scale(val: float) -> Tuple[float, str]:
     """Rescale value using scale units
 
     Args:
-        val (float): input value
+        val: input value
     Returns:
-        float: rescaled value
-        str: unit
+        tuple of rescaled value and unit
     """
 
     if val // 1e12 > 0:
@@ -71,12 +66,14 @@ def unit_scale(val):
         return val, ''
 
 
-def format_info(module_info, wrap_mode='mid', receptive_field=False):
+def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_field: bool = False) -> str:
     """Print module summary for an expected input tensor shape
 
     Args:
-        module_info (dict): dictionary output of `crawl_module`
-        wrap_mode (str, optional): wrapping mode
+        module_info: dictionary output of `crawl_module`
+        wrap_mode: wrapping mode
+    Returns:
+        formatted information
     """
 
     # Define separating lines
@@ -136,14 +133,14 @@ def format_info(module_info, wrap_mode='mid', receptive_field=False):
     return info_str
 
 
-def aggregate_info(info, max_depth):
+def aggregate_info(info: Dict[str, Any], max_depth: int) -> Dict[str, Any]:
     """Aggregate module information to a maximum depth
 
     Args:
-        info (dict): dictionary output of `crawl_module`
-        max_depth (int, optional): depth at which parent node aggregates children information
+        info: dictionary output of `crawl_module`
+        max_depth: depth at which parent node aggregates children information
     Returns:
-        dict: edited dictionary information
+        edited dictionary information
     """
 
     if not any(layer['depth'] == max_depth for layer in info['layers']):

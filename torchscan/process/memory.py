@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-
-"""
-Process memory
-"""
-
 import re
 import subprocess
 import warnings
@@ -11,13 +5,13 @@ import warnings
 __all__ = ['get_process_gpu_ram']
 
 
-def get_process_gpu_ram(pid):
+def get_process_gpu_ram(pid: int) -> float:
     """Gets the amount of RAM used by a given process on GPU devices
 
     Args:
-        pid (int): process ID
+        pid: process ID
     Returns:
-        float: RAM usage in Megabytes
+        RAM usage in Megabytes
     """
 
     # Query the running processes on GPUs

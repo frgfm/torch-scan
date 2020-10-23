@@ -1,14 +1,10 @@
-# -*- coding: utf-8 -*-
-
-"""
-Module MACs
-"""
-
 import warnings
 from functools import reduce
 from operator import mul
 
 from torch import nn
+from torch import Tensor
+from torch.nn import Module
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
@@ -17,7 +13,7 @@ from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd,
 __all__ = ['module_macs']
 
 
-def module_macs(module, input, output):
+def module_macs(module: Module, input: Tensor, output: Tensor) -> int:
     """Estimate the number of multiply-accumulation operations performed by the module
 
     Args:
@@ -52,7 +48,7 @@ def module_macs(module, input, output):
         return 0
 
 
-def macs_linear(module, input, output):
+def macs_linear(module: nn.Linear, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * macs_per_elt (bias already counted in accumulation)
@@ -61,7 +57,7 @@ def macs_linear(module, input, output):
     return mm_mac
 
 
-def macs_convtransposend(module, input, output):
+def macs_convtransposend(module: _ConvTransposeNd, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
 
     # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
@@ -74,7 +70,7 @@ def macs_convtransposend(module, input, output):
     return padding_macs + conv_macs
 
 
-def macs_convnd(module, input, output):
+def macs_convnd(module: _ConvNd, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.conv._ConvNd`"""
 
     # For each position, # mult = kernel size, # adds = kernel size - 1
@@ -89,7 +85,7 @@ def macs_convnd(module, input, output):
     return conv_mac
 
 
-def macs_bn(module, input, output):
+def macs_bn(module: _BatchNorm, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
 
     # sub mean, div by denom
@@ -103,11 +99,13 @@ def macs_bn(module, input, output):
     # Count tracking stats update ops
     # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
     tracking_mac = 0
+    b = input.shape[0]
+    num_spatial_elts = input.shape[2:].numel()
     if module.track_running_stats and module.training:
         # running_mean: by channel, sum value and div by batch size
-        tracking_mac += module.num_features * (input.shape[0] * input.shape[2:].numel() - 1)
+        tracking_mac += module.num_features * (b * num_spatial_elts - 1)  # type: ignore[operator, attr-defined]
         # running_var: by channel, sub mean and square values, sum them, divide by batch size
-        active_elts = input.shape[0] * input.shape[2:].numel()
+        active_elts = b * num_spatial_elts  # type: ignore[attr-defined]
         tracking_mac += module.num_features * (2 * active_elts - 1)
         # Update both runnning stat: rescale previous value (mul by N), add it the new one, then div by (N + 1)
         tracking_mac += 2 * module.num_features * 2
@@ -115,7 +113,7 @@ def macs_bn(module, input, output):
     return bn_mac + tracking_mac
 
 
-def macs_maxpool(module, input, output):
+def macs_maxpool(module: _MaxPoolNd, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
 
     k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
@@ -124,19 +122,22 @@ def macs_maxpool(module, input, output):
     return output.numel() * (k_size - 1)
 
 
-def macs_avgpool(module, input, output):
+def macs_avgpool(module: _AvgPoolNd, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
 
     k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return output.numel() * (k_size - 1 + input.ndim - 2)
+    return output.numel() * (k_size - 1 + input.ndim - 2)  # type: ignore[attr-defined]
 
 
-def macs_adaptive_maxpool(module, input, output):
+def macs_adaptive_maxpool(module: _AdaptiveMaxPoolNd, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
 
-    o_sizes = module.output_size if isinstance(module.output_size, tuple) else (module.output_size,) * (input.ndim - 2)
+    if isinstance(module.output_size, tuple):
+        o_sizes = module.output_size
+    else:
+        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], o_sizes))
@@ -145,10 +146,13 @@ def macs_adaptive_maxpool(module, input, output):
     return output.numel() * (reduce(mul, kernel_size) - 1)
 
 
-def macs_adaptive_avgpool(module, input, output):
+def macs_adaptive_avgpool(module: _AdaptiveAvgPoolNd, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
 
-    o_sizes = module.output_size if isinstance(module.output_size, tuple) else (module.output_size,) * (input.ndim - 2)
+    if isinstance(module.output_size, tuple):
+        o_sizes = module.output_size
+    else:
+        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
                         for i_size, o_size in zip(input.shape[2:], o_sizes))

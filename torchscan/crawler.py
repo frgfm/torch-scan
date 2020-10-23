@@ -1,12 +1,8 @@
-# -*- coding: utf-8 -*-
-
-"""
-Module crawler
-"""
-
 import os
 
 import torch
+from torch.nn import Module
+from typing import Callable, Optional, Dict, Any, Tuple, List, Union, Iterable
 
 from .modules import module_dmas, module_flops, module_macs, module_rf
 from .process import get_process_gpu_ram
@@ -15,13 +11,13 @@ from .utils import aggregate_info, format_info
 __all__ = ['crawl_module', 'summary']
 
 
-def apply(module, fn, name=None):
+def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str] = None) -> None:
     """Modified version of `torch.nn.Module.apply` method
 
     Args:
-        module (torch.nn.Module): target module
-        fn (callable): function to apply to each module
-        name (str, optional): name of the current module
+        module: target module
+        fn: function to apply to each module
+        name: name of the current module
     """
 
     if name is None:
@@ -31,7 +27,12 @@ def apply(module, fn, name=None):
         apply(m, fn, f"{name}.{n}")
 
 
-def crawl_module(module, input_shape, dtype=None, max_depth=None):
+def crawl_module(
+    module: Module,
+    input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
+    dtype: Optional[Union[torch.dtype, Iterable[torch.dtype]]] = None,
+    max_depth: Optional[int] = None
+) -> Dict[str, Any]:
     """Retrieves module information for an expected input tensor shape
 
     Example::
@@ -41,19 +42,19 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
         >>> module_info = crawl_module(mod, (3, 224, 224))
 
     Args:
-        module (torch.nn.Module): module to inspect
-        input_shape (tuple<int>): expected input shapes
-        dtype (type): data type of each input argument to the module
-        max_depth (int, optional): maximum depth of layer information
+        module: module to inspect
+        input_shape: expected input shapes
+        dtype: data type of each input argument to the module
+        max_depth: maximum depth of layer information
     Returns:
-        dict: layer and overhead information
+        layer and overhead information
     """
 
     # Get device and data types from model
     p = next(module.parameters())
     device = p.device
 
-    cuda_overhead, framework_overhead = 0, 0
+    cuda_overhead, framework_overhead = 0., 0.
     if torch.cuda.is_available():
         # Process RAM - allocator RAM
         cuda_overhead = get_process_gpu_ram(os.getpid()) - (torch.cuda.memory_reserved() / 1024 ** 2)
@@ -61,7 +62,7 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
         framework_overhead = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2
 
     # input
-    if isinstance(input_shape[0], int):
+    if not isinstance(input_shape, list):
         input_shape = [input_shape]
     if dtype is None:
         dtype = p.data.dtype
@@ -72,13 +73,13 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                 for in_shape, _dtype in zip(input_shape, dtype)]
 
     pre_fw_handles, post_fw_handles = [], []
-    pre_hook_tracker = {}
-    post_hook_tracker = {}
+    pre_hook_tracker: Dict[int, Any] = {}
+    post_hook_tracker: Dict[int, Any] = {}
 
     # Hook definition
-    def _hook_info(module, name):
+    def _hook_info(module: Module, name: str) -> None:
 
-        def _pre_hook(module, input):
+        def _pre_hook(module: Module, input: torch.Tensor) -> None:
             """Pre-forward hook"""
             # Check that another hook has not been triggered at this forward stage
             if not pre_hook_tracker[id(module)]['is_used'] and \
@@ -142,7 +143,7 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                 pre_hook_tracker[id(module)]['current'] = 0
                 pre_hook_tracker[id(module)]['is_used'] = False
 
-        def _fwd_hook(module, input, output):
+        def _fwd_hook(module: Module, input: torch.Tensor, output: torch.Tensor) -> None:
             """Post-forward hook"""
 
             # Check that another hook has not been triggered at this forward stage
@@ -150,19 +151,18 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                (post_hook_tracker[id(module)]['target'] == post_hook_tracker[id(module)]['current']):
                 # Write information
                 # Retrieve forward index
-                fw_idx = call_idxs[id(module)]
-                if len(fw_idx) == 1:
-                    fw_idx = fw_idx[0]
+                if len(call_idxs[id(module)]) == 1:
+                    fw_idx = call_idxs[id(module)][0]
                 else:
                     # The first dictionary with output_shape=None is the correct one
-                    for _idx in fw_idx:
+                    for _idx in call_idxs[id(module)]:
                         if info[_idx]['output_shape'] is None:
                             fw_idx = _idx
                             break
 
                 if any(module.children()):
                     tot_flops, tot_macs, tot_dmas = 0, 0, 0
-                    current_rf, current_stride, current_padding = 1, 1, 0
+                    current_rf, current_stride, current_padding = 1., 1., 0.
                 else:
                     # Compute stats for standalone layers
                     tot_flops = module_flops(module, input[0], output)
@@ -198,9 +198,9 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
         post_hook_tracker[id(module)] = dict(current=0, target=0, is_used=False)
 
     # Hook model
-    info = []
-    param_ids = []
-    call_idxs = {}
+    info: List[Dict[str, Any]] = []
+    param_ids: List[int] = []
+    call_idxs: Dict[int, List[int]] = {}
     apply(module, _hook_info)
 
     # Forward
@@ -213,7 +213,7 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
     for handle in post_fw_handles:
         handle.remove()
 
-    reserved_ram, diff_ram = 0, 0
+    reserved_ram, diff_ram = 0., 0.
     if torch.cuda.is_available():
         reserved_ram = torch.cuda.memory_reserved() / 1024 ** 2
         diff_ram = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024 ** 2
@@ -250,7 +250,13 @@ def crawl_module(module, input_shape, dtype=None, max_depth=None):
                              num_buffers=num_buffers, buffer_size=buffer_size))
 
 
-def summary(module, input_shape, wrap_mode='mid', max_depth=None, receptive_field=False):
+def summary(
+    module: Module,
+    input_shape: Tuple[int, ...],
+    wrap_mode: str = 'mid',
+    max_depth: Optional[int] = None,
+    receptive_field: bool = False
+) -> None:
     """Print module summary for an expected input tensor shape
 
     Example::
@@ -260,11 +266,11 @@ def summary(module, input_shape, wrap_mode='mid', max_depth=None, receptive_fiel
         >>> summary(mod, (3, 224, 224), receptive_field=True)
 
     Args:
-        module (torch.nn.Module): module to inspect
-        input_shape (tuple<int>): expected input shapes
-        wrap_mode (str, optional): if a value is too long, where the wrapping should be performed
-        max_depth (int, optional): maximum depth of layer information
-        receptive_field (bool, optional): whether receptive field estimation should be performed
+        module: module to inspect
+        input_shape: expected input shapes
+        wrap_mode: if a value is too long, where the wrapping should be performed
+        max_depth: maximum depth of layer information
+        receptive_field: whether receptive field estimation should be performed
     """
 
     # Get the summary dict

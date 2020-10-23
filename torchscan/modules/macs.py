@@ -99,13 +99,13 @@ def macs_bn(module: _BatchNorm, input: Tensor, output: Tensor) -> int:
     # Count tracking stats update ops
     # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
     tracking_mac = 0
-    b = input.shape[0]
+    b = input.shape[0]  # type: ignore[attr-defined]
     num_spatial_elts = input.shape[2:].numel()
     if module.track_running_stats and module.training:
         # running_mean: by channel, sum value and div by batch size
         tracking_mac += module.num_features * (b * num_spatial_elts - 1)  # type: ignore[operator, attr-defined]
         # running_var: by channel, sub mean and square values, sum them, divide by batch size
-        active_elts = b * num_spatial_elts  # type: ignore[attr-defined]
+        active_elts = b * num_spatial_elts
         tracking_mac += module.num_features * (2 * active_elts - 1)
         # Update both runnning stat: rescale previous value (mul by N), add it the new one, then div by (N + 1)
         tracking_mac += 2 * module.num_features * 2

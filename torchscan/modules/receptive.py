@@ -36,6 +36,9 @@ def module_rf(module, input, output):
         return -k, 1 / s, 0
     elif isinstance(module, (_ConvNd, _MaxPoolNd, _AvgPoolNd)):
         k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
+        if getattr(module, 'dilation') is not None:
+            d = module.dilation[0] if isinstance(module.dilation, tuple) else module.dilation
+            k = d * (k - 1) + 1
         s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
         p = module.padding[0] if isinstance(module.padding, tuple) else module.padding
         return k, s, p

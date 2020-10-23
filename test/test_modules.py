@@ -187,6 +187,9 @@ class Tester(unittest.TestCase):
         input_t = torch.rand((1, 3, 32, 32))
         mod = nn.Conv2d(3, 8, 3)
         self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (3, 1, 0))
+        # Check for dilation support
+        mod = nn.Conv2d(3, 8, 3, dilation=2)
+        self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (5, 1, 0))
         # ConvTranspose
         mod = nn.ConvTranspose2d(3, 8, 3)
         self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (-3, 1, 0))

@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules.receptive &mdash; torchscan 0.1.1+26b37d1-git documentation</title>
+  <title>torchscan.modules.receptive &mdash; torchscan 0.1.1+4867339-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1+26b37d1
+                0.1.1+4867339
               </div>
             
           
@@ -200,6 +200,9 @@
         <span class="k">return</span> <span class="o">-</span><span class="n">k</span><span class="p">,</span> <span class="mi">1</span> <span class="o">/</span> <span class="n">s</span><span class="p">,</span> <span class="mi">0</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">_ConvNd</span><span class="p">,</span> <span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">)):</span>
         <span class="n">k</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="s1">&#39;dilation&#39;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">d</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">dilation</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">dilation</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">dilation</span>
+            <span class="n">k</span> <span class="o">=</span> <span class="n">d</span> <span class="o">*</span> <span class="p">(</span><span class="n">k</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">stride</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">stride</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">stride</span>
         <span class="n">p</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">padding</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">padding</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">padding</span>
         <span class="k">return</span> <span class="n">k</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">p</span>

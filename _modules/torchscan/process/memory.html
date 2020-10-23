@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.process.memory &mdash; torchscan 0.1.1+4867339-git documentation</title>
+  <title>torchscan.process.memory &mdash; torchscan 0.1.1+10d86ab-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1+4867339
+                0.1.1+10d86ab
               </div>
             
           
@@ -162,26 +162,20 @@
            <div itemprop="articleBody">
             
   <h1>Source code for torchscan.process.memory</h1><div class="highlight"><pre>
-<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
-
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Process memory</span>
-<span class="sd">&quot;&quot;&quot;</span>
-
-<span class="kn">import</span> <span class="nn">re</span>
+<span></span><span class="kn">import</span> <span class="nn">re</span>
 <span class="kn">import</span> <span class="nn">subprocess</span>
 <span class="kn">import</span> <span class="nn">warnings</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;get_process_gpu_ram&#39;</span><span class="p">]</span>
 
 
-<div class="viewcode-block" id="get_process_gpu_ram"><a class="viewcode-back" href="../../../process.html#torchscan.process.get_process_gpu_ram">[docs]</a><span class="k">def</span> <span class="nf">get_process_gpu_ram</span><span class="p">(</span><span class="n">pid</span><span class="p">):</span>
+<div class="viewcode-block" id="get_process_gpu_ram"><a class="viewcode-back" href="../../../process.html#torchscan.process.get_process_gpu_ram">[docs]</a><span class="k">def</span> <span class="nf">get_process_gpu_ram</span><span class="p">(</span><span class="n">pid</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Gets the amount of RAM used by a given process on GPU devices</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        pid (int): process ID</span>
+<span class="sd">        pid: process ID</span>
 <span class="sd">    Returns:</span>
-<span class="sd">        float: RAM usage in Megabytes</span>
+<span class="sd">        RAM usage in Megabytes</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="c1"># Query the running processes on GPUs</span>

@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan &mdash; torchscan 0.1.1+4867339-git documentation</title>
+  <title>torchscan &mdash; torchscan 0.1.1+10d86ab-git documentation</title>
   
 
   
@@ -62,7 +62,7 @@
             
             
               <div class="version">
-                0.1.1+4867339
+                0.1.1+10d86ab
               </div>
             
           
@@ -171,7 +171,7 @@
 <h2>Crawler<a class="headerlink" href="#crawler" title="Permalink to this headline">¶</a></h2>
 <dl class="py function">
 <dt id="torchscan.crawl_module">
-<code class="sig-prename descclassname">torchscan.</code><code class="sig-name descname">crawl_module</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span></em>, <em class="sig-param"><span class="n">input_shape</span></em>, <em class="sig-param"><span class="n">dtype</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/crawler.html#crawl_module"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.crawl_module" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">torchscan.</code><code class="sig-name descname">crawl_module</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span><span class="p">:</span> <span class="n">torch.nn.modules.module.Module</span></em>, <em class="sig-param"><span class="n">input_shape</span><span class="p">:</span> <span class="n">Union<span class="p">[</span>List<span class="p">[</span>Tuple<span class="p">[</span>int<span class="p">, </span><span class="p">…</span><span class="p">]</span><span class="p">]</span><span class="p">, </span>Tuple<span class="p">[</span>int<span class="p">, </span><span class="p">…</span><span class="p">]</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">dtype</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>Union<span class="p">[</span>torch.dtype<span class="p">, </span>Iterable<span class="p">[</span>torch.dtype<span class="p">]</span><span class="p">]</span><span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em><span class="sig-paren">)</span> &#x2192; Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><a class="reference internal" href="_modules/torchscan/crawler.html#crawl_module"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.crawl_module" title="Permalink to this definition">¶</a></dt>
 <dd><p>Retrieves module information for an expected input tensor shape</p>
 <dl>
 <dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
@@ -185,24 +185,21 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>module</strong> (<em>torch.nn.Module</em>) – module to inspect</p></li>
-<li><p><strong>input_shape</strong> (<em>tuple&lt;int&gt;</em>) – expected input shapes</p></li>
-<li><p><strong>dtype</strong> (<em>type</em>) – data type of each input argument to the module</p></li>
-<li><p><strong>max_depth</strong> (<em>int</em><em>, </em><em>optional</em>) – maximum depth of layer information</p></li>
+<li><p><strong>module</strong> – module to inspect</p></li>
+<li><p><strong>input_shape</strong> – expected input shapes</p></li>
+<li><p><strong>dtype</strong> – data type of each input argument to the module</p></li>
+<li><p><strong>max_depth</strong> – maximum depth of layer information</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>layer and overhead information</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
 <dt id="torchscan.summary">
-<code class="sig-prename descclassname">torchscan.</code><code class="sig-name descname">summary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span></em>, <em class="sig-param"><span class="n">input_shape</span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="o">=</span><span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/crawler.html#summary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.summary" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">torchscan.</code><code class="sig-name descname">summary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span><span class="p">:</span> <span class="n">torch.nn.modules.module.Module</span></em>, <em class="sig-param"><span class="n">input_shape</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>int<span class="p">, </span><span class="p">…</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/torchscan/crawler.html#summary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.summary" title="Permalink to this definition">¶</a></dt>
 <dd><p>Print module summary for an expected input tensor shape</p>
 <dl>
 <dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
@@ -216,11 +213,11 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>module</strong> (<em>torch.nn.Module</em>) – module to inspect</p></li>
-<li><p><strong>input_shape</strong> (<em>tuple&lt;int&gt;</em>) – expected input shapes</p></li>
-<li><p><strong>wrap_mode</strong> (<em>str</em><em>, </em><em>optional</em>) – if a value is too long, where the wrapping should be performed</p></li>
-<li><p><strong>max_depth</strong> (<em>int</em><em>, </em><em>optional</em>) – maximum depth of layer information</p></li>
-<li><p><strong>receptive_field</strong> (<em>bool</em><em>, </em><em>optional</em>) – whether receptive field estimation should be performed</p></li>
+<li><p><strong>module</strong> – module to inspect</p></li>
+<li><p><strong>input_shape</strong> – expected input shapes</p></li>
+<li><p><strong>wrap_mode</strong> – if a value is too long, where the wrapping should be performed</p></li>
+<li><p><strong>max_depth</strong> – maximum depth of layer information</p></li>
+<li><p><strong>receptive_field</strong> – whether receptive field estimation should be performed</p></li>
 </ul>
 </dd>
 </dl>

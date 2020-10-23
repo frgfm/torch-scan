@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.utils &mdash; torchscan 0.1.1+4867339-git documentation</title>
+  <title>torchscan.utils &mdash; torchscan 0.1.1+10d86ab-git documentation</title>
   
 
   
@@ -61,7 +61,7 @@
             
             
               <div class="version">
-                0.1.1+4867339
+                0.1.1+10d86ab
               </div>
             
           
@@ -168,34 +168,34 @@
 <h1>torchscan.utils<a class="headerlink" href="#torchscan-utils" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt id="torchscan.utils.format_info">
-<code class="sig-prename descclassname">torchscan.utils.</code><code class="sig-name descname">format_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module_info</span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="o">=</span><span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="o">=</span><span class="default_value">False</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/utils.html#format_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.utils.format_info" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">torchscan.utils.</code><code class="sig-name descname">format_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module_info</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; str<a class="reference internal" href="_modules/torchscan/utils.html#format_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.utils.format_info" title="Permalink to this definition">¶</a></dt>
 <dd><p>Print module summary for an expected input tensor shape</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>module_info</strong> (<em>dict</em>) – dictionary output of <cite>crawl_module</cite></p></li>
-<li><p><strong>wrap_mode</strong> (<em>str</em><em>, </em><em>optional</em>) – wrapping mode</p></li>
+<li><p><strong>module_info</strong> – dictionary output of <cite>crawl_module</cite></p></li>
+<li><p><strong>wrap_mode</strong> – wrapping mode</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>formatted information</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py function">
 <dt id="torchscan.utils.aggregate_info">
-<code class="sig-prename descclassname">torchscan.utils.</code><code class="sig-name descname">aggregate_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">info</span></em>, <em class="sig-param"><span class="n">max_depth</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/utils.html#aggregate_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.utils.aggregate_info" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">torchscan.utils.</code><code class="sig-name descname">aggregate_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">info</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="p">:</span> <span class="n">int</span></em><span class="sig-paren">)</span> &#x2192; Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span><a class="reference internal" href="_modules/torchscan/utils.html#aggregate_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.utils.aggregate_info" title="Permalink to this definition">¶</a></dt>
 <dd><p>Aggregate module information to a maximum depth</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>info</strong> (<em>dict</em>) – dictionary output of <cite>crawl_module</cite></p></li>
-<li><p><strong>max_depth</strong> (<em>int</em><em>, </em><em>optional</em>) – depth at which parent node aggregates children information</p></li>
+<li><p><strong>info</strong> – dictionary output of <cite>crawl_module</cite></p></li>
+<li><p><strong>max_depth</strong> – depth at which parent node aggregates children information</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>edited dictionary information</p>
-</dd>
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p>dict</p>
 </dd>
 </dl>
 </dd></dl>

@@ -30,7 +30,6 @@ def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str]
 def crawl_module(
     module: Module,
     input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
-    relative_to_input: bool = False,
     dtype: Optional[Union[torch.dtype, Iterable[torch.dtype]]] = None
 ) -> Dict[str, Any]:
     """Retrieves module information for an expected input tensor shape
@@ -44,7 +43,6 @@ def crawl_module(
     Args:
         module: module to inspect
         input_shape: expected input shapes
-        relative_to_input: whether the receptive_field should be computed relatively to input or outputs
         dtype: data type of each input argument to the module
     Returns:
         layer and overhead information
@@ -234,16 +232,13 @@ def crawl_module(
 
     # Update cumulative receptive field
     _rf, _s, _p = 1, 1, 0
-    if not relative_to_input:
-        info = info[::-1]
-
     for fw_idx, _layer in enumerate(info):
         _rf = _layer['s'] * (_rf - 1) + _layer['rf']
         _s *= _layer['s']
         _p = _layer['s'] * _p + _layer['p']
-        info[fw_idx if relative_to_input else -fw_idx]['rf'] = _rf
-        info[fw_idx if relative_to_input else -fw_idx]['s'] = _s
-        info[fw_idx if relative_to_input else -fw_idx]['p'] = _p
+        info[fw_idx]['rf'] = _rf
+        info[fw_idx]['s'] = _s
+        info[fw_idx]['p'] = _p
 
     return dict(overheads=dict(cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
                                framework=dict(pre=framework_overhead, fwd=diff_ram)),
@@ -257,8 +252,7 @@ def summary(
     input_shape: Tuple[int, ...],
     wrap_mode: str = 'mid',
     max_depth: Optional[int] = None,
-    receptive_field: bool = False,
-    relative_to_input: bool = False,
+    receptive_field: bool = False
 ) -> None:
     """Print module summary for an expected input tensor shape
 
@@ -274,11 +268,10 @@ def summary(
         wrap_mode: if a value is too long, where the wrapping should be performed
         max_depth: maximum depth of layer information
         receptive_field: whether receptive field estimation should be performed
-        relative_to_input: if `receptive_field` is True, computes the receptive field relative to inputs
     """
 
     # Get the summary dict
-    module_info = crawl_module(module, input_shape, relative_to_input)
+    module_info = crawl_module(module, input_shape)
     # Aggregate until max_depth
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)

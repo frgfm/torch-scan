@@ -226,16 +226,14 @@ def aggregate_info(info: Dict[str, Any], max_depth: int) -> Dict[str, Any]:
                 p_size += _layer['param_size']
                 num_buffers += _layer['num_buffers']
                 b_size += _layer['buffer_size']
-                # Take the last receptive field values
-                rf, s, p = _layer['rf'], _layer['s'], _layer['p']
 
             # Update info
             info['layers'][fw_idx]['flops'] = flops
             info['layers'][fw_idx]['macs'] = macs
             info['layers'][fw_idx]['dmas'] = dmas
-            info['layers'][fw_idx]['rf'] = rf
-            info['layers'][fw_idx]['s'] = s
-            info['layers'][fw_idx]['p'] = p
+            info['layers'][fw_idx]['rf'] = info['layers'][fw_idx + 1]['rf']
+            info['layers'][fw_idx]['s'] = info['layers'][fw_idx + 1]['s']
+            info['layers'][fw_idx]['p'] = info['layers'][fw_idx + 1]['p']
             info['layers'][fw_idx]['grad_params'] = grad_p
             info['layers'][fw_idx]['nograd_params'] = nograd_p
             info['layers'][fw_idx]['param_size'] = p_size

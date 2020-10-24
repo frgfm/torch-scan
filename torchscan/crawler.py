@@ -30,8 +30,7 @@ def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str]
 def crawl_module(
     module: Module,
     input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
-    dtype: Optional[Union[torch.dtype, Iterable[torch.dtype]]] = None,
-    max_depth: Optional[int] = None
+    dtype: Optional[Union[torch.dtype, Iterable[torch.dtype]]] = None
 ) -> Dict[str, Any]:
     """Retrieves module information for an expected input tensor shape
 
@@ -45,7 +44,6 @@ def crawl_module(
         module: module to inspect
         input_shape: expected input shapes
         dtype: data type of each input argument to the module
-        max_depth: maximum depth of layer information
     Returns:
         layer and overhead information
     """
@@ -234,14 +232,13 @@ def crawl_module(
 
     # Update cumulative receptive field
     _rf, _s, _p = 1, 1, 0
-    for fw_idx, _layer in enumerate(info[::-1]):
+    for fw_idx, _layer in enumerate(info):
         _rf = _layer['s'] * (_rf - 1) + _layer['rf']
         _s *= _layer['s']
         _p = _layer['s'] * _p + _layer['p']
-
-        info[len(info) - 1 - fw_idx]['rf'] = _rf
-        info[len(info) - 1 - fw_idx]['s'] = _s
-        info[len(info) - 1 - fw_idx]['p'] = _p
+        info[fw_idx]['rf'] = _rf
+        info[fw_idx]['s'] = _s
+        info[fw_idx]['p'] = _p
 
     return dict(overheads=dict(cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
                                framework=dict(pre=framework_overhead, fwd=diff_ram)),

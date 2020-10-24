@@ -1,5 +1,4 @@
 #!usr/bin/python
-# -*- coding: utf-8 -*-
 
 """
 Torchvision benchmark
@@ -30,8 +29,13 @@ def main():
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    print(f"{'Model':<20} | {'Params (M)':<10} | {'FLOPs (G)':<10} | {'MACs (G)':<10} | {'DMAs (G)':<10}")
-    print('-' * 71)
+    margin = 4
+    headers = ['Model', 'Params (M)', 'FLOPs (G)', 'MACs (G)', 'DMAs (G)', 'RF']
+    max_w = [20, 10, 10, 10, 10, 10]
+
+    info_str = [(' ' * margin).join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, max_w)])]
+    info_str.append('-' * len(info_str[0]))
+    print('\n'.join(info_str))
     for name in TORCHVISION_MODELS:
         model = models.__dict__[name]().eval().to(device)
         dsize = (3, 224, 224)
@@ -43,10 +47,10 @@ def main():
         tot_flops = sum(layer['flops'] for layer in model_info['layers'])
         tot_macs = sum(layer['macs'] for layer in model_info['layers'])
         tot_dmas = sum(layer['dmas'] for layer in model_info['layers'])
-        print(f"{name:<20} | {tot_params / 1e6:<10.2f} | {tot_flops / 1e9:<10.2f} | {tot_macs / 1e9:<10.2f} | "
-              f"{tot_dmas / 1e9:<10.2f}")
+        rf = model_info['layers'][0]['rf']
+        print(f"{name:<{max_w[0]}} | {tot_params / 1e6:<{max_w[1]}.2f} | {tot_flops / 1e9:<{max_w[2]}.2f} | "
+              f"{tot_macs / 1e9:<{max_w[3]}.2f} | {tot_dmas / 1e9:<{max_w[4]}.2f} | {rf:<{max_w[5]}.0f}")
 
 
 if __name__ == "__main__":
-
     main()

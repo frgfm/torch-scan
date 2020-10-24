@@ -232,13 +232,13 @@ def crawl_module(
 
     # Update cumulative receptive field
     _rf, _s, _p = 1, 1, 0
-    for fw_idx, _layer in enumerate(info):
+    for fw_idx, _layer in enumerate(info[::-1]):
         _rf = _layer['s'] * (_rf - 1) + _layer['rf']
         _s *= _layer['s']
         _p = _layer['s'] * _p + _layer['p']
-        info[fw_idx]['rf'] = _rf
-        info[fw_idx]['s'] = _s
-        info[fw_idx]['p'] = _p
+        info[len(info) - 1 - fw_idx]['rf'] = _rf
+        info[len(info) - 1 - fw_idx]['s'] = _s
+        info[len(info) - 1 - fw_idx]['p'] = _p
 
     return dict(overheads=dict(cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
                                framework=dict(pre=framework_overhead, fwd=diff_ram)),
@@ -252,7 +252,8 @@ def summary(
     input_shape: Tuple[int, ...],
     wrap_mode: str = 'mid',
     max_depth: Optional[int] = None,
-    receptive_field: bool = False
+    receptive_field: bool = False,
+    effective_rf_stats: bool = False,
 ) -> None:
     """Print module summary for an expected input tensor shape
 
@@ -268,6 +269,7 @@ def summary(
         wrap_mode: if a value is too long, where the wrapping should be performed
         max_depth: maximum depth of layer information
         receptive_field: whether receptive field estimation should be performed
+        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding
     """
 
     # Get the summary dict
@@ -276,4 +278,4 @@ def summary(
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)
     # Format it and print it
-    print(format_info(module_info, wrap_mode, receptive_field))
+    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))

@@ -53,6 +53,14 @@ class UtilsTester(unittest.TestCase):
         sys.stdout = sys.__stdout__
         self.assertEqual(captured_output.getvalue().split('\n')[1].rpartition('  ')[-1], 'Receptive field')
         self.assertEqual(captured_output.getvalue().split('\n')[3].split()[-1], '3')
+        # Check effective stats
+        captured_output = io.StringIO()
+        sys.stdout = captured_output
+        crawler.summary(mod, (3, 32, 32), receptive_field=True, effective_rf_stats=True)
+        # Reset redirect.
+        sys.stdout = sys.__stdout__
+        self.assertEqual(captured_output.getvalue().split('\n')[1].rpartition('  ')[-1], 'Effective padding')
+        self.assertEqual(captured_output.getvalue().split('\n')[3].split()[-1], '0')
 
 
 if __name__ == '__main__':

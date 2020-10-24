@@ -129,9 +129,9 @@ def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_f
 
     # Define separating lines
     line_length = sum(col_w) + (len(col_w) - 1) * margin
-    thin_line = ('_' * line_length) + '\n'
-    thick_line = ('=' * line_length) + '\n'
-    dot_line = ('-' * line_length) + '\n'
+    thin_line = '_' * line_length
+    thick_line = '=' * line_length
+    dot_line = '-' * line_length
 
     margin_str = ' ' * margin
 

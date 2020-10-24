@@ -232,13 +232,13 @@ def crawl_module(
 
     # Update cumulative receptive field
     _rf, _s, _p = 1, 1, 0
-    for fw_idx, _layer in enumerate(info[::-1]):
-        _rf = _layer['s'] * (_rf - 1) + _layer['rf']
+    for fw_idx, _layer in enumerate(info):
+        _rf += _s * (_layer['rf'] - 1)
         _s *= _layer['s']
         _p = _layer['s'] * _p + _layer['p']
-        info[len(info) - 1 - fw_idx]['rf'] = _rf
-        info[len(info) - 1 - fw_idx]['s'] = _s
-        info[len(info) - 1 - fw_idx]['p'] = _p
+        info[fw_idx]['rf'] = _rf
+        info[fw_idx]['s'] = _s
+        info[fw_idx]['p'] = _p
 
     return dict(overheads=dict(cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
                                framework=dict(pre=framework_overhead, fwd=diff_ram)),

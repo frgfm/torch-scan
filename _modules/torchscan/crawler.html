@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.crawler &mdash; torchscan 0.1.1+10d86ab-git documentation</title>
+  <title>torchscan.crawler &mdash; torchscan 0.1.1+f38b549-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1+10d86ab
+                0.1.1+f38b549
               </div>
             
           
@@ -194,8 +194,7 @@
 <div class="viewcode-block" id="crawl_module"><a class="viewcode-back" href="../../torchscan.html#torchscan.crawl_module">[docs]</a><span class="k">def</span> <span class="nf">crawl_module</span><span class="p">(</span>
     <span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span>
     <span class="n">input_shape</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]],</span>
-    <span class="n">dtype</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">max_depth</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">dtype</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
     <span class="sd">&quot;&quot;&quot;Retrieves module information for an expected input tensor shape</span>
 
@@ -209,7 +208,6 @@
 <span class="sd">        module: module to inspect</span>
 <span class="sd">        input_shape: expected input shapes</span>
 <span class="sd">        dtype: data type of each input argument to the module</span>
-<span class="sd">        max_depth: maximum depth of layer information</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        layer and overhead information</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -398,14 +396,13 @@
 
     <span class="c1"># Update cumulative receptive field</span>
     <span class="n">_rf</span><span class="p">,</span> <span class="n">_s</span><span class="p">,</span> <span class="n">_p</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">fw_idx</span><span class="p">,</span> <span class="n">_layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">info</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]):</span>
+    <span class="k">for</span> <span class="n">fw_idx</span><span class="p">,</span> <span class="n">_layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">info</span><span class="p">):</span>
         <span class="n">_rf</span> <span class="o">=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">_rf</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span>
         <span class="n">_s</span> <span class="o">*=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span>
         <span class="n">_p</span> <span class="o">=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">*</span> <span class="n">_p</span> <span class="o">+</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">]</span>
-
-        <span class="n">info</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_rf</span>
-        <span class="n">info</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_s</span>
-        <span class="n">info</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">info</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_p</span>
+        <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_rf</span>
+        <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_s</span>
+        <span class="n">info</span><span class="p">[</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_p</span>
 
     <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">overheads</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">cuda</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">pre</span><span class="o">=</span><span class="n">cuda_overhead</span><span class="p">,</span> <span class="n">fwd</span><span class="o">=</span><span class="n">get_process_gpu_ram</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getpid</span><span class="p">())</span> <span class="o">-</span> <span class="n">reserved_ram</span><span class="p">),</span>
                                <span class="n">framework</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">pre</span><span class="o">=</span><span class="n">framework_overhead</span><span class="p">,</span> <span class="n">fwd</span><span class="o">=</span><span class="n">diff_ram</span><span class="p">)),</span>

@@ -234,8 +234,8 @@ def crawl_module(
     _rf, _s, _p = 1, 1, 0
     for fw_idx, _layer in enumerate(info):
         _rf += _s * (_layer['rf'] - 1)
+        _p += _s * _layer['p']
         _s *= _layer['s']
-        _p = _layer['s'] * _p + _layer['p']
         info[fw_idx]['rf'] = _rf
         info[fw_idx]['s'] = _s
         info[fw_idx]['p'] = _p

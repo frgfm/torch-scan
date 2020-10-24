@@ -50,7 +50,7 @@ def rf_aggregnd(
     output: Tensor
 ) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
-    if getattr(module, 'dilation') is not None:
+    if hasattr(module, 'dilation'):
         d = module.dilation[0] if isinstance(module.dilation, tuple) else module.dilation
         k = d * (k - 1) + 1  # type: ignore[operator]
     s = module.stride[0] if isinstance(module.stride, tuple) else module.stride

@@ -236,14 +236,14 @@ def crawl_module(
     _rf, _s, _p = 1, 1, 0
     if not relative_to_input:
         info = info[::-1]
+
     for fw_idx, _layer in enumerate(info):
         _rf = _layer['s'] * (_rf - 1) + _layer['rf']
         _s *= _layer['s']
         _p = _layer['s'] * _p + _layer['p']
-
-        info[fw_idx]['rf'] = _rf
-        info[fw_idx]['s'] = _s
-        info[fw_idx]['p'] = _p
+        info[fw_idx if relative_to_input else -fw_idx]['rf'] = _rf
+        info[fw_idx if relative_to_input else -fw_idx]['s'] = _s
+        info[fw_idx if relative_to_input else -fw_idx]['p'] = _p
 
     return dict(overheads=dict(cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
                                framework=dict(pre=framework_overhead, fwd=diff_ram)),

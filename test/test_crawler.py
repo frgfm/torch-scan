@@ -32,6 +32,13 @@ class UtilsTester(unittest.TestCase):
         self.assertIsInstance(res, dict)
         self.assertEqual(res['overall']['grad_params'], 224)
         self.assertEqual(res['layers'][0]['output_shape'], (-1, 8, 30, 30))
+        # Check receptive field order
+        mod = nn.Sequential(nn.Conv2d(3, 8, 5), nn.ReLU(), nn.Conv2d(8, 16, 3))
+        inv_res = crawler.crawl_module(mod, (3, 32, 32), relative_to_input=False)
+        inv_order = [(_layer['rf'], _layer['s'], _layer['p']) for _layer in res['layers']]
+        res = crawler.crawl_module(mod, (3, 32, 32), relative_to_input=True)
+        order = [(_layer['rf'], _layer['s'], _layer['p']) for _layer in inv_res['layers']]
+        self.assertTrue(all(x == y for x, y in zip(order[-1], inv_order[0])))
 
     def test_summary(self):
 

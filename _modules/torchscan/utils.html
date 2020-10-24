@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.utils &mdash; torchscan 0.1.1+cc5c054-git documentation</title>
+  <title>torchscan.utils &mdash; torchscan 0.1.1+2cec3f6-git documentation</title>
   
 
   
@@ -60,7 +60,7 @@
             
             
               <div class="version">
-                0.1.1+cc5c054
+                0.1.1+2cec3f6
               </div>
             
           
@@ -243,11 +243,12 @@
     <span class="n">layer</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
     <span class="n">col_w</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">wrap_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mid&#39;</span><span class="p">,</span>
-    <span class="n">receptive_field</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">receptive_field</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">effective_rf_stats</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-        <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">5</span>  <span class="c1"># type: ignore[list-item]</span>
+        <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">7</span>  <span class="c1"># type: ignore[list-item]</span>
 
     <span class="n">max_len</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">3</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_w</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="mi">100</span>
     <span class="n">line_str</span> <span class="o">=</span> <span class="p">[</span><span class="n">format_s</span><span class="p">(</span><span class="n">wrap_string</span><span class="p">(</span><span class="n">format_name</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]),</span> <span class="n">max_len</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">),</span>
@@ -259,16 +260,26 @@
 
     <span class="k">if</span> <span class="n">receptive_field</span><span class="p">:</span>
         <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">4</span><span class="p">]))</span>
+        <span class="k">if</span> <span class="n">effective_rf_stats</span><span class="p">:</span>
+            <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">5</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">5</span><span class="p">]))</span>
+            <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">6</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">6</span><span class="p">]))</span>
 
     <span class="k">return</span> <span class="n">line_str</span>
 
 
-<div class="viewcode-block" id="format_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.format_info">[docs]</a><span class="k">def</span> <span class="nf">format_info</span><span class="p">(</span><span class="n">module_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">wrap_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mid&#39;</span><span class="p">,</span> <span class="n">receptive_field</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<div class="viewcode-block" id="format_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.format_info">[docs]</a><span class="k">def</span> <span class="nf">format_info</span><span class="p">(</span>
+    <span class="n">module_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+    <span class="n">wrap_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mid&#39;</span><span class="p">,</span>
+    <span class="n">receptive_field</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">effective_rf_stats</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Print module summary for an expected input tensor shape</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        module_info: dictionary output of `crawl_module`</span>
 <span class="sd">        wrap_mode: wrapping mode</span>
+<span class="sd">        receptive_field: whether to display receptive field</span>
+<span class="sd">        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        formatted information</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -277,19 +288,23 @@
     <span class="n">margin</span> <span class="o">=</span> <span class="mi">4</span>
     <span class="c1"># Dynamic col width</span>
     <span class="c1"># Init with headers</span>
-    <span class="n">headers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Layer&#39;</span><span class="p">,</span> <span class="s1">&#39;Type&#39;</span><span class="p">,</span> <span class="s1">&#39;Output Shape&#39;</span><span class="p">,</span> <span class="s1">&#39;Param #&#39;</span><span class="p">,</span> <span class="s1">&#39;Receptive field&#39;</span><span class="p">]</span>
-    <span class="n">max_w</span> <span class="o">=</span> <span class="p">[</span><span class="mi">27</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">]</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Layer&#39;</span><span class="p">,</span> <span class="s1">&#39;Type&#39;</span><span class="p">,</span> <span class="s1">&#39;Output Shape&#39;</span><span class="p">,</span> <span class="s1">&#39;Param #&#39;</span><span class="p">,</span> <span class="s1">&#39;Receptive field&#39;</span><span class="p">,</span> <span class="s1">&#39;Effective stride&#39;</span><span class="p">,</span> <span class="s1">&#39;Effective padding&#39;</span><span class="p">]</span>
+    <span class="n">max_w</span> <span class="o">=</span> <span class="p">[</span><span class="mi">27</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">17</span><span class="p">]</span>
     <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">headers</span><span class="p">]</span>
     <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]:</span>
         <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="nb">max</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
-                 <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="n">format_line_str</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">col_w</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">,</span> <span class="n">receptive_field</span><span class="o">=</span><span class="kc">True</span><span class="p">))]</span>
+                 <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="n">format_line_str</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">col_w</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">,</span>
+                                                        <span class="n">receptive_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">effective_rf_stats</span><span class="o">=</span><span class="kc">True</span><span class="p">))]</span>
 
     <span class="c1"># Truncate columns that are too long</span>
     <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">max_v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">max_v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="n">max_w</span><span class="p">)]</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">receptive_field</span><span class="p">:</span>
-        <span class="n">col_w</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-        <span class="n">headers</span> <span class="o">=</span> <span class="n">headers</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">col_w</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="n">headers</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="n">effective_rf_stats</span><span class="p">:</span>
+        <span class="n">col_w</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
+        <span class="n">headers</span> <span class="o">=</span> <span class="n">headers</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
 
     <span class="c1"># Define separating lines</span>
     <span class="n">line_length</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">col_w</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">col_w</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">margin</span>
@@ -306,7 +321,7 @@
 
     <span class="c1"># Layers</span>
     <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]:</span>
-        <span class="n">line_str</span> <span class="o">=</span> <span class="n">format_line_str</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">col_w</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="p">,</span> <span class="n">receptive_field</span><span class="p">)</span>
+        <span class="n">line_str</span> <span class="o">=</span> <span class="n">format_line_str</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">col_w</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="p">,</span> <span class="n">receptive_field</span><span class="p">,</span> <span class="n">effective_rf_stats</span><span class="p">)</span>
         <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39; &#39;</span> <span class="o">*</span> <span class="n">margin</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">line_str</span><span class="p">))</span>
 
     <span class="c1"># Parameter information</span>
@@ -375,16 +390,14 @@
                 <span class="n">p_size</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span>
                 <span class="n">num_buffers</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span>
                 <span class="n">b_size</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">]</span>
-                <span class="c1"># Take the last receptive field values</span>
-                <span class="n">rf</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">p</span> <span class="o">=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">],</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">],</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">]</span>
 
             <span class="c1"># Update info</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">flops</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">macs</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dmas</span>
-            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rf</span>
-            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
-            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">grad_p</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nograd_p</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_size</span>

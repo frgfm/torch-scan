@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan &mdash; torchscan 0.1.1+cc5c054-git documentation</title>
+  <title>torchscan &mdash; torchscan 0.1.1+2cec3f6-git documentation</title>
   
 
   
@@ -62,7 +62,7 @@
             
             
               <div class="version">
-                0.1.1+cc5c054
+                0.1.1+2cec3f6
               </div>
             
           
@@ -198,7 +198,7 @@
 
 <dl class="py function">
 <dt id="torchscan.summary">
-<code class="sig-prename descclassname">torchscan.</code><code class="sig-name descname">summary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span><span class="p">:</span> <span class="n">torch.nn.modules.module.Module</span></em>, <em class="sig-param"><span class="n">input_shape</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>int<span class="p">, </span><span class="p">…</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/torchscan/crawler.html#summary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.summary" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">torchscan.</code><code class="sig-name descname">summary</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module</span><span class="p">:</span> <span class="n">torch.nn.modules.module.Module</span></em>, <em class="sig-param"><span class="n">input_shape</span><span class="p">:</span> <span class="n">Tuple<span class="p">[</span>int<span class="p">, </span><span class="p">…</span><span class="p">]</span></span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">max_depth</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>int<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">effective_rf_stats</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; None<a class="reference internal" href="_modules/torchscan/crawler.html#summary"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.summary" title="Permalink to this definition">¶</a></dt>
 <dd><p>Print module summary for an expected input tensor shape</p>
 <dl>
 <dt>Example::</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
@@ -217,6 +217,7 @@
 <li><p><strong>wrap_mode</strong> – if a value is too long, where the wrapping should be performed</p></li>
 <li><p><strong>max_depth</strong> – maximum depth of layer information</p></li>
 <li><p><strong>receptive_field</strong> – whether receptive field estimation should be performed</p></li>
+<li><p><strong>effective_rf_stats</strong> – if <cite>receptive_field</cite> is True, displays effective stride and padding</p></li>
 </ul>
 </dd>
 </dl>

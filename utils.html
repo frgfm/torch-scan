@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.utils &mdash; torchscan 0.1.1+cc5c054-git documentation</title>
+  <title>torchscan.utils &mdash; torchscan 0.1.1+2cec3f6-git documentation</title>
   
 
   
@@ -61,7 +61,7 @@
             
             
               <div class="version">
-                0.1.1+cc5c054
+                0.1.1+2cec3f6
               </div>
             
           
@@ -168,13 +168,15 @@
 <h1>torchscan.utils<a class="headerlink" href="#torchscan-utils" title="Permalink to this headline">¶</a></h1>
 <dl class="py function">
 <dt id="torchscan.utils.format_info">
-<code class="sig-prename descclassname">torchscan.utils.</code><code class="sig-name descname">format_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module_info</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; str<a class="reference internal" href="_modules/torchscan/utils.html#format_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.utils.format_info" title="Permalink to this definition">¶</a></dt>
+<code class="sig-prename descclassname">torchscan.utils.</code><code class="sig-name descname">format_info</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">module_info</span><span class="p">:</span> <span class="n">Dict<span class="p">[</span>str<span class="p">, </span>Any<span class="p">]</span></span></em>, <em class="sig-param"><span class="n">wrap_mode</span><span class="p">:</span> <span class="n">str</span> <span class="o">=</span> <span class="default_value">'mid'</span></em>, <em class="sig-param"><span class="n">receptive_field</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em>, <em class="sig-param"><span class="n">effective_rf_stats</span><span class="p">:</span> <span class="n">bool</span> <span class="o">=</span> <span class="default_value">False</span></em><span class="sig-paren">)</span> &#x2192; str<a class="reference internal" href="_modules/torchscan/utils.html#format_info"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#torchscan.utils.format_info" title="Permalink to this definition">¶</a></dt>
 <dd><p>Print module summary for an expected input tensor shape</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>module_info</strong> – dictionary output of <cite>crawl_module</cite></p></li>
 <li><p><strong>wrap_mode</strong> – wrapping mode</p></li>
+<li><p><strong>receptive_field</strong> – whether to display receptive field</p></li>
+<li><p><strong>effective_rf_stats</strong> – if <cite>receptive_field</cite> is True, displays effective stride and padding</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>

@@ -252,7 +252,8 @@ def summary(
     input_shape: Tuple[int, ...],
     wrap_mode: str = 'mid',
     max_depth: Optional[int] = None,
-    receptive_field: bool = False
+    receptive_field: bool = False,
+    effective_rf_stats: bool = False,
 ) -> None:
     """Print module summary for an expected input tensor shape
 
@@ -268,6 +269,7 @@ def summary(
         wrap_mode: if a value is too long, where the wrapping should be performed
         max_depth: maximum depth of layer information
         receptive_field: whether receptive field estimation should be performed
+        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding
     """
 
     # Get the summary dict
@@ -276,4 +278,4 @@ def summary(
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)
     # Format it and print it
-    print(format_info(module_info, wrap_mode, receptive_field))
+    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))

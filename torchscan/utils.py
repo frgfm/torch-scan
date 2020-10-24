@@ -79,11 +79,12 @@ def format_line_str(
     layer: Dict[str, Any],
     col_w: Optional[List[int]] = None,
     wrap_mode: str = 'mid',
-    receptive_field: bool = False
+    receptive_field: bool = False,
+    effective_rf_stats: bool = False
 ) -> List[str]:
 
     if not isinstance(col_w, list):
-        col_w = [None] * 5  # type: ignore[list-item]
+        col_w = [None] * 7  # type: ignore[list-item]
 
     max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
     line_str = [format_s(wrap_string(format_name(layer['name'], layer['depth']), max_len, mode=wrap_mode),
@@ -95,16 +96,26 @@ def format_line_str(
 
     if receptive_field:
         line_str.append(format_s(f"{layer['rf']:.0f}", col_w[4], col_w[4]))
+        if effective_rf_stats:
+            line_str.append(format_s(f"{layer['s']:.0f}", col_w[5], col_w[5]))
+            line_str.append(format_s(f"{layer['p']:.0f}", col_w[6], col_w[6]))
 
     return line_str
 
 
-def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_field: bool = False) -> str:
+def format_info(
+    module_info: Dict[str, Any],
+    wrap_mode: str = 'mid',
+    receptive_field: bool = False,
+    effective_rf_stats: bool = False
+) -> str:
     """Print module summary for an expected input tensor shape
 
     Args:
         module_info: dictionary output of `crawl_module`
         wrap_mode: wrapping mode
+        receptive_field: whether to display receptive field
+        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding
     Returns:
         formatted information
     """
@@ -113,19 +124,23 @@ def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_f
     margin = 4
     # Dynamic col width
     # Init with headers
-    headers = ['Layer', 'Type', 'Output Shape', 'Param #', 'Receptive field']
-    max_w = [27, 20, 25, 15, 15]
+    headers = ['Layer', 'Type', 'Output Shape', 'Param #', 'Receptive field', 'Effective stride', 'Effective padding']
+    max_w = [27, 20, 25, 15, 15, 16, 17]
     col_w = [len(s) for s in headers]
     for layer in module_info['layers']:
         col_w = [max(v, len(s))
-                 for v, s in zip(col_w, format_line_str(layer, col_w=None, wrap_mode=wrap_mode, receptive_field=True))]
+                 for v, s in zip(col_w, format_line_str(layer, col_w=None, wrap_mode=wrap_mode,
+                                                        receptive_field=True, effective_rf_stats=True))]
 
     # Truncate columns that are too long
     col_w = [min(v, max_v) for v, max_v in zip(col_w, max_w)]
 
     if not receptive_field:
-        col_w = col_w[:-1]
-        headers = headers[:-1]
+        col_w = col_w[:4]
+        headers = headers[:4]
+    elif not effective_rf_stats:
+        col_w = col_w[:5]
+        headers = headers[:5]
 
     # Define separating lines
     line_length = sum(col_w) + (len(col_w) - 1) * margin
@@ -142,7 +157,7 @@ def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_f
 
     # Layers
     for layer in module_info['layers']:
-        line_str = format_line_str(layer, col_w, wrap_mode, receptive_field)
+        line_str = format_line_str(layer, col_w, wrap_mode, receptive_field, effective_rf_stats)
         info_str.append((' ' * margin).join(line_str))
 
     # Parameter information

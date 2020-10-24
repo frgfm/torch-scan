@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional, List
 
 
 def format_name(name: str, depth: int = 0) -> str:
@@ -66,6 +66,39 @@ def unit_scale(val: float) -> Tuple[float, str]:
         return val, ''
 
 
+def format_s(f_string, min_w: Optional[int] = None, max_w: Optional[int] = None) -> str:
+    if isinstance(min_w, int):
+        f_string = f"{f_string:<{min_w}}"
+    if isinstance(max_w, int):
+        f_string = f"{f_string:.{max_w}}"
+
+    return f_string
+
+
+def format_line_str(
+    layer: Dict[str, Any],
+    col_w: Optional[List[int]] = None,
+    wrap_mode: str = 'mid',
+    receptive_field: bool = False
+) -> List[str]:
+
+    if not isinstance(col_w, list):
+        col_w = [None] * 5  # type: ignore[list-item]
+
+    max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
+    line_str = [format_s(wrap_string(format_name(layer['name'], layer['depth']), max_len, mode=wrap_mode),
+                         col_w[0], col_w[0])]
+    line_str.append(format_s(layer['type'], col_w[1], col_w[1]))
+    line_str.append(format_s(str(layer['output_shape']), col_w[2], col_w[2]))
+    line_str.append(format_s(f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:,}",
+                             col_w[3], col_w[3]))
+
+    if receptive_field:
+        line_str.append(format_s(f"{layer['rf']:.0f}", col_w[4], col_w[4]))
+
+    return line_str
+
+
 def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_field: bool = False) -> str:
     """Print module summary for an expected input tensor shape
 
@@ -76,61 +109,75 @@ def format_info(module_info: Dict[str, Any], wrap_mode: str = 'mid', receptive_f
         formatted information
     """
 
+    # Set margin between cols
+    margin = 4
+    # Dynamic col width
+    # Init with headers
+    headers = ['Layer', 'Type', 'Output Shape', 'Param #', 'Receptive field']
+    max_w = [27, 20, 25, 15, 15]
+    col_w = [len(s) for s in headers]
+    for layer in module_info['layers']:
+        col_w = [max(v, len(s))
+                 for v, s in zip(col_w, format_line_str(layer, col_w=None, wrap_mode=wrap_mode, receptive_field=True))]
+
+    # Truncate columns that are too long
+    col_w = [min(v, max_v) for v, max_v in zip(col_w, max_w)]
+
+    if not receptive_field:
+        col_w = col_w[:-1]
+        headers = headers[:-1]
+
     # Define separating lines
-    line_length = 90
-    if receptive_field:
-        line_length += 18
-    thin_line = ('_' * line_length) + '\n'
-    thick_line = ('=' * line_length) + '\n'
-    dot_line = ('-' * line_length) + '\n'
+    line_length = sum(col_w) + (len(col_w) - 1) * margin
+    thin_line = '_' * line_length
+    thick_line = '=' * line_length
+    dot_line = '-' * line_length
+
+    margin_str = ' ' * margin
 
     # Header
-    info_str = thin_line
-    if receptive_field:
-        info_str += f"{'Layer':<27}  {'Type':<20}  {'Output Shape':<25} {'Param #':<15} {'Receptive field':<15}\n"
-    else:
-        info_str += f"{'Layer':<27}  {'Type':<20}  {'Output Shape':<25} {'Param #':<15}\n"
-    info_str += thick_line
+    info_str = [thin_line]
+    info_str.append(margin_str.join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, col_w)]))
+    info_str.append(thick_line)
 
+    # Layers
     for layer in module_info['layers']:
-        # name, type, output_shape, nb_params
-        info_str += (f"{wrap_string(format_name(layer['name'], layer['depth']), 30, mode=wrap_mode):<27.25}  "
-                     f"{layer['type']:<20}  {str(layer['output_shape']):<25} "
-                     f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:<15,}")
-        info_str += (f" {layer['rf']:<15}\n" if receptive_field else '\n')
+        line_str = format_line_str(layer, col_w, wrap_mode, receptive_field)
+        info_str.append((' ' * margin).join(line_str))
 
     # Parameter information
-    info_str += thick_line
+    info_str.append(thick_line)
 
-    info_str += f"Trainable params: {module_info['overall']['grad_params']:,}\n"
-    info_str += f"Non-trainable params: {module_info['overall']['nograd_params']:,}\n"
-    info_str += f"Total params: {module_info['overall']['grad_params'] + module_info['overall']['nograd_params']:,}\n"
+    info_str.append(f"Trainable params: {module_info['overall']['grad_params']:,}")
+    info_str.append(f"Non-trainable params: {module_info['overall']['nograd_params']:,}")
+    num_params = module_info['overall']['grad_params'] + module_info['overall']['nograd_params']
+    info_str.append(f"Total params: {num_params:,}")
 
     # Static RAM usage
-    info_str += dot_line
+    info_str.append(dot_line)
 
     # Convert to Megabytes
     param_size = (module_info['overall']['param_size'] + module_info['overall']['buffer_size']) / 1024 ** 2
     overhead = module_info['overheads']['framework']['fwd'] + module_info['overheads']['cuda']['fwd']
 
-    info_str += f"Model size (params + buffers): {param_size:.2f} Mb\n"
-    info_str += f"Framework & CUDA overhead: {overhead:.2f} Mb\n"
-    info_str += f"Total RAM usage: {param_size + overhead:.2f} Mb\n"
+    info_str.append(f"Model size (params + buffers): {param_size:.2f} Mb")
+    info_str.append(f"Framework & CUDA overhead: {overhead:.2f} Mb")
+    info_str.append(f"Total RAM usage: {param_size + overhead:.2f} Mb")
 
     # FLOPS information
-    info_str += dot_line
+    info_str.append(dot_line)
 
     flops, flops_units = unit_scale(sum(layer['flops'] for layer in module_info['layers']))
     macs, macs_units = unit_scale(sum(layer['macs'] for layer in module_info['layers']))
     dmas, dmas_units = unit_scale(sum(layer['dmas'] for layer in module_info['layers']))
 
-    info_str += f"Floating Point Operations on forward: {flops:.2f} {flops_units}FLOPs\n"
-    info_str += f"Multiply-Accumulations on forward: {macs:.2f} {macs_units}MACs\n"
-    info_str += f"Direct memory accesses on forward: {dmas:.2f} {dmas_units}DMAs\n"
+    info_str.append(f"Floating Point Operations on forward: {flops:.2f} {flops_units}FLOPs")
+    info_str.append(f"Multiply-Accumulations on forward: {macs:.2f} {macs_units}MACs")
+    info_str.append(f"Direct memory accesses on forward: {dmas:.2f} {dmas_units}DMAs")
 
-    info_str += thin_line
+    info_str.append(thin_line)
 
-    return info_str
+    return '\n'.join(info_str)
 
 
 def aggregate_info(info: Dict[str, Any], max_depth: int) -> Dict[str, Any]:

@@ -203,7 +203,7 @@ def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], input: Tensor, output: Tens
     # Resolve kernel size and stride size (can be stored as a single integer or a tuple)
     if isinstance(module.kernel_size, tuple):
         kernel_size = module.kernel_size
-    else:
+    elif isinstance(module.kernel_size, int):
         kernel_size = (module.kernel_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
 
     # Each output element required K ** 2 memory accesses

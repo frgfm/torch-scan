@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules.memory &mdash; torchscan 0.1.1+f24904b-git documentation</title>
+  <title>torchscan.modules.memory &mdash; torchscan 0.1.1+3529d4a-git documentation</title>
   
 
   
@@ -24,7 +24,6 @@
         <script src="../../../_static/jquery.js"></script>
         <script src="../../../_static/underscore.js"></script>
         <script src="../../../_static/doctools.js"></script>
-        <script src="../../../_static/language_data.js"></script>
     
     <script type="text/javascript" src="../../../_static/js/theme.js"></script>
 
@@ -60,7 +59,7 @@
             
             
               <div class="version">
-                0.1.1+f24904b
+                0.1.1+3529d4a
               </div>
             
           
@@ -367,7 +366,7 @@
     <span class="c1"># Resolve kernel size and stride size (can be stored as a single integer or a tuple)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
         <span class="n">kernel_size</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
-    <span class="k">else</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
         <span class="n">kernel_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
 
     <span class="c1"># Each output element required K ** 2 memory accesses</span>

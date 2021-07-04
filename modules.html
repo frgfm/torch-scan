@@ -5,10 +5,11 @@
 <!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  
+  <meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules &mdash; torchscan 0.1.1+782e8c9-git documentation</title>
+  <title>torchscan.modules &mdash; torchscan 0.1.1+fb50451-git documentation</title>
   
 
   
@@ -21,6 +22,7 @@
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
@@ -61,7 +63,7 @@
             
             
               <div class="version">
-                0.1.1+782e8c9
+                0.1.1+fb50451
               </div>
             
           
@@ -164,15 +166,15 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="torchscan-modules">
+  <section id="torchscan-modules">
 <h1>torchscan.modules<a class="headerlink" href="#torchscan-modules" title="Permalink to this headline">¶</a></h1>
 <p>The modules subpackage contains tools for inspection of modules.</p>
-<div class="section" id="flops">
+<section id="flops">
 <h2>FLOPs<a class="headerlink" href="#flops" title="Permalink to this headline">¶</a></h2>
 <p>Related to the number of floating point operations performed during model inference.</p>
 <dl class="py function">
-<dt id="torchscan.modules.module_flops">
-<code class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></code><code class="sig-name descname"><span class="pre">module_flops</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">int</span><a class="reference internal" href="_modules/torchscan/modules/flops.html#module_flops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_flops" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="torchscan.modules.module_flops">
+<span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_flops</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">int</span><a class="reference internal" href="_modules/torchscan/modules/flops.html#module_flops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_flops" title="Permalink to this definition">¶</a></dt>
 <dd><p>Estimate the number of floating point operations performed by the module</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -188,13 +190,13 @@
 </dl>
 </dd></dl>
 
-</div>
-<div class="section" id="macs">
+</section>
+<section id="macs">
 <h2>MACs<a class="headerlink" href="#macs" title="Permalink to this headline">¶</a></h2>
 <p>Related to the number of multiply-accumulate operations performed during model inference</p>
 <dl class="py function">
-<dt id="torchscan.modules.module_macs">
-<code class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></code><code class="sig-name descname"><span class="pre">module_macs</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">int</span><a class="reference internal" href="_modules/torchscan/modules/macs.html#module_macs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_macs" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="torchscan.modules.module_macs">
+<span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_macs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">int</span><a class="reference internal" href="_modules/torchscan/modules/macs.html#module_macs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_macs" title="Permalink to this definition">¶</a></dt>
 <dd><p>Estimate the number of multiply-accumulation operations performed by the module</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -213,13 +215,13 @@
 </dl>
 </dd></dl>
 
-</div>
-<div class="section" id="dmas">
+</section>
+<section id="dmas">
 <h2>DMAs<a class="headerlink" href="#dmas" title="Permalink to this headline">¶</a></h2>
 <p>Related to the number of direct memory accesses during model inference</p>
 <dl class="py function">
-<dt id="torchscan.modules.module_dmas">
-<code class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></code><code class="sig-name descname"><span class="pre">module_dmas</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">int</span><a class="reference internal" href="_modules/torchscan/modules/memory.html#module_dmas"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_dmas" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="torchscan.modules.module_dmas">
+<span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_dmas</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">int</span><a class="reference internal" href="_modules/torchscan/modules/memory.html#module_dmas"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_dmas" title="Permalink to this definition">¶</a></dt>
 <dd><p>Estimate the number of direct memory accesses by the module.
 The implementation overhead is neglected</p>
 <dl class="field-list simple">
@@ -239,13 +241,13 @@ The implementation overhead is neglected</p>
 </dl>
 </dd></dl>
 
-</div>
-<div class="section" id="receptive-field">
+</section>
+<section id="receptive-field">
 <h2>Receptive field<a class="headerlink" href="#receptive-field" title="Permalink to this headline">¶</a></h2>
 <p>Related to the effective receptive field of a layer</p>
 <dl class="py function">
-<dt id="torchscan.modules.module_rf">
-<code class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></code><code class="sig-name descname"><span class="pre">module_rf</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span> </span><span class="pre">float</span><span class="p"><span class="pre">,</span> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><a class="reference internal" href="_modules/torchscan/modules/receptive.html#module_rf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_rf" title="Permalink to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="torchscan.modules.module_rf">
+<span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_rf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.nn.modules.module.Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">torch.Tensor</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">,</span> </span><span class="pre">float</span><span class="p"><span class="pre">,</span> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span><a class="reference internal" href="_modules/torchscan/modules/receptive.html#module_rf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_rf" title="Permalink to this definition">¶</a></dt>
 <dd><p>Estimate the spatial receptive field of the module</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -263,8 +265,8 @@ effective padding</p>
 </dl>
 </dd></dl>
 
-</div>
-</div>
+</section>
+</section>
 
 
            </div>

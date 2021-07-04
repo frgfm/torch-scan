@@ -6,46 +6,9 @@
 The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
 
 
+## Quick Tour
 
-## Table of Contents
-
-* [Getting Started](#getting-started)
-  * [Prerequisites](#prerequisites)
-  * [Installation](#installation)
-* [Usage](#usage)
-* [Benchmark](#benchmark)
-* [Technical Roadmap](#technical-roadmap)
-* [Documentation](#documentation)
-* [Contributing](#contributing)
-* [Credits](#credits)
-* [License](#license)
-
-
-
-## Getting started
-
-### Prerequisites
-
-- Python 3.6 (or more recent)
-- [pip](https://pip.pypa.io/en/stable/)
-
-### Installation
-
-You can install the package using [pypi](https://pypi.org/project/torch-scan/) as follows:
-
-```shell
-pip install torchscan
-```
-
-or using [conda](https://anaconda.org/frgfm/torchscan):
-
-```shell
-conda install -c frgfm torchscan
-```
-
-
-
-## Usage
+### Inspecting your PyTorch architecture
 
 Similarly to the `torchsummary` implementation, `torchscan` brings useful module information into readable format. For nested complex architectures, you can use a maximum depth of display as follows:
 
@@ -116,8 +79,35 @@ summary(model, (3, 224, 224), receptive_field=True, max_depth=0)
 which will add the layer's receptive field (relatively to the last convolutional layer) to the summary.
 
 
+## Setup
 
-## Benchmark
+Python 3.6 (or higher) and [pip](https://pip.pypa.io/en/stable/)/[conda](https://docs.conda.io/en/latest/miniconda.html) are required to install Torchscan.
+
+### Stable release
+
+You can install the last stable release of the package using [pypi](https://pypi.org/project/torch-scan/) as follows:
+
+```shell
+pip install torchscan
+```
+
+or using [conda](https://anaconda.org/frgfm/torchscan):
+
+```shell
+conda install -c frgfm torchscan
+```
+
+### Developer installation
+
+Alternatively, if you wish to use the latest features of the project that haven't made their way to a release yet, you can install the package from source:
+
+```shell
+git clone https://github.com/frgfm/torch-scan.git
+pip install -e torch-scan/.
+```
+
+
+## Benchmark
 
 Below are the results for classification models supported by `torchvision` for a single image with 3 color channels of size `224x224` (apart from  `inception_v3`   which uses `299x299`).
 
@@ -165,44 +155,20 @@ The above results were produced using the `scripts/benchmark.py` script.
 
 
 
-## Technical roadmap
+## What else
 
-The project is currently under development, here are the objectives for the next releases:
+### Documentation
 
-- [x] Support of `torch.nn.Module` layers: ConvTranspose, Identity.
-
-- [x] Package distribution: add a conda package.
-
-- [x] Shared parameter support (cf. [discussion](https://discuss.pytorch.org/t/repeated-model-layers-real-or-torchsummary-bug/26489))
-
-- [ ] Result exporting: add a csv export option.
-
-- [ ] Forward pass stat support: RAM usage for each layer, on forward pass.
-
-- [ ] Backward pass stat support: RAM usage for each layer, on backward pass.
-
-- [ ] Support of `torch.nn.Module` layers: GroupNorm, Upsample, PixelShuffle, RNN, LSTM, GRU, Embedding, Transformer.
-
-- [ ] Support of scripted modules
-
-- [ ] Support of `torch.nn` functional API
-
-- [ ] I/O handling: multiple inputs or outputs, non-tensor I/O
-
-- [ ] Add computational graph (cf. [pytorchviz](https://github.com/szagoruyko/pytorchviz))
+The full package documentation is available [here](https://frgfm.github.io/torch-scan/) for detailed specifications.
 
 
+### Example script
 
-## Documentation
+An example script is provided for you to benchmark torchvision models using the library:
 
-The full package documentation is available [here](<https://frgfm.github.io/torch-scan/>) for detailed specifications. The documentation was built with [Sphinx](sphinx-doc.org) using a [theme](github.com/readthedocs/sphinx_rtd_theme) provided by [Read the Docs](readthedocs.org).
-
-
-
-## Contributing
-
-Please refer to `CONTRIBUTING` if you wish to contribute to this project.
-
+```shell
+python scripts/benchmark.py
+```
 
 
 ## Credits
@@ -215,6 +181,29 @@ This project is developed and maintained by the repo owner, but the implementati
 - [THOP](https://github.com/Lyken17/pytorch-OpCounter): PyTorch Op counter
 - Number of operations and memory estimation articles by [Matthijs Hollemans](https://machinethink.net/blog/how-fast-is-my-model/), and [Sicara](https://www.sicara.ai/blog/2019-28-10-deep-learning-memory-usage-and-pytorch-optimization-tricks)
 - [Pruning Convolutional Neural Networks for Resource Efficient Inference](https://arxiv.org/abs/1611.06440)
+
+
+## Citation
+
+If you wish to cite this project, feel free to use this [BibTeX](http://www.bibtex.org/) reference:
+
+```bibtex
+@misc{torchscan2020,
+    title={Torchscan: meaningful module insights},
+    author={François-Guillaume Fernandez},
+    year={2020},
+    month={March},
+    publisher = {GitHub},
+    howpublished = {\url{https://github.com/frgfm/torch-scan}}
+}
+```
+
+
+## Contributing
+
+Any sort of contribution is greatly appreciated!
+
+You can find a short guide in [`CONTRIBUTING`](CONTRIBUTING) to help grow this project!
 
 
 

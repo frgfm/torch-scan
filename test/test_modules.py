@@ -17,6 +17,7 @@ class MyModule(nn.Module):
 
 
 class Tester(unittest.TestCase):
+    @torch.no_grad()
     def test_module_flops(self):
 
         # Check for unknown module that it returns 0 and throws a warning
@@ -75,7 +76,11 @@ class Tester(unittest.TestCase):
         # ConvTranspose
         mod = nn.ConvTranspose2d(3, 8, 3)
         self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 499408)
+        # Transformer
+        mod = nn.Transformer(nhead=4, num_encoder_layers=3)
+        self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 1916295945)
 
+    @torch.no_grad()
     def test_module_macs(self):
 
         # Check for unknown module that it returns 0 and throws a warning
@@ -122,6 +127,7 @@ class Tester(unittest.TestCase):
         # Dropout
         self.assertEqual(modules.module_macs(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
 
+    @torch.no_grad()
     def test_module_dmas(self):
 
         # Check for unknown module that it returns 0 and throws a warning
@@ -169,6 +175,7 @@ class Tester(unittest.TestCase):
         # Dropout
         self.assertEqual(modules.module_dmas(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 17)
 
+    @torch.no_grad()
     def test_module_rf(self):
 
         # Check for unknown module that it returns 0 and throws a warning

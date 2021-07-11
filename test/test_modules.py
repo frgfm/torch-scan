@@ -25,59 +25,61 @@ class Tester(unittest.TestCase):
         self.assertWarns(UserWarning, modules.module_flops, MyModule(), None, None)
 
         # Common unit tests
-        self.assertEqual(modules.module_flops(nn.Linear(8, 4), torch.zeros((1, 8)), torch.zeros((1, 4))),
+        self.assertEqual(modules.module_flops(nn.Linear(8, 4), (torch.zeros((1, 8)),), torch.zeros((1, 4))),
                          4 * (2 * 8 - 1) + 4)
-        self.assertEqual(modules.module_flops(nn.Linear(8, 4, bias=False), torch.zeros((1, 8)), torch.zeros((1, 4))),
+        self.assertEqual(modules.module_flops(nn.Linear(8, 4, bias=False), (torch.zeros((1, 8)),), torch.zeros((1, 4))),
                          4 * (2 * 8 - 1))
         # Activations
-        self.assertEqual(modules.module_flops(nn.Identity(), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
-        self.assertEqual(modules.module_flops(nn.Flatten(), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
-        self.assertEqual(modules.module_flops(nn.ReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 8)
-        self.assertEqual(modules.module_flops(nn.ELU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 48)
-        self.assertEqual(modules.module_flops(nn.LeakyReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), 32)
-        self.assertEqual(modules.module_flops(nn.ReLU6(), torch.zeros((1, 8)), torch.zeros((1, 8))), 16)
-        self.assertEqual(modules.module_flops(nn.Tanh(), torch.zeros((1, 8)), torch.zeros((1, 8))), 48)
-        self.assertEqual(modules.module_flops(nn.Sigmoid(), torch.zeros((1, 8)), torch.zeros((1, 8))), 32)
+        self.assertEqual(modules.module_flops(nn.Identity(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
+        self.assertEqual(modules.module_flops(nn.Flatten(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
+        self.assertEqual(modules.module_flops(nn.ReLU(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 8)
+        self.assertEqual(modules.module_flops(nn.ELU(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 48)
+        self.assertEqual(modules.module_flops(nn.LeakyReLU(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 32)
+        self.assertEqual(modules.module_flops(nn.ReLU6(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 16)
+        self.assertEqual(modules.module_flops(nn.Tanh(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 48)
+        self.assertEqual(modules.module_flops(nn.Sigmoid(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 32)
 
         # BN
-        self.assertEqual(modules.module_flops(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
+        self.assertEqual(modules.module_flops(nn.BatchNorm1d(8), (torch.zeros((1, 8, 4)),), torch.zeros((1, 8, 4))),
                          144 + 32 + 32 * 3 + 48)
 
         # Pooling
         self.assertEqual(modules.module_flops(nn.MaxPool2d((2, 2)),
-                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                              (torch.zeros((1, 8, 4, 4)),), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
         self.assertEqual(modules.module_flops(nn.AvgPool2d((2, 2)),
-                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                              (torch.zeros((1, 8, 4, 4)),), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
         self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d((2, 2)),
-                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                              (torch.zeros((1, 8, 4, 4)),), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
         # Check that single integer output size is supported
         self.assertEqual(modules.module_flops(nn.AdaptiveMaxPool2d(2),
-                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                              (torch.zeros((1, 8, 4, 4)),), torch.zeros((1, 8, 2, 2))),
                          3 * 32)
         self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d((2, 2)),
-                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                              (torch.zeros((1, 8, 4, 4)),), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
         # Check that single integer output size is supported
         self.assertEqual(modules.module_flops(nn.AdaptiveAvgPool2d(2),
-                                              torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
+                                              (torch.zeros((1, 8, 4, 4)),), torch.zeros((1, 8, 2, 2))),
                          5 * 32)
 
         # Dropout
-        self.assertEqual(modules.module_flops(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), 8)
-        self.assertEqual(modules.module_flops(nn.Dropout(p=0), torch.zeros((1, 8)), torch.zeros((1, 8))), 0)
+        self.assertEqual(modules.module_flops(nn.Dropout(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 8)
+        self.assertEqual(modules.module_flops(nn.Dropout(p=0), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
 
         # Conv
         input_t = torch.rand((1, 3, 32, 32))
         mod = nn.Conv2d(3, 8, 3)
-        self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 388800)
+        self.assertEqual(modules.module_flops(mod, (input_t,), mod(input_t)), 388800)
         # ConvTranspose
         mod = nn.ConvTranspose2d(3, 8, 3)
-        self.assertEqual(modules.module_flops(mod, input_t, mod(input_t)), 499408)
+        self.assertEqual(modules.module_flops(mod, (input_t,), mod(input_t)), 499408)
         # Transformer
         mod = nn.Transformer(nhead=4, num_encoder_layers=3)
+        src = torch.rand((10, 32, 512))
+        tgt = torch.rand((20, 32, 512))
         self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 1916295945)
 
     @torch.no_grad()

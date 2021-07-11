@@ -146,7 +146,7 @@ def crawl_module(
                 pre_hook_tracker[id(module)]['current'] = 0
                 pre_hook_tracker[id(module)]['is_used'] = False
 
-        def _fwd_hook(module: Module, input: torch.Tensor, output: torch.Tensor) -> None:
+        def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
             """Post-forward hook"""
 
             # Check that another hook has not been triggered at this forward stage
@@ -168,10 +168,10 @@ def crawl_module(
                     current_rf, current_stride, current_padding = 1., 1., 0.
                 else:
                     # Compute stats for standalone layers
-                    tot_flops = module_flops(module, input[0], output)
-                    tot_macs = module_macs(module, input[0], output)
-                    tot_dmas = module_dmas(module, input[0], output)
-                    current_rf, current_stride, current_padding = module_rf(module, input[0], output)
+                    tot_flops = module_flops(module, inputs, output)
+                    tot_macs = module_macs(module, inputs[0], output)
+                    tot_dmas = module_dmas(module, inputs[0], output)
+                    current_rf, current_stride, current_padding = module_rf(module, inputs[0], output)
 
                 # Update layer information
                 info[fw_idx]['output_shape'] = (-1, *output.shape[1:])

@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.process &mdash; torchscan 0.1.1+fb50451-git documentation</title>
+  <title>torchscan.process &mdash; torchscan 0.1.1+de4472e-git documentation</title>
   
 
   
@@ -26,6 +26,7 @@
         <script src="_static/jquery.js"></script>
         <script src="_static/underscore.js"></script>
         <script src="_static/doctools.js"></script>
+        <script src="_static/js/custom.js"></script>
     
     <script type="text/javascript" src="_static/js/theme.js"></script>
 
@@ -34,8 +35,9 @@
   
   <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato" type="text/css" />
-  <link rel="stylesheet" href="_static/css/custom_theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/custom.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="torchscan.utils" href="utils.html" />
@@ -59,13 +61,6 @@
           
           </a>
 
-          
-            
-            
-              <div class="version">
-                0.1.1+fb50451
-              </div>
-            
           
 
           
@@ -172,14 +167,17 @@
 <p>The following models are available:</p>
 <span class="target" id="module-torchscan.process"></span><dl class="py function">
 <dt class="sig sig-object py" id="torchscan.process.get_process_gpu_ram">
-<span class="sig-prename descclassname"><span class="pre">torchscan.process.</span></span><span class="sig-name descname"><span class="pre">get_process_gpu_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pid</span></span><span class="p"><span class="pre">:</span></span> <span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> &#x2192; <span class="pre">float</span><a class="reference internal" href="_modules/torchscan/process/memory.html#get_process_gpu_ram"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.process.get_process_gpu_ram" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">torchscan.process.</span></span><span class="sig-name descname"><span class="pre">get_process_gpu_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pid</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/process/memory.html#get_process_gpu_ram"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.process.get_process_gpu_ram" title="Permalink to this definition">¶</a></dt>
 <dd><p>Gets the amount of RAM used by a given process on GPU devices</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>pid</strong> – process ID</p>
+<dd class="field-odd"><p><strong>pid</strong> (<em>int</em>) – process ID</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>RAM usage in Megabytes</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>float</p>
 </dd>
 </dl>
 </dd></dl>
@@ -206,7 +204,7 @@
 
   <div role="contentinfo">
     <p>
-        &copy; Copyright 2020, François-Guillaume Fernandez
+        &copy; Copyright 2020-2021, François-Guillaume Fernandez
 
     </p>
   </div>

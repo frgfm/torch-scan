@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.utils &mdash; torchscan 0.1.1+fb50451-git documentation</title>
+  <title>torchscan.utils &mdash; torchscan 0.1.1+de4472e-git documentation</title>
   
 
   
@@ -25,6 +25,7 @@
         <script src="../../_static/jquery.js"></script>
         <script src="../../_static/underscore.js"></script>
         <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/js/custom.js"></script>
     
     <script type="text/javascript" src="../../_static/js/theme.js"></script>
 
@@ -33,8 +34,9 @@
   
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Lato" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/custom_theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/custom.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
 </head>
@@ -56,13 +58,6 @@
           
           </a>
 
-          
-            
-            
-              <div class="version">
-                0.1.1+fb50451
-              </div>
-            
           
 
           
@@ -162,22 +157,21 @@
            <div itemprop="articleBody">
             
   <h1>Source code for torchscan.utils</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright (C) 2020-2021, François-Guillaume Fernandez.</span>
+<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
 
-<span class="c1"># This program is licensed under the Apache License version 2.</span>
-<span class="c1"># See LICENSE or go to &lt;https://www.apache.org/licenses/LICENSE-2.0.txt&gt; for full license details.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Utils</span>
+<span class="sd">&quot;&quot;&quot;</span>
 
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">List</span>
 
-
-<span class="k">def</span> <span class="nf">format_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">format_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Format a string for nested data printing</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        name: input string</span>
-<span class="sd">        depth: depth of the nested information</span>
+<span class="sd">        name (str): input string</span>
+<span class="sd">        depth (int, optional): depth of the nested information</span>
 <span class="sd">    Returns:</span>
-<span class="sd">        formatted string</span>
+<span class="sd">        str: formatted string</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
@@ -188,17 +182,17 @@
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;|    &#39;</span> <span class="o">*</span> <span class="p">(</span><span class="n">depth</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span><span class="si">}</span><span class="s2">└─</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
 
 
-<span class="k">def</span> <span class="nf">wrap_string</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">max_len</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">delimiter</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">wrap</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;[...]&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;end&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">wrap_string</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">max_len</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">wrap</span><span class="o">=</span><span class="s1">&#39;[...]&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;end&#39;</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Wrap a string into a given length</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        s: input string</span>
-<span class="sd">        max_len: maximum string length</span>
-<span class="sd">        delimiter: character used for delimiting information categories</span>
-<span class="sd">        wrap: wrapping sequence used</span>
-<span class="sd">        mode: wrapping mode</span>
+<span class="sd">        s (str): input string</span>
+<span class="sd">        max_len (int): maximum string length</span>
+<span class="sd">        delimiter (str, optional): character used for delimiting information categories</span>
+<span class="sd">        wrap (str, optional): wrapping sequence used</span>
+<span class="sd">        mode (str, optional): wrapping mode</span>
 <span class="sd">    Returns:</span>
-<span class="sd">        wrapped string</span>
+<span class="sd">        str: wrapped string</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_len</span> <span class="ow">or</span> <span class="n">mode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -214,13 +208,14 @@
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;received an unexpected value of argument `mode`&quot;</span><span class="p">)</span>
 
 
-<span class="k">def</span> <span class="nf">unit_scale</span><span class="p">(</span><span class="n">val</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="k">def</span> <span class="nf">unit_scale</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Rescale value using scale units</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        val: input value</span>
+<span class="sd">        val (float): input value</span>
 <span class="sd">    Returns:</span>
-<span class="sd">        tuple of rescaled value and unit</span>
+<span class="sd">        float: rescaled value</span>
+<span class="sd">        str: unit</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e12</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
@@ -235,143 +230,79 @@
         <span class="k">return</span> <span class="n">val</span><span class="p">,</span> <span class="s1">&#39;&#39;</span>
 
 
-<span class="k">def</span> <span class="nf">format_s</span><span class="p">(</span><span class="n">f_string</span><span class="p">,</span> <span class="n">min_w</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">max_w</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">min_w</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-        <span class="n">f_string</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">f_string</span><span class="si">:</span><span class="s2">&lt;</span><span class="si">{</span><span class="n">min_w</span><span class="si">}}</span><span class="s2">&quot;</span>
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">max_w</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-        <span class="n">f_string</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">f_string</span><span class="si">:</span><span class="s2">.</span><span class="si">{</span><span class="n">max_w</span><span class="si">}}</span><span class="s2">&quot;</span>
-
-    <span class="k">return</span> <span class="n">f_string</span>
-
-
-<span class="k">def</span> <span class="nf">format_line_str</span><span class="p">(</span>
-    <span class="n">layer</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
-    <span class="n">col_w</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">wrap_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mid&#39;</span><span class="p">,</span>
-    <span class="n">receptive_field</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="n">effective_rf_stats</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
-        <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">7</span>  <span class="c1"># type: ignore[list-item]</span>
-
-    <span class="n">max_len</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">3</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">col_w</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">int</span><span class="p">)</span> <span class="k">else</span> <span class="mi">100</span>
-    <span class="n">line_str</span> <span class="o">=</span> <span class="p">[</span><span class="n">format_s</span><span class="p">(</span><span class="n">wrap_string</span><span class="p">(</span><span class="n">format_name</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]),</span> <span class="n">max_len</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">),</span>
-                         <span class="n">col_w</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">0</span><span class="p">])]</span>
-    <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
-    <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;output_shape&#39;</span><span class="p">]),</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
-    <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                             <span class="n">col_w</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
-
-    <span class="k">if</span> <span class="n">receptive_field</span><span class="p">:</span>
-        <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">4</span><span class="p">]))</span>
-        <span class="k">if</span> <span class="n">effective_rf_stats</span><span class="p">:</span>
-            <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">5</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">5</span><span class="p">]))</span>
-            <span class="n">line_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">format_s</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">6</span><span class="p">],</span> <span class="n">col_w</span><span class="p">[</span><span class="mi">6</span><span class="p">]))</span>
-
-    <span class="k">return</span> <span class="n">line_str</span>
-
-
-<div class="viewcode-block" id="format_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.format_info">[docs]</a><span class="k">def</span> <span class="nf">format_info</span><span class="p">(</span>
-    <span class="n">module_info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
-    <span class="n">wrap_mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mid&#39;</span><span class="p">,</span>
-    <span class="n">receptive_field</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="n">effective_rf_stats</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<div class="viewcode-block" id="format_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.format_info">[docs]</a><span class="k">def</span> <span class="nf">format_info</span><span class="p">(</span><span class="n">module_info</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="s1">&#39;mid&#39;</span><span class="p">,</span> <span class="n">receptive_field</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Print module summary for an expected input tensor shape</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        module_info: dictionary output of `crawl_module`</span>
-<span class="sd">        wrap_mode: wrapping mode</span>
-<span class="sd">        receptive_field: whether to display receptive field</span>
-<span class="sd">        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding</span>
-<span class="sd">    Returns:</span>
-<span class="sd">        formatted information</span>
+<span class="sd">        module_info (dict): dictionary output of `crawl_module`</span>
+<span class="sd">        wrap_mode (str, optional): wrapping mode</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="c1"># Set margin between cols</span>
-    <span class="n">margin</span> <span class="o">=</span> <span class="mi">4</span>
-    <span class="c1"># Dynamic col width</span>
-    <span class="c1"># Init with headers</span>
-    <span class="n">headers</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;Layer&#39;</span><span class="p">,</span> <span class="s1">&#39;Type&#39;</span><span class="p">,</span> <span class="s1">&#39;Output Shape&#39;</span><span class="p">,</span> <span class="s1">&#39;Param #&#39;</span><span class="p">,</span> <span class="s1">&#39;Receptive field&#39;</span><span class="p">,</span> <span class="s1">&#39;Effective stride&#39;</span><span class="p">,</span> <span class="s1">&#39;Effective padding&#39;</span><span class="p">]</span>
-    <span class="n">max_w</span> <span class="o">=</span> <span class="p">[</span><span class="mi">27</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">17</span><span class="p">]</span>
-    <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">headers</span><span class="p">]</span>
-    <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]:</span>
-        <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="nb">max</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">))</span>
-                 <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="n">format_line_str</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">col_w</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">,</span>
-                                                        <span class="n">receptive_field</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">effective_rf_stats</span><span class="o">=</span><span class="kc">True</span><span class="p">))]</span>
-
-    <span class="c1"># Truncate columns that are too long</span>
-    <span class="n">col_w</span> <span class="o">=</span> <span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">max_v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span><span class="p">,</span> <span class="n">max_v</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">col_w</span><span class="p">,</span> <span class="n">max_w</span><span class="p">)]</span>
-
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">receptive_field</span><span class="p">:</span>
-        <span class="n">col_w</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span>
-        <span class="n">headers</span> <span class="o">=</span> <span class="n">headers</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span>
-    <span class="k">elif</span> <span class="ow">not</span> <span class="n">effective_rf_stats</span><span class="p">:</span>
-        <span class="n">col_w</span> <span class="o">=</span> <span class="n">col_w</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
-        <span class="n">headers</span> <span class="o">=</span> <span class="n">headers</span><span class="p">[:</span><span class="mi">5</span><span class="p">]</span>
-
     <span class="c1"># Define separating lines</span>
-    <span class="n">line_length</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">col_w</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">col_w</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">margin</span>
-    <span class="n">thin_line</span> <span class="o">=</span> <span class="s1">&#39;_&#39;</span> <span class="o">*</span> <span class="n">line_length</span>
-    <span class="n">thick_line</span> <span class="o">=</span> <span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="n">line_length</span>
-    <span class="n">dot_line</span> <span class="o">=</span> <span class="s1">&#39;-&#39;</span> <span class="o">*</span> <span class="n">line_length</span>
-
-    <span class="n">margin_str</span> <span class="o">=</span> <span class="s1">&#39; &#39;</span> <span class="o">*</span> <span class="n">margin</span>
+    <span class="n">line_length</span> <span class="o">=</span> <span class="mi">90</span>
+    <span class="k">if</span> <span class="n">receptive_field</span><span class="p">:</span>
+        <span class="n">line_length</span> <span class="o">+=</span> <span class="mi">18</span>
+    <span class="n">thin_line</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_&#39;</span> <span class="o">*</span> <span class="n">line_length</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">thick_line</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="n">line_length</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">dot_line</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;-&#39;</span> <span class="o">*</span> <span class="n">line_length</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
 
     <span class="c1"># Header</span>
-    <span class="n">info_str</span> <span class="o">=</span> <span class="p">[</span><span class="n">thin_line</span><span class="p">]</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">margin_str</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col_name</span><span class="si">:</span><span class="s2">&lt;</span><span class="si">{</span><span class="n">col_w</span><span class="si">}}</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">col_name</span><span class="p">,</span> <span class="n">col_w</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">headers</span><span class="p">,</span> <span class="n">col_w</span><span class="p">)]))</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">thick_line</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">=</span> <span class="n">thin_line</span>
+    <span class="k">if</span> <span class="n">receptive_field</span><span class="p">:</span>
+        <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Layer&#39;</span><span class="si">:</span><span class="s2">&lt;27</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Type&#39;</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Output Shape&#39;</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Param #&#39;</span><span class="si">:</span><span class="s2">&lt;15</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Receptive field&#39;</span><span class="si">:</span><span class="s2">&lt;15</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Layer&#39;</span><span class="si">:</span><span class="s2">&lt;27</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Type&#39;</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Output Shape&#39;</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Param #&#39;</span><span class="si">:</span><span class="s2">&lt;15</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">thick_line</span>
 
-    <span class="c1"># Layers</span>
     <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]:</span>
-        <span class="n">line_str</span> <span class="o">=</span> <span class="n">format_line_str</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">col_w</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="p">,</span> <span class="n">receptive_field</span><span class="p">,</span> <span class="n">effective_rf_stats</span><span class="p">)</span>
-        <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="s1">&#39; &#39;</span> <span class="o">*</span> <span class="n">margin</span><span class="p">)</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">line_str</span><span class="p">))</span>
+        <span class="c1"># name, type, output_shape, nb_params</span>
+        <span class="n">info_str</span> <span class="o">+=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">wrap_string</span><span class="p">(</span><span class="n">format_name</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]),</span> <span class="mi">30</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">)</span><span class="si">:</span><span class="s2">&lt;27.25</span><span class="si">}</span><span class="s2">  &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;output_shape&#39;</span><span class="p">])</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">&lt;15,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">info_str</span> <span class="o">+=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot; </span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">&lt;15</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="k">if</span> <span class="n">receptive_field</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span>
 
     <span class="c1"># Parameter information</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">thick_line</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">thick_line</span>
 
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Trainable params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Non-trainable params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="n">num_params</span> <span class="o">=</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total params: </span><span class="si">{</span><span class="n">num_params</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Trainable params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Non-trainable params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Total params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
 
     <span class="c1"># Static RAM usage</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dot_line</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">dot_line</span>
 
     <span class="c1"># Convert to Megabytes</span>
     <span class="n">param_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">])</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">**</span> <span class="mi">2</span>
     <span class="n">overhead</span> <span class="o">=</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overheads&#39;</span><span class="p">][</span><span class="s1">&#39;framework&#39;</span><span class="p">][</span><span class="s1">&#39;fwd&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overheads&#39;</span><span class="p">][</span><span class="s1">&#39;cuda&#39;</span><span class="p">][</span><span class="s1">&#39;fwd&#39;</span><span class="p">]</span>
 
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Model size (params + buffers): </span><span class="si">{</span><span class="n">param_size</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb&quot;</span><span class="p">)</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Framework &amp; CUDA overhead: </span><span class="si">{</span><span class="n">overhead</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb&quot;</span><span class="p">)</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total RAM usage: </span><span class="si">{</span><span class="n">param_size</span> <span class="o">+</span> <span class="n">overhead</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb&quot;</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Model size (params + buffers): </span><span class="si">{</span><span class="n">param_size</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Framework &amp; CUDA overhead: </span><span class="si">{</span><span class="n">overhead</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Total RAM usage: </span><span class="si">{</span><span class="n">param_size</span> <span class="o">+</span> <span class="n">overhead</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb</span><span class="se">\n</span><span class="s2">&quot;</span>
 
     <span class="c1"># FLOPS information</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dot_line</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">dot_line</span>
 
     <span class="n">flops</span><span class="p">,</span> <span class="n">flops_units</span> <span class="o">=</span> <span class="n">unit_scale</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]))</span>
     <span class="n">macs</span><span class="p">,</span> <span class="n">macs_units</span> <span class="o">=</span> <span class="n">unit_scale</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]))</span>
     <span class="n">dmas</span><span class="p">,</span> <span class="n">dmas_units</span> <span class="o">=</span> <span class="n">unit_scale</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]))</span>
 
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Floating Point Operations on forward: </span><span class="si">{</span><span class="n">flops</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">flops_units</span><span class="si">}</span><span class="s2">FLOPs&quot;</span><span class="p">)</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Multiply-Accumulations on forward: </span><span class="si">{</span><span class="n">macs</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">macs_units</span><span class="si">}</span><span class="s2">MACs&quot;</span><span class="p">)</span>
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Direct memory accesses on forward: </span><span class="si">{</span><span class="n">dmas</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">dmas_units</span><span class="si">}</span><span class="s2">DMAs&quot;</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Floating Point Operations on forward: </span><span class="si">{</span><span class="n">flops</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">flops_units</span><span class="si">}</span><span class="s2">FLOPs</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Multiply-Accumulations on forward: </span><span class="si">{</span><span class="n">macs</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">macs_units</span><span class="si">}</span><span class="s2">MACs</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Direct memory accesses on forward: </span><span class="si">{</span><span class="n">dmas</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">dmas_units</span><span class="si">}</span><span class="s2">DMAs</span><span class="se">\n</span><span class="s2">&quot;</span>
 
-    <span class="n">info_str</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">thin_line</span><span class="p">)</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">thin_line</span>
 
-    <span class="k">return</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">info_str</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">info_str</span></div>
 
 
-<div class="viewcode-block" id="aggregate_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.aggregate_info">[docs]</a><span class="k">def</span> <span class="nf">aggregate_info</span><span class="p">(</span><span class="n">info</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">max_depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<div class="viewcode-block" id="aggregate_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.aggregate_info">[docs]</a><span class="k">def</span> <span class="nf">aggregate_info</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Aggregate module information to a maximum depth</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        info: dictionary output of `crawl_module`</span>
-<span class="sd">        max_depth: depth at which parent node aggregates children information</span>
+<span class="sd">        info (dict): dictionary output of `crawl_module`</span>
+<span class="sd">        max_depth (int, optional): depth at which parent node aggregates children information</span>
 <span class="sd">    Returns:</span>
-<span class="sd">        edited dictionary information</span>
+<span class="sd">        dict: edited dictionary information</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">max_depth</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]):</span>
@@ -395,16 +326,14 @@
                 <span class="n">p_size</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span>
                 <span class="n">num_buffers</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span>
                 <span class="n">b_size</span> <span class="o">+=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">]</span>
-                <span class="c1"># Take last child effective RF</span>
-                <span class="n">_rf</span><span class="p">,</span> <span class="n">_s</span><span class="p">,</span> <span class="n">_p</span> <span class="o">=</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;rf&#39;</span><span class="p">],</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;s&#39;</span><span class="p">],</span> <span class="n">_layer</span><span class="p">[</span><span class="s1">&#39;p&#39;</span><span class="p">]</span>
 
             <span class="c1"># Update info</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">flops</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">macs</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dmas</span>
-            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_rf</span>
-            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_s</span>
-            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">_p</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">][</span><span class="s1">&#39;rf&#39;</span><span class="p">]</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">][</span><span class="s1">&#39;s&#39;</span><span class="p">]</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">][</span><span class="s1">&#39;p&#39;</span><span class="p">]</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">grad_p</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nograd_p</span>
             <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_size</span>
@@ -427,7 +356,7 @@
 
   <div role="contentinfo">
     <p>
-        &copy; Copyright 2020, François-Guillaume Fernandez
+        &copy; Copyright 2020-2021, François-Guillaume Fernandez
 
     </p>
   </div>

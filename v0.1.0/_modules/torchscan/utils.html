@@ -1,0 +1,392 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>torchscan.utils &mdash; torchscan 0.1.1+de4472e-git documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/js/custom.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/custom.css" type="text/css" />
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> torchscan
+          
+
+          
+          </a>
+
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Package Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../torchscan.html">torchscan</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../torchscan.html#crawler">Crawler</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../modules.html">torchscan.modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../modules.html#flops">FLOPs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../modules.html#macs">MACs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../modules.html#dmas">DMAs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../process.html">torchscan.process</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../utils.html">torchscan.utils</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">torchscan</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>torchscan.utils</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for torchscan.utils</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!usr/bin/python</span>
+<span class="c1"># -*- coding: utf-8 -*-</span>
+
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Utils</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">format_name</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Format a string for nested data printing</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        name (str): input string</span>
+<span class="sd">        depth (int, optional): depth of the nested information</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        str: formatted string</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">name</span>
+    <span class="k">elif</span> <span class="n">depth</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;├─</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;|    &#39;</span> <span class="o">*</span> <span class="p">(</span><span class="n">depth</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span><span class="si">}</span><span class="s2">└─</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">wrap_string</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">max_len</span><span class="p">,</span> <span class="n">delimiter</span><span class="o">=</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">wrap</span><span class="o">=</span><span class="s1">&#39;[...]&#39;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;end&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Wrap a string into a given length</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        s (str): input string</span>
+<span class="sd">        max_len (int): maximum string length</span>
+<span class="sd">        delimiter (str, optional): character used for delimiting information categories</span>
+<span class="sd">        wrap (str, optional): wrapping sequence used</span>
+<span class="sd">        mode (str, optional): wrapping mode</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        str: wrapped string</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">max_len</span> <span class="ow">or</span> <span class="n">mode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">s</span>
+
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;end&#39;</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">s</span><span class="p">[:</span><span class="n">max_len</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">wrap</span><span class="p">)]</span> <span class="o">+</span> <span class="n">wrap</span>
+    <span class="k">elif</span> <span class="n">mode</span> <span class="o">==</span> <span class="s1">&#39;mid&#39;</span><span class="p">:</span>
+        <span class="n">final_part</span> <span class="o">=</span> <span class="n">s</span><span class="o">.</span><span class="n">rpartition</span><span class="p">(</span><span class="n">delimiter</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">wrapped_end</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">wrap</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">final_part</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">s</span><span class="p">[:</span><span class="n">max_len</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">wrapped_end</span><span class="p">)]</span> <span class="o">+</span> <span class="n">wrapped_end</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;received an unexpected value of argument `mode`&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">unit_scale</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Rescale value using scale units</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        val (float): input value</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        float: rescaled value</span>
+<span class="sd">        str: unit</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e12</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e12</span><span class="p">,</span> <span class="s1">&#39;T&#39;</span>
+    <span class="k">elif</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e9</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e9</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span>
+    <span class="k">elif</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e6</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e6</span><span class="p">,</span> <span class="s1">&#39;M&#39;</span>
+    <span class="k">elif</span> <span class="n">val</span> <span class="o">//</span> <span class="mf">1e3</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">val</span> <span class="o">/</span> <span class="mf">1e3</span><span class="p">,</span> <span class="s1">&#39;k&#39;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">val</span><span class="p">,</span> <span class="s1">&#39;&#39;</span>
+
+
+<div class="viewcode-block" id="format_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.format_info">[docs]</a><span class="k">def</span> <span class="nf">format_info</span><span class="p">(</span><span class="n">module_info</span><span class="p">,</span> <span class="n">wrap_mode</span><span class="o">=</span><span class="s1">&#39;mid&#39;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Print module summary for an expected input tensor shape</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        module_info (dict): dictionary output of `crawl_module`</span>
+<span class="sd">        wrap_mode (str, optional): wrapping mode</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># Define separating lines</span>
+    <span class="n">line_length</span> <span class="o">=</span> <span class="mi">90</span>
+    <span class="n">thin_line</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;_&#39;</span> <span class="o">*</span> <span class="n">line_length</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">thick_line</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="n">line_length</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="n">dot_line</span> <span class="o">=</span> <span class="p">(</span><span class="s1">&#39;-&#39;</span> <span class="o">*</span> <span class="n">line_length</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span>
+
+    <span class="c1"># Header</span>
+    <span class="n">info_str</span> <span class="o">=</span> <span class="n">thin_line</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Layer&#39;</span><span class="si">:</span><span class="s2">&lt;27</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Type&#39;</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="s1">&#39;Output Shape&#39;</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Param #&#39;</span><span class="si">:</span><span class="s2">&lt;15</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">thick_line</span>
+
+    <span class="c1"># Layer information</span>
+    <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]:</span>
+        <span class="c1"># name, type, output_shape, nb_params</span>
+        <span class="n">info_str</span> <span class="o">+=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">wrap_string</span><span class="p">(</span><span class="n">format_name</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">],</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]),</span> <span class="mi">30</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">wrap_mode</span><span class="p">)</span><span class="si">:</span><span class="s2">&lt;27.25</span><span class="si">}</span><span class="s2">  &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;output_shape&#39;</span><span class="p">])</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">&lt;15,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Parameter information</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">thick_line</span>
+
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Trainable params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Non-trainable params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Total params: </span><span class="si">{</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+
+    <span class="c1"># Static RAM usage</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">dot_line</span>
+
+    <span class="c1"># Convert to Megabytes</span>
+    <span class="n">param_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overall&#39;</span><span class="p">][</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">])</span> <span class="o">/</span> <span class="mi">1024</span> <span class="o">**</span> <span class="mi">2</span>
+    <span class="n">overhead</span> <span class="o">=</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overheads&#39;</span><span class="p">][</span><span class="s1">&#39;framework&#39;</span><span class="p">][</span><span class="s1">&#39;fwd&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;overheads&#39;</span><span class="p">][</span><span class="s1">&#39;cuda&#39;</span><span class="p">][</span><span class="s1">&#39;fwd&#39;</span><span class="p">]</span>
+
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Model size (params + buffers): </span><span class="si">{</span><span class="n">param_size</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Framework &amp; CUDA overhead: </span><span class="si">{</span><span class="n">overhead</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Total RAM usage: </span><span class="si">{</span><span class="n">param_size</span> <span class="o">+</span> <span class="n">overhead</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> Mb</span><span class="se">\n</span><span class="s2">&quot;</span>
+
+    <span class="c1"># FLOPS information</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">dot_line</span>
+
+    <span class="n">flops</span><span class="p">,</span> <span class="n">flops_units</span> <span class="o">=</span> <span class="n">unit_scale</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]))</span>
+    <span class="n">macs</span><span class="p">,</span> <span class="n">macs_units</span> <span class="o">=</span> <span class="n">unit_scale</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]))</span>
+    <span class="n">dmas</span><span class="p">,</span> <span class="n">dmas_units</span> <span class="o">=</span> <span class="n">unit_scale</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">module_info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]))</span>
+
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Floating Point Operations on forward: </span><span class="si">{</span><span class="n">flops</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">flops_units</span><span class="si">}</span><span class="s2">FLOPs</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Multiply-Accumulations on forward: </span><span class="si">{</span><span class="n">macs</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">macs_units</span><span class="si">}</span><span class="s2">MACs</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;Direct memory accesses on forward: </span><span class="si">{</span><span class="n">dmas</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">dmas_units</span><span class="si">}</span><span class="s2">DMAs</span><span class="se">\n</span><span class="s2">&quot;</span>
+
+    <span class="n">info_str</span> <span class="o">+=</span> <span class="n">thin_line</span>
+
+    <span class="k">return</span> <span class="n">info_str</span></div>
+
+
+<div class="viewcode-block" id="aggregate_info"><a class="viewcode-back" href="../../utils.html#torchscan.utils.aggregate_info">[docs]</a><span class="k">def</span> <span class="nf">aggregate_info</span><span class="p">(</span><span class="n">info</span><span class="p">,</span> <span class="n">max_depth</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Aggregate module information to a maximum depth</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        info (dict): dictionary output of `crawl_module`</span>
+<span class="sd">        max_depth (int, optional): depth at which parent node aggregates children information</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        dict: edited dictionary information</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">max_depth</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;The `max_depth` argument cannot be higher than module depth.&quot;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">fw_idx</span><span class="p">,</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]):</span>
+        <span class="c1"># Need to aggregate information</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;is_leaf&#39;</span><span class="p">]</span> <span class="ow">and</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="n">max_depth</span><span class="p">:</span>
+            <span class="n">grad_p</span><span class="p">,</span> <span class="n">nograd_p</span><span class="p">,</span> <span class="n">p_size</span><span class="p">,</span> <span class="n">num_buffers</span><span class="p">,</span> <span class="n">b_size</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+            <span class="n">flops</span><span class="p">,</span> <span class="n">macs</span><span class="p">,</span> <span class="n">dmas</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:]:</span>
+                <span class="c1"># Children have superior depth and were hooked after parent</span>
+                <span class="k">if</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">max_depth</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="c1"># Aggregate all information (flops, macc, ram)</span>
+                <span class="n">flops</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span>
+                <span class="n">macs</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span>
+                <span class="n">dmas</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span>
+                <span class="n">grad_p</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span>
+                <span class="n">nograd_p</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span>
+                <span class="n">p_size</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span>
+                <span class="n">num_buffers</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span>
+                <span class="n">b_size</span> <span class="o">+=</span> <span class="n">l</span><span class="p">[</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">]</span>
+
+            <span class="c1"># Update info</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;flops&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">flops</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;macs&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">macs</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;dmas&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dmas</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;grad_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">grad_p</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;nograd_params&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">nograd_p</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;param_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">p_size</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;num_buffers&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">num_buffers</span>
+            <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">][</span><span class="n">fw_idx</span><span class="p">][</span><span class="s1">&#39;buffer_size&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">b_size</span>
+
+    <span class="c1"># Filter out further depth information</span>
+    <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">layer</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">info</span><span class="p">[</span><span class="s1">&#39;layers&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="n">layer</span><span class="p">[</span><span class="s1">&#39;depth&#39;</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">max_depth</span><span class="p">]</span>
+
+    <span class="k">return</span> <span class="n">info</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020-2021, François-Guillaume Fernandez
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+    <!-- Theme Analytics -->
+    <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+      (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+      m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-148140560-3', 'auto');
+    ga('send', 'pageview');
+    </script>
+
+    
+   
+
+</body>
+</html>

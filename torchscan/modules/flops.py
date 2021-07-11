@@ -62,7 +62,7 @@ def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Tensor) -> 
     elif isinstance(module, _AdaptiveAvgPoolNd):
         return flops_adaptive_avgpool(module, inputs, output)
     elif isinstance(module, nn.Dropout):
-        return flops_dropout(module, inputs, output)
+        return flops_dropout(module, inputs)
     elif isinstance(module, nn.Transformer):
         return flops_transformer(module, inputs)
     else:
@@ -255,8 +255,8 @@ def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
     return norm_ops + scale_ops
 
 
-def flops_mha(module: nn.TransformerEncoderLayer, inputs: Tuple[Tensor, ...]) -> int:
-    """FLOPs estimation for `torch.nn.TransformerEncoderLayer`"""
+def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Tensor, ...]) -> int:
+    """FLOPs estimation for `torch.nn.MultiheadAttention`"""
 
     # Input projection
     q, k, v = inputs[:3]
@@ -328,7 +328,7 @@ def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: T
     tot_flops += flops_dropout(module.dropout1, inputs) + inputs[0].numel()
     tot_flops += flops_layernorm(module.norm1, inputs)
     # get linear 1 output size
-    tot_flops += flops_linear(module.linear1, inputs) + module_flops(module.activation, inputs)
+    tot_flops += flops_linear(module.linear1, inputs) + module_flops(module.activation, inputs, torch.empty(1))
     tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
     # get linear 2 output size
     tot_flops += flops_dropout(module.dropout2, inputs) + inputs[0].numel()
@@ -349,7 +349,7 @@ def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: T
     tot_flops += flops_layernorm(module.norm2, inputs)
 
     # get linear 1 output size
-    tot_flops += flops_linear(module.linear1, inputs) + module_flops(module.activation, inputs)
+    tot_flops += flops_linear(module.linear1, inputs) + module_flops(module.activation, inputs, torch.empty(1))
     tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
     # get linear 2 output size
     tot_flops += flops_dropout(module.dropout3, inputs) + inputs[0].numel()

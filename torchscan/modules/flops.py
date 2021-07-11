@@ -6,7 +6,7 @@
 import warnings
 from functools import reduce
 from operator import mul
-from typing import Optional, Tuple
+from typing import Tuple
 
 import torch
 from torch import nn
@@ -20,7 +20,7 @@ from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd,
 __all__ = ['module_flops']
 
 
-def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Optional[Tensor] = None) -> int:
+def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
     """Estimate the number of floating point operations performed by the module
 
     Args:

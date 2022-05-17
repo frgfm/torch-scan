@@ -5,7 +5,6 @@
 
 import warnings
 from functools import reduce
-from math import prod
 from operator import mul
 
 from torch import nn
@@ -58,7 +57,7 @@ def macs_linear(module: nn.Linear, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * macs_per_elt (bias already counted in accumulation)
-    mm_mac = module.in_features * prod(output.shape)
+    mm_mac = module.in_features * reduce(mul, output.shape)
 
     return mm_mac
 

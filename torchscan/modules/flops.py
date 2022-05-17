@@ -4,7 +4,7 @@
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0.txt> for full license details.
 
 import warnings
-from math import prod
+from functools import reduce
 from operator import mul
 from typing import Tuple
 
@@ -74,8 +74,8 @@ def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * in_chan
-    mm_flops = prod(inputs[0].shape) * (2 * module.in_features - 1)
-    bias_flops = prod(inputs[0].shape) if module.bias is not None else 0
+    mm_flops = reduce(mul, inputs[0].shape) * (2 * module.in_features - 1)
+    bias_flops = reduce(mul, inputs[0].shape) if module.bias is not None else 0
 
     return mm_flops + bias_flops
 
@@ -149,7 +149,7 @@ def flops_convnd(module: _ConvNd, inputs: Tuple[Tensor, ...], output: Tensor) ->
     """FLOPs estimation for `torch.nn.modules.conv._ConvNd`"""
 
     # For each position, # mult = kernel size, # adds = kernel size - 1
-    window_flops_per_chan = 2 * prod(module.kernel_size) - 1
+    window_flops_per_chan = 2 * reduce(mul, module.kernel_size) - 1
     # Connections to input channels is controlled by the group parameter
     effective_in_chan = (inputs[0].shape[1] // module.groups)
     # N * flops + (N - 1) additions
@@ -193,7 +193,7 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
 def flops_maxpool(module: _MaxPoolNd, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
 
-    k_size = prod(module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
+    k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
 
     # for each spatial output element, check max element in kernel scope
     return output.numel() * (k_size - 1)
@@ -202,7 +202,7 @@ def flops_maxpool(module: _MaxPoolNd, inputs: Tuple[Tensor, ...], output: Tensor
 def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
 
-    k_size = prod(module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
+    k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return output.numel() * (k_size - 1 + inputs[0].ndim - 2)  # type: ignore[attr-defined]
@@ -220,7 +220,7 @@ def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...
                         for i_size, o_size in zip(inputs[0].shape[2:], o_sizes))
 
     # for each spatial output element, check max element in kernel scope
-    return output.numel() * (prod(kernel_size) - 1)
+    return output.numel() * (reduce(mul, kernel_size) - 1)
 
 
 def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
@@ -235,18 +235,18 @@ def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...
                         for i_size, o_size in zip(inputs[0].shape[2:], o_sizes))
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return output.numel() * (prod(kernel_size) - 1 + len(kernel_size))
+    return output.numel() * (reduce(mul, kernel_size) - 1 + len(kernel_size))
 
 
 def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
 
     # Compute current mean
-    norm_ops = prod(module.normalized_shape) * inputs[0].shape[:-len(module.normalized_shape)].numel()
+    norm_ops = reduce(mul, module.normalized_shape) * inputs[0].shape[:-len(module.normalized_shape)].numel()
     # current var (sub the mean, square it, sum them, divide by remaining shape)
     norm_ops += 3 * inputs[0].numel()
     # for each channel, add eps and running_var, sqrt it
-    norm_ops += prod(module.normalized_shape) * 2
+    norm_ops += reduce(mul, module.normalized_shape) * 2
     # For each element, sub running_mean, div by denom
     norm_ops += inputs[0].numel() * 2
     # For each element, mul by gamma, add beta

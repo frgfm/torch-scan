@@ -80,8 +80,8 @@ class Tester(unittest.TestCase):
         self.assertEqual(modules.module_flops(mod, (input_t,), mod(input_t)), 499408)
         # Transformer
         mod = nn.Transformer(nhead=4, num_encoder_layers=3)
-        src = torch.rand((10, 32, 512))
-        tgt = torch.rand((20, 32, 512))
+        src = torch.rand((10, 16, 64))
+        tgt = torch.rand((20, 16, 64))
         self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 1916295945)
 
     @torch.no_grad()

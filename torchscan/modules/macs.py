@@ -57,7 +57,7 @@ def macs_linear(module: nn.Linear, input: Tensor, output: Tensor) -> int:
     """MACs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * macs_per_elt (bias already counted in accumulation)
-    mm_mac = input.shape[0] * output.shape[1] * input.shape[1]
+    mm_mac = module.in_features * reduce(mul, output.shape)
 
     return mm_mac
 

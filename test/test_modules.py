@@ -29,6 +29,8 @@ class Tester(unittest.TestCase):
                          4 * (2 * 8 - 1) + 4)
         self.assertEqual(modules.module_flops(nn.Linear(8, 4, bias=False), (torch.zeros((1, 8)),), torch.zeros((1, 4))),
                          4 * (2 * 8 - 1))
+        self.assertEqual(modules.module_flops(nn.Linear(8, 4), (torch.zeros((1, 2, 8)),), torch.zeros((1, 2, 4))),
+                         2 * (4 * (2 * 8 - 1) + 4))
         # Activations
         self.assertEqual(modules.module_flops(nn.Identity(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
         self.assertEqual(modules.module_flops(nn.Flatten(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
@@ -77,10 +79,10 @@ class Tester(unittest.TestCase):
         mod = nn.ConvTranspose2d(3, 8, 3)
         self.assertEqual(modules.module_flops(mod, (input_t,), mod(input_t)), 499408)
         # Transformer
-        mod = nn.Transformer(nhead=4, num_encoder_layers=3)
-        src = torch.rand((10, 32, 512))
-        tgt = torch.rand((20, 32, 512))
-        self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 1916295945)
+        mod = nn.Transformer(d_model=64, nhead=4, num_encoder_layers=3)
+        src = torch.rand((10, 16, 64))
+        tgt = torch.rand((20, 16, 64))
+        self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 774952841)
 
     @torch.no_grad()
     def test_module_macs(self):
@@ -92,6 +94,8 @@ class Tester(unittest.TestCase):
         # Linear
         self.assertEqual(modules.module_macs(nn.Linear(8, 4), torch.zeros((1, 8)), torch.zeros((1, 4))),
                          8 * 4)
+        self.assertEqual(modules.module_macs(nn.Linear(8, 4), torch.zeros((1, 2, 8)), torch.zeros((1, 2, 4))),
+                         8 * 4 * 2)
         # Activations
         self.assertEqual(modules.module_macs(nn.ReLU(), None, None), 0)
         # Conv

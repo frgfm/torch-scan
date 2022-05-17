@@ -74,8 +74,9 @@ def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * in_chan
-    mm_flops = inputs[0].shape[0] * module.out_features * (2 * module.in_features - 1)
-    bias_flops = inputs[0].shape[0] * module.out_features if module.bias is not None else 0
+    num_out_feats = module.out_features * reduce(mul, inputs[0].shape[:-1])
+    mm_flops = num_out_feats * (2 * module.in_features - 1)
+    bias_flops = num_out_feats if module.bias is not None else 0
 
     return mm_flops + bias_flops
 

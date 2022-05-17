@@ -270,7 +270,7 @@ def summary(
 
     Args:
         module: module to inspect
-        input_shape: expected input shapes
+        input_shape: expected input shapes (don't include batch size)
         wrap_mode: if a value is too long, where the wrapping should be performed
         max_depth: maximum depth of layer information
         receptive_field: whether receptive field estimation should be performed

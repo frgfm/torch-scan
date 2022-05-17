@@ -34,7 +34,7 @@ def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Tensor) -> 
     if isinstance(module, (nn.Identity, nn.Flatten)):
         return 0
     elif isinstance(module, nn.Linear):
-        return flops_linear(module, inputs, output)
+        return flops_linear(module, inputs)
     elif isinstance(module, nn.ReLU):
         return flops_relu(module, inputs)
     elif isinstance(module, nn.ELU):
@@ -70,12 +70,13 @@ def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Tensor) -> 
         return 0
 
 
-def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
+def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
 
     # batch size * out_chan * in_chan
-    mm_flops = reduce(mul, output.shape) * (2 * module.in_features - 1)
-    bias_flops = reduce(mul, output.shape) if module.bias is not None else 0
+    num_out_feats = module.out_features * reduce(mul, inputs[0].shape[:-1]) 
+    mm_flops = num_out_feats * (2 * module.in_features - 1)
+    bias_flops = num_out_feats if module.bias is not None else 0
 
     return mm_flops + bias_flops
 

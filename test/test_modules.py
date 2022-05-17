@@ -82,7 +82,7 @@ class Tester(unittest.TestCase):
         mod = nn.Transformer(d_model=64, nhead=4, num_encoder_layers=3)
         src = torch.rand((10, 16, 64))
         tgt = torch.rand((20, 16, 64))
-        self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 1916295945)
+        self.assertEqual(modules.module_flops(mod, (src, tgt), mod(src, tgt)), 774952841)
 
     @torch.no_grad()
     def test_module_macs(self):

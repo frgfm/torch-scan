@@ -29,6 +29,8 @@ class Tester(unittest.TestCase):
                          4 * (2 * 8 - 1) + 4)
         self.assertEqual(modules.module_flops(nn.Linear(8, 4, bias=False), (torch.zeros((1, 8)),), torch.zeros((1, 4))),
                          4 * (2 * 8 - 1))
+        self.assertEqual(modules.module_flops(nn.Linear(8, 4), (torch.zeros((1, 2, 8)),), torch.zeros((1, 2, 4))),
+                         2 * (4 * (2 * 8 - 1) + 4))
         # Activations
         self.assertEqual(modules.module_flops(nn.Identity(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
         self.assertEqual(modules.module_flops(nn.Flatten(), (torch.zeros((1, 8)),), torch.zeros((1, 8))), 0)
@@ -92,6 +94,8 @@ class Tester(unittest.TestCase):
         # Linear
         self.assertEqual(modules.module_macs(nn.Linear(8, 4), torch.zeros((1, 8)), torch.zeros((1, 4))),
                          8 * 4)
+        self.assertEqual(modules.module_macs(nn.Linear(8, 4), torch.zeros((1, 2, 8)), torch.zeros((1, 2, 4))),
+                         8 * 4 * 2)
         # Activations
         self.assertEqual(modules.module_macs(nn.ReLU(), None, None), 0)
         # Conv

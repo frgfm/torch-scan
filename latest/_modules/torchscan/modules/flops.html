@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.modules.flops &mdash; torchscan 0.1.1+61116d9-git documentation</title>
+  <title>torchscan.modules.flops &mdash; torchscan 0.1.1+358edb6-git documentation</title>
   
 
   
@@ -233,8 +233,9 @@
     <span class="sd">&quot;&quot;&quot;FLOPs estimation for `torch.nn.Linear`&quot;&quot;&quot;</span>
 
     <span class="c1"># batch size * out_chan * in_chan</span>
-    <span class="n">mm_flops</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">module</span><span class="o">.</span><span class="n">out_features</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">module</span><span class="o">.</span><span class="n">in_features</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="n">bias_flops</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">module</span><span class="o">.</span><span class="n">out_features</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="n">num_out_feats</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">out_features</span> <span class="o">*</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">inputs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="n">mm_flops</span> <span class="o">=</span> <span class="n">num_out_feats</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">module</span><span class="o">.</span><span class="n">in_features</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">bias_flops</span> <span class="o">=</span> <span class="n">num_out_feats</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">bias</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
 
     <span class="k">return</span> <span class="n">mm_flops</span> <span class="o">+</span> <span class="n">bias_flops</span>
 
@@ -542,7 +543,7 @@
 
   <div role="contentinfo">
     <p>
-        &copy; Copyright 2020-2021, François-Guillaume Fernandez
+        &copy; Copyright 2020-2022, François-Guillaume Fernandez
 
     </p>
   </div>

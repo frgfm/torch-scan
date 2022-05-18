@@ -1,13 +1,13 @@
-# Copyright (C) 2020-2021, François-Guillaume Fernandez.
+# Copyright (C) 2020-2022, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License version 2.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0.txt> for full license details.
 
 import os
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import torch
 from torch.nn import Module
-from typing import Callable, Optional, Dict, Any, Tuple, List, Union, Iterable
 
 from .modules import module_dmas, module_flops, module_macs, module_rf
 from .process import get_process_gpu_ram

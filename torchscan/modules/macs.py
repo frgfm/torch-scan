@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2021, François-Guillaume Fernandez.
+# Copyright (C) 2020-2022, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License version 2.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0.txt> for full license details.
@@ -7,13 +7,11 @@ import warnings
 from functools import reduce
 from operator import mul
 
-from torch import nn
-from torch import Tensor
+from torch import Tensor, nn
 from torch.nn import Module
-from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.batchnorm import _BatchNorm
-from torch.nn.modules.pooling import _MaxPoolNd, _AvgPoolNd, _AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd
-
+from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
+from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 __all__ = ['module_macs']
 

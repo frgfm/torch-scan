@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2021, François-Guillaume Fernandez.
+# Copyright (C) 2020-2022, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License version 2.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0.txt> for full license details.
@@ -23,10 +23,10 @@ def get_process_gpu_ram(pid: int) -> float:
     try:
         res = subprocess.run(["nvidia-smi", "-q", "-d", "PIDS"], capture_output=True).stdout.decode()
         # Try to locate the process
-        pids = re.findall("Process ID\s+:\s([^\D]*)", res)
+        pids = re.findall(r"Process ID\s+:\s([^\D]*)", res)
         for idx, _pid in enumerate(pids):
             if int(_pid) == pid:
-                return float(re.findall("Used GPU Memory\s+:\s([^\D]*)", res)[idx])
+                return float(re.findall(r"Used GPU Memory\s+:\s([^\D]*)", res)[idx])
     except Exception as e:
         warnings.warn(f"raised: {e}. Assuming no GPU is available.")
 

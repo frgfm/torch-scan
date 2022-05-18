@@ -1,5 +1,4 @@
 import pytest
-
 import torch
 from torch import nn
 
@@ -52,8 +51,6 @@ def test_module_flops_warning():
     ],
 )
 def test_module_flops(mod, input_shape, output_shape, expected_val):
-
-
     assert modules.module_flops(mod, (torch.zeros(input_shape),), torch.zeros(output_shape)) == expected_val
 
 

@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>torchscan.crawler &mdash; torchscan 0.1.1+358edb6-git documentation</title>
+  <title>torchscan.crawler &mdash; torchscan 0.1.2.dev0+4d4fcbf-git documentation</title>
   
 
   
@@ -21,10 +21,11 @@
   
     
       <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
         <script src="../../_static/jquery.js"></script>
         <script src="../../_static/underscore.js"></script>
         <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
         <script src="../../_static/js/custom.js"></script>
     
     <script type="text/javascript" src="../../_static/js/theme.js"></script>
@@ -34,8 +35,7 @@
   
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/custom.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" /> 
@@ -79,7 +79,16 @@
               
             
             
-              <p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
+              <p><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../installing.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../installing.html#via-python-package">Via Python Package</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../installing.html#via-conda">Via Conda</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../installing.html#via-git">Via Git</a></li>
+</ul>
+</li>
+</ul>
+<p><span class="caption-text">Package Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../torchscan.html">torchscan</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../torchscan.html#crawler">Crawler</a></li>
@@ -94,6 +103,14 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../process.html">torchscan.process</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../utils.html">torchscan.utils</a></li>
+</ul>
+<p><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../changelog.html">Changelog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../changelog.html#v0-1-1-2020-08-04">v0.1.1 (2020-08-04)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../changelog.html#v0-1-0-2020-05-21">v0.1.0 (2020-05-21)</a></li>
+</ul>
+</li>
 </ul>
 
             
@@ -157,16 +174,16 @@
            <div itemprop="articleBody">
             
   <h1>Source code for torchscan.crawler</h1><div class="highlight"><pre>
-<span></span><span class="c1"># Copyright (C) 2020-2021, François-Guillaume Fernandez.</span>
+<span></span><span class="c1"># Copyright (C) 2020-2022, François-Guillaume Fernandez.</span>
 
 <span class="c1"># This program is licensed under the Apache License version 2.</span>
 <span class="c1"># See LICENSE or go to &lt;https://www.apache.org/licenses/LICENSE-2.0.txt&gt; for full license details.</span>
 
 <span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">Module</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Iterable</span>
 
 <span class="kn">from</span> <span class="nn">.modules</span> <span class="kn">import</span> <span class="n">module_dmas</span><span class="p">,</span> <span class="n">module_flops</span><span class="p">,</span> <span class="n">module_macs</span><span class="p">,</span> <span class="n">module_rf</span>
 <span class="kn">from</span> <span class="nn">.process</span> <span class="kn">import</span> <span class="n">get_process_gpu_ram</span>

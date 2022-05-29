@@ -130,6 +130,6 @@ dmypy.json
 .pyre/
 
 # Package version
-/torchscan/version.py
+torchscan/version.py
 # Conda distribution
 conda-dist/

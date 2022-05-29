@@ -31,10 +31,10 @@ else:
         version += '+' + sha[:7]
 print(f"Building wheel {package_name}-{version}")
 
-with open(cwd.joinpath('torchscan', 'version.py'), 'w') as f:
+with open(cwd.joinpath('torchscan', 'version.py'), 'w', encoding='utf-8') as f:
     f.write(f"__version__ = '{version}'\n")
 
-with open('README.md', 'r') as f:
+with open('README.md', 'r', encoding='utf-8') as f:
     readme = f.read()
 
 _deps = [

@@ -76,6 +76,8 @@ def test_summary():
         )
     )
 
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
     crawler.summary(mod, (3, 32, 32), max_depth=1)
     # Reset redirect.
     sys.stdout = sys.__stdout__

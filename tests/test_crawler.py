@@ -1,8 +1,8 @@
 import io
 import sys
-import pytest
 from collections import OrderedDict
 
+import pytest
 import torch.nn as nn
 
 from torchscan import crawler
@@ -66,11 +66,15 @@ def test_summary():
     with pytest.raises(ValueError):
         crawler.summary(mod, (3, 32, 32), max_depth=1)
 
-    mod = nn.Sequential(OrderedDict([
-        ("features", nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(inplace=True))),
-        ("pool", nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(1))),
-        ("classifier", nn.Linear(8, 1)),
-    ]))
+    mod = nn.Sequential(
+        OrderedDict(
+            [
+                ("features", nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(inplace=True))),
+                ("pool", nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(1))),
+                ("classifier", nn.Linear(8, 1)),
+            ]
+        )
+    )
 
     crawler.summary(mod, (3, 32, 32), max_depth=1)
     # Reset redirect.

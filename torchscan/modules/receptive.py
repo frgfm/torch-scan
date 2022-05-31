@@ -59,7 +59,7 @@ def module_rf(module: Module, input: Tensor, output: Tensor) -> Tuple[float, flo
 def rf_convtransposend(module: _ConvTransposeNd, intput: Tensor, output: Tensor) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
     s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
-    return -k, 1.0 / s, 0.0  # type: ignore[operator]
+    return -k, 1.0 / s, 0.0
 
 
 def rf_aggregnd(

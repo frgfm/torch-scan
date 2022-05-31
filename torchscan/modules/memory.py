@@ -6,7 +6,7 @@
 import warnings
 from functools import reduce
 from operator import mul
-from typing import Union
+from typing import Tuple, Union
 
 from torch import Tensor, nn
 from torch.nn import Module
@@ -207,7 +207,7 @@ def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], input: Tensor, output: Tens
     if isinstance(module.kernel_size, tuple):
         kernel_size = module.kernel_size
     elif isinstance(module.kernel_size, int):
-        kernel_size = (module.kernel_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
+        kernel_size = (module.kernel_size,) * (input.ndim - 2)
 
     # Each output element required K ** 2 memory accesses
     input_dma = reduce(mul, kernel_size) * output.numel()
@@ -223,7 +223,7 @@ def dmas_adaptive_pool(module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], in
     if isinstance(module.output_size, tuple):
         o_sizes = module.output_size
     else:
-        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
+        o_sizes = (module.output_size,) * (input.ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1

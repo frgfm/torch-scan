@@ -103,10 +103,10 @@ def macs_bn(module: _BatchNorm, input: Tensor, output: Tensor) -> int:
     # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
     tracking_mac = 0
     b = input.shape[0]
-    num_spatial_elts = input.shape[2:].numel()  # type: ignore[attr-defined]
+    num_spatial_elts = input.shape[2:].numel()
     if module.track_running_stats and module.training:
         # running_mean: by channel, sum value and div by batch size
-        tracking_mac += module.num_features * (b * num_spatial_elts - 1)  # type: ignore[operator, attr-defined]
+        tracking_mac += module.num_features * (b * num_spatial_elts - 1)  # type: ignore[operator]
         # running_var: by channel, sub mean and square values, sum them, divide by batch size
         active_elts = b * num_spatial_elts
         tracking_mac += module.num_features * (2 * active_elts - 1)
@@ -131,7 +131,7 @@ def macs_avgpool(module: _AvgPoolNd, input: Tensor, output: Tensor) -> int:
     k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return output.numel() * (k_size - 1 + input.ndim - 2)  # type: ignore[attr-defined]
+    return output.numel() * (k_size - 1 + input.ndim - 2)
 
 
 def macs_adaptive_maxpool(module: _AdaptiveMaxPoolNd, input: Tensor, output: Tensor) -> int:
@@ -140,7 +140,7 @@ def macs_adaptive_maxpool(module: _AdaptiveMaxPoolNd, input: Tensor, output: Ten
     if isinstance(module.output_size, tuple):
         o_sizes = module.output_size
     else:
-        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
+        o_sizes = (module.output_size,) * (input.ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
@@ -157,7 +157,7 @@ def macs_adaptive_avgpool(module: _AdaptiveAvgPoolNd, input: Tensor, output: Ten
     if isinstance(module.output_size, tuple):
         o_sizes = module.output_size
     else:
-        o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
+        o_sizes = (module.output_size,) * (input.ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1

@@ -180,9 +180,9 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
         if module.momentum is None:
             tracking_flops += 1
         # running_mean: by channel, sum values and div by batch size
-        tracking_flops += inputs[0].numel()  # type: ignore[attr-defined]
+        tracking_flops += inputs[0].numel()
         # running_var: by channel, sub mean and square values, sum them, divide by batch size
-        tracking_flops += 3 * inputs[0].numel()  # type: ignore[attr-defined]
+        tracking_flops += 3 * inputs[0].numel()
         # Update both runnning stat: rescale previous value (mul by N), add it the new one, then div by (N + 1)
         tracking_flops += 2 * module.num_features * 3
 
@@ -204,7 +204,7 @@ def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], output: Tensor
     k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return output.numel() * (k_size - 1 + inputs[0].ndim - 2)  # type: ignore[attr-defined]
+    return output.numel() * (k_size - 1 + inputs[0].ndim - 2)
 
 
 def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
@@ -213,7 +213,7 @@ def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...
     if isinstance(module.output_size, tuple):
         o_sizes = module.output_size
     else:
-        o_sizes = (module.output_size,) * (inputs[0].ndim - 2)  # type: ignore[attr-defined]
+        o_sizes = (module.output_size,) * (inputs[0].ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
@@ -230,7 +230,7 @@ def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...
     if isinstance(module.output_size, tuple):
         o_sizes = module.output_size
     else:
-        o_sizes = (module.output_size,) * (inputs[0].ndim - 2)  # type: ignore[attr-defined]
+        o_sizes = (module.output_size,) * (inputs[0].ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1

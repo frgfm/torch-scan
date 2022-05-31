@@ -125,6 +125,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requirements-parser==0.2.0
+          pip install requirements-parser==0.2.0 toml
       - name: Run unittests
         run: python .github/validate_deps.py

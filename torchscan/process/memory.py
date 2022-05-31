@@ -7,7 +7,7 @@ import re
 import subprocess
 import warnings
 
-__all__ = ['get_process_gpu_ram']
+__all__ = ["get_process_gpu_ram"]
 
 
 def get_process_gpu_ram(pid: int) -> float:
@@ -31,4 +31,4 @@ def get_process_gpu_ram(pid: int) -> float:
         warnings.warn(f"raised: {e}. Assuming no GPU is available.")
 
     # Otherwise assume the process is running exclusively on CPU
-    return 0.
+    return 0.0

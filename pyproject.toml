@@ -1,0 +1,114 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchscan"
+description = "Useful information about your Pytorch module"
+authors = [
+    {email = "fg-feedback@protonmail.com"},
+    {name = "François-Guillaume Fernandez"}
+]
+readme = "README.md"
+requires-python = ">=3.6,<4"
+license = {file = "LICENSE"}
+keywords = ["pytorch", "deep learning", "summary", "memory", "ram"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dynamic = ["version"]
+dependencies = [
+    "torch>=1.5.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=5.3.2",
+    "coverage[toml]>=4.5.4",
+]
+quality = [
+    "flake8>=3.9.0",
+    "isort>=5.7.0",
+    "mypy>=0.812",
+    "pydocstyle[toml]>=6.0.0",
+    "black>=22.1,<23.0",
+]
+docs = [
+    "sphinx<=3.4.3",
+    "sphinx-rtd-theme==0.4.3",
+    "sphinxemoji>=0.1.8",
+    "sphinx-copybutton>=0.3.1",
+    "docutils<0.18",
+    # cf. https://github.com/readthedocs/readthedocs.org/issues/9038
+    "Jinja2<3.1",
+]
+dev = [
+    # test
+    "pytest>=5.3.2",
+    "coverage[toml]>=4.5.4",
+    # style
+    "flake8>=3.9.0",
+    "isort>=5.7.0",
+    "mypy>=0.812",
+    "pydocstyle[toml]>=6.0.0",
+    "black>=22.1,<23.0",
+    # docs
+    "sphinx<=3.4.3",
+    "sphinx-rtd-theme==0.4.3",
+    "sphinxemoji>=0.1.8",
+    "sphinx-copybutton>=0.3.1",
+    "docutils<0.18",
+    "Jinja2<3.1",
+]
+
+[project.urls]
+documentation = "https://frgfm.github.io/torch-scan"
+repository = "https://github.com/frgfm/torch-scan"
+tracker = "https://github.com/frgfm/torch-scan/issues"
+
+[tool.setuptools]
+zip-safe = true
+
+[tool.setuptools.packages.find]
+exclude = ["docs*", "scripts*", "tests*"]
+
+
+[tool.mypy]
+files = "torchscan/*.py"
+show_error_codes = true
+pretty = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+disallow_untyped_calls = true
+check_untyped_defs = true
+implicit_reexport = false
+
+[tool.isort]
+line_length = 120
+src_paths = ["torchscan", "tests"]
+skip_glob = "**/__init__.py"
+known_third_party = ["torch", "torchvision"]
+
+[tool.pydocstyle]
+select = "D300,D301,D417"
+match = ".*\\.py"
+
+[tool.coverage.run]
+source = ["torchscan"]
+
+[tool.black]
+line-length = 120
+target-version = ['py38']

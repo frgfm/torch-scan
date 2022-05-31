@@ -87,19 +87,19 @@ make quality
 
 ##### Lint verification
 
-To ensure that your incoming PR complies with the lint settings, you need to install [flake8](https://flake8.pycqa.org/en/latest/) and run the following command from the repository's root folder:
+To ensure that your incoming PR complies with the lint settings, you need to install [flake8](https://flake8.pycqa.org/en/latest/), [black](https://black.readthedocs.io/en/stable/) and run the following command from the repository's root folder:
 
 ```shell
 flake8 ./
+black --check .
 ```
-This will read the `.flake8` setting file and let you know whether your commits need some adjustments.
 
 ##### Import order
 
 In order to ensure there is a common import order convention, run [isort](https://github.com/PyCQA/isort) as follows:
 
 ```shell
-isort **/*.py
+isort .
 ```
 This will reorder the imports of your local files.
 
@@ -108,9 +108,17 @@ This will reorder the imports of your local files.
 Additionally, to catch type-related issues and have a cleaner codebase, annotation typing are expected. After installing [mypy](https://github.com/python/mypy), you can run the verifications as follows:
 
 ```shell
-mypy --config-file mypy.ini
+mypy torchscan/
 ```
-The `mypy.ini` file will be read to check your typing.
+
+##### Docstring style
+
+Finally, documentation being important, [pydocstyle](https://github.com/PyCQA/pydocstyle) will be checking the docstrings:
+
+```shell
+pydocstyle torchscan/
+```
+
 
 ### Submit your modifications
 

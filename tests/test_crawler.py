@@ -12,13 +12,13 @@ def test_apply():
 
     # Tag module attributes
     def tag_name(mod, name):
-        mod.__depth__ = len(name.split('.')) - 1
-        mod.__name__ = name.rpartition('.')[-1]
+        mod.__depth__ = len(name.split(".")) - 1
+        mod.__name__ = name.rpartition(".")[-1]
 
     crawler.apply(mod, tag_name)
 
     assert mod[1][1].__depth__ == 2
-    assert mod[1][1].__name__ == '1'
+    assert mod[1][1].__name__ == "1"
 
 
 def test_crawl_module():
@@ -27,8 +27,8 @@ def test_crawl_module():
 
     res = crawler.crawl_module(mod, (3, 32, 32))
     assert isinstance(res, dict)
-    assert res['overall']['grad_params'] == 224
-    assert res['layers'][0]['output_shape'] == (-1, 8, 30, 30)
+    assert res["overall"]["grad_params"] == 224
+    assert res["layers"][0]["output_shape"] == (-1, 8, 30, 30)
 
 
 def test_summary():
@@ -41,7 +41,7 @@ def test_summary():
     crawler.summary(mod, (3, 32, 32))
     # Reset redirect.
     sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split('\n')[7] == 'Total params: 224'
+    assert captured_output.getvalue().split("\n")[7] == "Total params: 224"
 
     # Check receptive field
     captured_output = io.StringIO()
@@ -49,13 +49,13 @@ def test_summary():
     crawler.summary(mod, (3, 32, 32), receptive_field=True)
     # Reset redirect.
     sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split('\n')[1].rpartition('  ')[-1] == 'Receptive field'
-    assert captured_output.getvalue().split('\n')[3].split()[-1] == '3'
+    assert captured_output.getvalue().split("\n")[1].rpartition("  ")[-1] == "Receptive field"
+    assert captured_output.getvalue().split("\n")[3].split()[-1] == "3"
     # Check effective stats
     captured_output = io.StringIO()
     sys.stdout = captured_output
     crawler.summary(mod, (3, 32, 32), receptive_field=True, effective_rf_stats=True)
     # Reset redirect.
     sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split('\n')[1].rpartition('  ')[-1] == 'Effective padding'
-    assert captured_output.getvalue().split('\n')[3].split()[-1] == '0'
+    assert captured_output.getvalue().split("\n")[1].rpartition("  ")[-1] == "Effective padding"
+    assert captured_output.getvalue().split("\n")[3].split()[-1] == "0"

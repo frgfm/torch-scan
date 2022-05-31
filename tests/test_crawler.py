@@ -81,4 +81,4 @@ def test_summary():
     crawler.summary(mod, (3, 32, 32), max_depth=1)
     # Reset redirect.
     sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split("\n")[5].startswith("├─features ")
+    assert captured_output.getvalue().split("\n")[4].startswith("├─features ")

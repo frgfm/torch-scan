@@ -14,7 +14,7 @@ Closes # (issue)
 
 ## Before submitting
 - [ ] Was this discussed/approved in a Github [issue](https://github.com/frgfm/torch-scan/issues?q=is%3Aissue) or a [discussion](https://github.com/frgfm/torch-scan/discussions)? Please add a link to it if that's the case.
-- [ ] You have read the [contribution guidelines](https://github.com/frgfm/torch-scan/blob/master/CONTRIBUTING.md#submitting-a-pull-request) and followed them in this PR.
+- [ ] You have read the [contribution guidelines](https://github.com/frgfm/torch-scan/blob/main/CONTRIBUTING.md#submitting-a-pull-request) and followed them in this PR.
 - [ ] Did you make sure to update the documentation with your changes? Here are the
-      [documentation guidelines](https://github.com/frgm/torch-scan/tree/master/docs).
+      [documentation guidelines](https://github.com/frgm/torch-scan/tree/main/docs).
 - [ ] Did you write any new necessary tests?

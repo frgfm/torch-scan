@@ -7,10 +7,10 @@ Whatever the way you wish to contribute to the project, please respect the [code
 
 ## Codebase structure
 
-- [torchscan](https://github.com/frgfm/torch-scan/blob/master/torchscan) - The actual torchscan library
-- [tests](https://github.com/frgfm/torch-scan/blob/master/tests) - Python unit tests
-- [docs](https://github.com/frgfm/torch-scan/blob/master/docs) - Sphinx documentation building
-- [scripts](https://github.com/frgfm/torch-scan/blob/master/scripts) - Example and utilities scripts
+- [torchscan](https://github.com/frgfm/torch-scan/blob/main/torchscan) - The actual torchscan library
+- [tests](https://github.com/frgfm/torch-scan/blob/main/tests) - Python unit tests
+- [docs](https://github.com/frgfm/torch-scan/blob/main/docs) - Sphinx documentation building
+- [scripts](https://github.com/frgfm/torch-scan/blob/main/scripts) - Example and utilities scripts
 
 
 
@@ -52,7 +52,7 @@ cd torch-scan
 git remote add upstream https://github.com/frgfm/torch-scan.git
 ```
 
-3 - You should not work on the `master` branch, so let's create a new one
+3 - You should not work on the `main` branch, so let's create a new one
 ```shell
 git checkout -b a-short-description
 ```

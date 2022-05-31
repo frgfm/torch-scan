@@ -96,6 +96,10 @@ html_theme_options = {
     },
 }
 
+html_logo = '_static/images/logo.png'
+html_favicon = '_static/images/favicon.ico'
+html_title = 'Torchscan documentation'
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

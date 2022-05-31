@@ -1,5 +1,6 @@
+**************************************
 TorchScan: inspect your PyTorch models
-======================================
+**************************************
 
 The :mod:`torchscan` package provides tools for analyzing your PyTorch modules and models. Additionally to performance benchmarks, a comprehensive architecture comparison require some insights in the model complexity, its usage of computational and memory resources.
 

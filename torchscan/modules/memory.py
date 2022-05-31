@@ -6,7 +6,7 @@
 import warnings
 from functools import reduce
 from operator import mul
-from typing import Tuple, Union
+from typing import Union
 
 from torch import Tensor, nn
 from torch.nn import Module

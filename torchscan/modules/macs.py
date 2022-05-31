@@ -13,7 +13,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
-__all__ = ['module_macs']
+__all__ = ["module_macs"]
 
 
 def module_macs(module: Module, input: Tensor, output: Tensor) -> int:
@@ -47,7 +47,7 @@ def module_macs(module: Module, input: Tensor, output: Tensor) -> int:
     elif isinstance(module, nn.Dropout):
         return 0
     else:
-        warnings.warn(f'Module type not supported: {module.__class__.__name__}')
+        warnings.warn(f"Module type not supported: {module.__class__.__name__}")
         return 0
 
 
@@ -79,7 +79,7 @@ def macs_convnd(module: _ConvNd, input: Tensor, output: Tensor) -> int:
     # For each position, # mult = kernel size, # adds = kernel size - 1
     window_macs_per_chan = reduce(mul, module.kernel_size)
     # Connections to input channels is controlled by the group parameter
-    effective_in_chan = (input.shape[1] // module.groups)
+    effective_in_chan = input.shape[1] // module.groups
     # N * mac
     window_mac = effective_in_chan * window_macs_per_chan
     conv_mac = output.numel() * window_mac
@@ -99,7 +99,7 @@ def macs_bn(module: _BatchNorm, input: Tensor, output: Tensor) -> int:
     # Sum everything up
     bn_mac = input.numel() * (norm_mac + scale_mac)
 
-    # Count tracking stats update ops
+    # Count tracking stats update ops
     # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
     tracking_mac = 0
     b = input.shape[0]
@@ -141,9 +141,11 @@ def macs_adaptive_maxpool(module: _AdaptiveMaxPoolNd, input: Tensor, output: Ten
         o_sizes = module.output_size
     else:
         o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(input.shape[2:], o_sizes))
+    # Approximate kernel_size using ratio of spatial shapes between input and output
+    kernel_size = tuple(
+        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
+        for i_size, o_size in zip(input.shape[2:], o_sizes)
+    )
 
     # for each spatial output element, check max element in kernel scope
     return output.numel() * (reduce(mul, kernel_size) - 1)
@@ -156,9 +158,11 @@ def macs_adaptive_avgpool(module: _AdaptiveAvgPoolNd, input: Tensor, output: Ten
         o_sizes = module.output_size
     else:
         o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(input.shape[2:], o_sizes))
+    # Approximate kernel_size using ratio of spatial shapes between input and output
+    kernel_size = tuple(
+        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
+        for i_size, o_size in zip(input.shape[2:], o_sizes)
+    )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return output.numel() * (reduce(mul, kernel_size) - 1 + len(kernel_size))

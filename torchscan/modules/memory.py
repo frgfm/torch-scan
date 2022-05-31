@@ -14,7 +14,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
-__all__ = ['module_dmas']
+__all__ = ["module_dmas"]
 
 
 def module_dmas(module: Module, input: Tensor, output: Tensor) -> int:
@@ -56,7 +56,7 @@ def module_dmas(module: Module, input: Tensor, output: Tensor) -> int:
     elif isinstance(module, nn.Dropout):
         return dmas_dropout(module, input, output)
     else:
-        warnings.warn(f'Module type not supported: {module.__class__.__name__}')
+        warnings.warn(f"Module type not supported: {module.__class__.__name__}")
         return 0
 
 
@@ -165,7 +165,7 @@ def dmas_convtransposend(module: _ConvTransposeNd, input: Tensor, output: Tensor
 def dmas_convnd(module: _ConvNd, input: Tensor, output: Tensor) -> int:
     """DMAs estimation for `torch.nn.modules.conv._ConvNd`"""
 
-    # Each output element required K ** 2 memory access of each input channel
+    # Each output element required K ** 2 memory access of each input channel
     input_dma = module.in_channels * reduce(mul, module.kernel_size) * output.numel()
     # Correct with groups
     input_dma //= module.groups
@@ -203,13 +203,13 @@ def dmas_bn(module: _BatchNorm, input: Tensor, output: Tensor) -> int:
 def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], input: Tensor, output: Tensor) -> int:
     """DMAs estimation for spatial pooling modules"""
 
-    # Resolve kernel size and stride size (can be stored as a single integer or a tuple)
+    # Resolve kernel size and stride size (can be stored as a single integer or a tuple)
     if isinstance(module.kernel_size, tuple):
         kernel_size = module.kernel_size
     elif isinstance(module.kernel_size, int):
         kernel_size = (module.kernel_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
 
-    # Each output element required K ** 2 memory accesses
+    # Each output element required K ** 2 memory accesses
     input_dma = reduce(mul, kernel_size) * output.numel()
 
     output_dma = output.numel()
@@ -224,10 +224,12 @@ def dmas_adaptive_pool(module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], in
         o_sizes = module.output_size
     else:
         o_sizes = (module.output_size,) * (input.ndim - 2)  # type: ignore[attr-defined]
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(input.shape[2:], o_sizes))
-    # Each output element required K ** 2 memory accesses
+    # Approximate kernel_size using ratio of spatial shapes between input and output
+    kernel_size = tuple(
+        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
+        for i_size, o_size in zip(input.shape[2:], o_sizes)
+    )
+    # Each output element required K ** 2 memory accesses
     input_dma = reduce(mul, kernel_size) * output.numel()
 
     output_dma = output.numel()

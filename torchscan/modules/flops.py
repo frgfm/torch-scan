@@ -15,7 +15,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
-__all__ = ['module_flops']
+__all__ = ["module_flops"]
 
 
 def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
@@ -64,7 +64,7 @@ def module_flops(module: Module, inputs: Tuple[Tensor, ...], output: Tensor) -> 
     elif isinstance(module, nn.Transformer):
         return flops_transformer(module, inputs)
     else:
-        warnings.warn(f'Module type not supported: {module.__class__.__name__}')
+        warnings.warn(f"Module type not supported: {module.__class__.__name__}")
         return 0
 
 
@@ -150,7 +150,7 @@ def flops_convnd(module: _ConvNd, inputs: Tuple[Tensor, ...], output: Tensor) ->
     # For each position, # mult = kernel size, # adds = kernel size - 1
     window_flops_per_chan = 2 * reduce(mul, module.kernel_size) - 1
     # Connections to input channels is controlled by the group parameter
-    effective_in_chan = (inputs[0].shape[1] // module.groups)
+    effective_in_chan = inputs[0].shape[1] // module.groups
     # N * flops + (N - 1) additions
     window_flops = effective_in_chan * window_flops_per_chan + (effective_in_chan - 1)
     conv_flops = output.numel() * window_flops
@@ -166,13 +166,13 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
 
     # for each channel, add eps and running_var, sqrt it
     norm_ops = module.num_features * 2
-    # For each element, sub running_mean, div by denom
+    # For each element, sub running_mean, div by denom
     norm_ops += inputs[0].numel() * 2
     # For each element, mul by gamma, add beta
     scale_ops = inputs[0].numel() * 2 if module.affine else 0
     bn_flops = norm_ops + scale_ops
 
-    # Count tracking stats update ops
+    # Count tracking stats update ops
     # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
     tracking_flops = 0
     if module.track_running_stats and module.training:
@@ -214,9 +214,11 @@ def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...
         o_sizes = module.output_size
     else:
         o_sizes = (module.output_size,) * (inputs[0].ndim - 2)  # type: ignore[attr-defined]
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(inputs[0].shape[2:], o_sizes))
+    # Approximate kernel_size using ratio of spatial shapes between input and output
+    kernel_size = tuple(
+        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
+        for i_size, o_size in zip(inputs[0].shape[2:], o_sizes)
+    )
 
     # for each spatial output element, check max element in kernel scope
     return output.numel() * (reduce(mul, kernel_size) - 1)
@@ -229,9 +231,11 @@ def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...
         o_sizes = module.output_size
     else:
         o_sizes = (module.output_size,) * (inputs[0].ndim - 2)  # type: ignore[attr-defined]
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-                        for i_size, o_size in zip(inputs[0].shape[2:], o_sizes))
+    # Approximate kernel_size using ratio of spatial shapes between input and output
+    kernel_size = tuple(
+        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
+        for i_size, o_size in zip(inputs[0].shape[2:], o_sizes)
+    )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return output.numel() * (reduce(mul, kernel_size) - 1 + len(kernel_size))
@@ -241,7 +245,7 @@ def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
 
     # Compute current mean
-    norm_ops = reduce(mul, module.normalized_shape) * inputs[0].shape[:-len(module.normalized_shape)].numel()
+    norm_ops = reduce(mul, module.normalized_shape) * inputs[0].shape[: -len(module.normalized_shape)].numel()
     # current var (sub the mean, square it, sum them, divide by remaining shape)
     norm_ops += 3 * inputs[0].numel()
     # for each channel, add eps and running_var, sqrt it
@@ -263,36 +267,24 @@ def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Tensor, ...]) -> int:
     if module._qkv_same_embed_dim:
         tot_flops = 3 * flops_linear(
             nn.Linear(
-                module.in_proj_weight.shape[1],
-                module.in_proj_weight.shape[0],
-                bias=module.in_proj_bias is not None
+                module.in_proj_weight.shape[1], module.in_proj_weight.shape[0], bias=module.in_proj_bias is not None
             ),
-            (torch.empty((batch_size, module.in_proj_weight.shape[1])),)
+            (torch.empty((batch_size, module.in_proj_weight.shape[1])),),
         )
     else:
         tot_flops = flops_linear(
             nn.Linear(
-                module.q_proj_weight.shape[1],
-                module.q_proj_weight.shape[0],
-                bias=module.in_proj_bias is not None
+                module.q_proj_weight.shape[1], module.q_proj_weight.shape[0], bias=module.in_proj_bias is not None
             ),
-            (torch.empty((batch_size, module.q_proj_weight.shape[1])),)
+            (torch.empty((batch_size, module.q_proj_weight.shape[1])),),
         )
         tot_flops += flops_linear(
-            nn.Linear(
-                module.k_proj_weight.shape[1],
-                module.k_proj_weight.shape[0],
-                bias=module.bias_k is not None
-            ),
-            (torch.empty((batch_size, module.k_proj_weight.shape[1])),)
+            nn.Linear(module.k_proj_weight.shape[1], module.k_proj_weight.shape[0], bias=module.bias_k is not None),
+            (torch.empty((batch_size, module.k_proj_weight.shape[1])),),
         )
         tot_flops += flops_linear(
-            nn.Linear(
-                module.v_proj_weight.shape[1],
-                module.v_proj_weight.shape[0],
-                bias=module.bias_v is not None
-            ),
-            (torch.empty((batch_size, module.v_proj_weight.shape[1])),)
+            nn.Linear(module.v_proj_weight.shape[1], module.v_proj_weight.shape[0], bias=module.bias_v is not None),
+            (torch.empty((batch_size, module.v_proj_weight.shape[1])),),
         )
 
     # Q (L, B, embed_dim) --> (B * num_heads, L, head_dim=embed_dim / num_heads)

@@ -220,14 +220,10 @@ def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], input: Tensor, output: Tens
 def dmas_adaptive_pool(module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], input: Tensor, output: Tensor) -> int:
     """DMAs estimation for adaptive spatial pooling modules"""
 
-    if isinstance(module.output_size, tuple):
-        o_sizes = module.output_size
-    else:
-        o_sizes = (module.output_size,) * (input.ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(input.shape[2:], o_sizes)
+        for i_size, o_size in zip(input.shape[2:], output.shape[2:])
     )
     # Each output element required K ** 2 memory accesses
     input_dma = reduce(mul, kernel_size) * output.numel()

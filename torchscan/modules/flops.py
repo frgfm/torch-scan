@@ -210,14 +210,10 @@ def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], output: Tensor
 def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
 
-    if isinstance(module.output_size, tuple):
-        o_sizes = module.output_size
-    else:
-        o_sizes = (module.output_size,) * (inputs[0].ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inputs[0].shape[2:], o_sizes)
+        for i_size, o_size in zip(inputs[0].shape[2:], output.shape[2:])
     )
 
     # for each spatial output element, check max element in kernel scope
@@ -227,14 +223,10 @@ def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...
 def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], output: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
 
-    if isinstance(module.output_size, tuple):
-        o_sizes = module.output_size
-    else:
-        o_sizes = (module.output_size,) * (inputs[0].ndim - 2)
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inputs[0].shape[2:], o_sizes)
+        for i_size, o_size in zip(inputs[0].shape[2:], output.shape[2:])
     )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size

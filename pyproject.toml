@@ -89,6 +89,12 @@ exclude = ["docs*", "scripts*", "tests*"]
 files = "torchscan/*.py"
 show_error_codes = true
 pretty = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+disallow_untyped_calls = true
+check_untyped_defs = true
+implicit_reexport = false
 
 [tool.isort]
 line_length = 120

@@ -96,9 +96,9 @@ html_theme_options = {
     },
 }
 
-html_logo = '_static/images/logo.png'
-html_favicon = '_static/images/favicon.ico'
-html_title = 'Torchscan documentation'
+html_logo = "_static/images/logo.png"
+html_favicon = "_static/images/favicon.ico"
+html_title = "Torchscan documentation"
 
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -110,7 +110,7 @@ html_static_path = ["_static"]
 # ref: https://github.com/orenhecht/googleanalytics/blob/master/sphinxcontrib/googleanalytics.py
 def add_ga_javascript(app, pagename, templatename, context, doctree):
 
-    metatags = context.get('metatags', '')
+    metatags = context.get("metatags", "")
     metatags += """
     <!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id={0}"></script>
@@ -120,12 +120,14 @@ def add_ga_javascript(app, pagename, templatename, context, doctree):
   gtag('js', new Date());
   gtag('config', '{0}');
 </script>
-    """.format(app.config.googleanalytics_id)
-    context['metatags'] = metatags
+    """.format(
+        app.config.googleanalytics_id
+    )
+    context["metatags"] = metatags
 
 
 def setup(app):
-    app.add_config_value('googleanalytics_id', 'UA-148140560-3', 'html')
+    app.add_config_value("googleanalytics_id", "UA-148140560-3", "html")
     app.add_css_file("css/custom.css")
     app.add_js_file("js/custom.js")
-    app.connect('html-page-context', add_ga_javascript)
+    app.connect("html-page-context", add_ga_javascript)

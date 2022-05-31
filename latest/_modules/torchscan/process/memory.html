@@ -183,7 +183,7 @@
 <span class="kn">import</span> <span class="nn">subprocess</span>
 <span class="kn">import</span> <span class="nn">warnings</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;get_process_gpu_ram&#39;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;get_process_gpu_ram&quot;</span><span class="p">]</span>
 
 
 <div class="viewcode-block" id="get_process_gpu_ram"><a class="viewcode-back" href="../../../process.html#torchscan.process.get_process_gpu_ram">[docs]</a><span class="k">def</span> <span class="nf">get_process_gpu_ram</span><span class="p">(</span><span class="n">pid</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -207,7 +207,7 @@
         <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;raised: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. Assuming no GPU is available.&quot;</span><span class="p">)</span>
 
     <span class="c1"># Otherwise assume the process is running exclusively on CPU</span>
-    <span class="k">return</span> <span class="mf">0.</span></div>
+    <span class="k">return</span> <span class="mf">0.0</span></div>
 </pre></div>
 
            </div>

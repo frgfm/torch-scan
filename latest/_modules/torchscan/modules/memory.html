@@ -190,7 +190,7 @@
 <span class="kn">from</span> <span class="nn">torch.nn.modules.conv</span> <span class="kn">import</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="n">_ConvTransposeNd</span>
 <span class="kn">from</span> <span class="nn">torch.nn.modules.pooling</span> <span class="kn">import</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">,</span> <span class="n">_MaxPoolNd</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;module_dmas&#39;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;module_dmas&quot;</span><span class="p">]</span>
 
 
 <div class="viewcode-block" id="module_dmas"><a class="viewcode-back" href="../../../modules.html#torchscan.modules.module_dmas">[docs]</a><span class="k">def</span> <span class="nf">module_dmas</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
@@ -232,7 +232,7 @@
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">dmas_dropout</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="mi">0</span></div>
 
 
@@ -341,7 +341,7 @@
 <span class="k">def</span> <span class="nf">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.modules.conv._ConvNd`&quot;&quot;&quot;</span>
 
-    <span class="c1"># Each output element required K ** 2 memory access of each input channel</span>
+    <span class="c1"># Each output element required K ** 2 memory access of each input channel</span>
     <span class="n">input_dma</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">in_channels</span> <span class="o">*</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
     <span class="c1"># Correct with groups</span>
     <span class="n">input_dma</span> <span class="o">//=</span> <span class="n">module</span><span class="o">.</span><span class="n">groups</span>
@@ -379,13 +379,13 @@
 <span class="k">def</span> <span class="nf">dmas_pool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">],</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for spatial pooling modules&quot;&quot;&quot;</span>
 
-    <span class="c1"># Resolve kernel size and stride size (can be stored as a single integer or a tuple)</span>
+    <span class="c1"># Resolve kernel size and stride size (can be stored as a single integer or a tuple)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
         <span class="n">kernel_size</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-        <span class="n">kernel_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="n">kernel_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
 
-    <span class="c1"># Each output element required K ** 2 memory accesses</span>
+    <span class="c1"># Each output element required K ** 2 memory accesses</span>
     <span class="n">input_dma</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
@@ -396,14 +396,12 @@
 <span class="k">def</span> <span class="nf">dmas_adaptive_pool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">],</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for adaptive spatial pooling modules&quot;&quot;&quot;</span>
 
-    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
-        <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">o_sizes</span> <span class="o">=</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]</span>
-    <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
-    <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">o_sizes</span><span class="p">))</span>
-    <span class="c1"># Each output element required K ** 2 memory accesses</span>
+    <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
+    <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
+    <span class="p">)</span>
+    <span class="c1"># Each output element required K ** 2 memory accesses</span>
     <span class="n">input_dma</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>

@@ -16,12 +16,13 @@ function addGithubButton() {
         <div class="github-repo">
             <a
                 class="github-button"
-                href="https://github.com/frgfm/torch-scan" data-size="large" data-show-count="true" aria-label="Star frgfm/torch-scan on GitHub">
-                Star
-            </a>
+                href="https://github.com/frgfm/torch-scan"
+                data-size="large"
+                data-show-count="true"
+                aria-label="Star frgfm/torch-scan on GitHub">Star</a>
         </div>
     `;
-    document.querySelector(".wy-side-nav-search .icon-home").insertAdjacentHTML('afterend', div);
+    document.querySelector(".sidebar-brand").insertAdjacentHTML('afterend', div);
 }
 
 function addVersionControl() {
@@ -78,7 +79,7 @@ function addVersionControl() {
     div.style.display = 'block';
     div.style.textAlign = 'center';
 
-    const scrollDiv = document.querySelector(".wy-side-nav-search");
+    const scrollDiv = document.querySelector(".sidebar-brand");
     scrollDiv.insertBefore(div, scrollDiv.children[1]);
 }
 

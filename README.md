@@ -1,7 +1,29 @@
+<p align="center">
+  <img src="https://github.com/frgfm/torch-scan/releases/download/v0.1.1/logo_text.png" width="40%">
+</p>
 
-# Torchscan: meaningful module insights
-
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9dc68e8bfce34d9dbc8b44a350e9adc7)](https://www.codacy.com/gh/frgfm/torch-scan/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade)  ![Build Status](https://github.com/frgfm/torch-scan/workflows/python-package/badge.svg) [![codecov](https://codecov.io/gh/frgfm/torch-scan/branch/main/graph/badge.svg)](https://codecov.io/gh/frgfm/torch-scan) [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://frgfm.github.io/torch-scan)  [![Pypi](https://img.shields.io/badge/pypi-v0.1.1-blue.svg)](https://pypi.org/project/torchscan/) 
+<p align="center">
+  <a href="https://github.com/frgfm/torch-scan/actions?query=workflow%3Abuilds">
+    <img alt="CI Status" src="https://img.shields.io/github/workflow/status/frgfm/torch-scan/builds?label=CI&logo=github&style=flat-square">
+  </a>
+  <a href="https://frgfm.github.io/torch-scan">
+    <img src="https://img.shields.io/readthedocs/deezer-python.svg?logo=read-the-docs&style=flat-square" alt="Documentation Status">
+  </a>
+  <a href="https://codecov.io/gh/frgfm/torch-scan">
+    <img src="https://img.shields.io/codecov/c/github/frgfm/torch-scan.svg?logo=codecov&style=flat-square" alt="Test coverage percentage">
+  </a>
+  <a href="https://github.com/ambv/black">
+    <img src="https://img.shields.io/badge/code%20style-black-000000.svg?style=flat-square" alt="black">
+  </a>
+  <a href="https://www.codacy.com/gh/frgfm/torch-scan/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade"><img src="https://app.codacy.com/project/badge/Grade/9dc68e8bfce34d9dbc8b44a350e9adc7"/></a>
+</p>
+<p align="center">
+  <a href="https://pypi.org/project/torchscan/">
+    <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=python&amp;logoColor=fff&amp;style=flat-square" alt="PyPi Status">
+  </a>
+  <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?style=flat-square" alt="pyversions">
+  <img src="https://img.shields.io/pypi/l/torchscan.svg?style=flat-square" alt="license">
+</p>
 
 The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
 

@@ -1,6 +1,8 @@
 import io
 import sys
+from collections import OrderedDict
 
+import pytest
 import torch.nn as nn
 
 from torchscan import crawler
@@ -59,3 +61,24 @@ def test_summary():
     sys.stdout = sys.__stdout__
     assert captured_output.getvalue().split("\n")[1].rpartition("  ")[-1] == "Effective padding"
     assert captured_output.getvalue().split("\n")[3].split()[-1] == "0"
+
+    # Max depth > model hierarchy
+    with pytest.raises(ValueError):
+        crawler.summary(mod, (3, 32, 32), max_depth=1)
+
+    mod = nn.Sequential(
+        OrderedDict(
+            [
+                ("features", nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(inplace=True))),
+                ("pool", nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(1))),
+                ("classifier", nn.Linear(8, 1)),
+            ]
+        )
+    )
+
+    captured_output = io.StringIO()
+    sys.stdout = captured_output
+    crawler.summary(mod, (3, 32, 32), max_depth=1)
+    # Reset redirect.
+    sys.stdout = sys.__stdout__
+    assert captured_output.getvalue().split("\n")[4].startswith("├─features ")

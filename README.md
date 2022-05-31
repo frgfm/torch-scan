@@ -1,7 +1,7 @@
 
 # Torchscan: meaningful module insights
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9dc68e8bfce34d9dbc8b44a350e9adc7)](https://www.codacy.com/gh/frgfm/torch-scan/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade)  ![Build Status](https://github.com/frgfm/torch-scan/workflows/python-package/badge.svg) [![codecov](https://codecov.io/gh/frgfm/torch-scan/branch/master/graph/badge.svg)](https://codecov.io/gh/frgfm/torch-scan) [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://frgfm.github.io/torch-scan)  [![Pypi](https://img.shields.io/badge/pypi-v0.1.1-blue.svg)](https://pypi.org/project/torchscan/) 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE) [![Codacy Badge](https://app.codacy.com/project/badge/Grade/9dc68e8bfce34d9dbc8b44a350e9adc7)](https://www.codacy.com/gh/frgfm/torch-scan/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade)  ![Build Status](https://github.com/frgfm/torch-scan/workflows/python-package/badge.svg) [![codecov](https://codecov.io/gh/frgfm/torch-scan/branch/main/graph/badge.svg)](https://codecov.io/gh/frgfm/torch-scan) [![Docs](https://img.shields.io/badge/docs-available-blue.svg)](https://frgfm.github.io/torch-scan)  [![Pypi](https://img.shields.io/badge/pypi-v0.1.1-blue.svg)](https://pypi.org/project/torchscan/) 
 
 The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
 

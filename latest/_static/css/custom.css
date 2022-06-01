@@ -1,10 +1,5 @@
 h1 {
-    font-family: "Helvetica Neue", Arial, sans-serif;
     font-size: 200%;
-}
-
-h1, h2, h3, h4, h5, .caption-text {
-    font-family: "Helvetica Neue", Arial, sans-serif;
 }
 
 /* Github button */
@@ -17,7 +12,7 @@ h1, h2, h3, h4, h5, .caption-text {
 /* Version control */
 
 .version-button {
-    color: white;
+    color: gray;
     border: none;
     padding: 5px;
     font-size: 15px;
@@ -25,7 +20,8 @@ h1, h2, h3, h4, h5, .caption-text {
 }
 
 .version-button:hover, .version-button:focus {
-    background-color: #5eb2e6;
+    color: white;
+    background-color: gray;
 }
 
 .version-dropdown {
@@ -36,14 +32,15 @@ h1, h2, h3, h4, h5, .caption-text {
 }
 
 .version-dropdown a {
-    color: white;
+    color: gray;
     padding: 3px 4px;
     text-decoration: none;
     display: block;
 }
 
 .version-dropdown a:hover {
-    background-color: #5eb2e6;
+    color: white;
+    background-color: gray;
 }
 
 .version-show {

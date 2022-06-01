@@ -95,6 +95,7 @@ html_theme_options = {
         },
     ],
     "source_repository": "https://github.com/frgfm/torch-scan/",
+    "sidebar_hide_name": True,
 }
 
 

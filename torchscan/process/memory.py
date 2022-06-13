@@ -32,7 +32,7 @@ def get_process_gpu_ram(pid: int) -> float:
     except Exception as e:
         warnings.warn(f"raised: {e}. Assuming no GPU is available.")
 
-    if torch.is_available():
+    if torch.cuda.is_available():
         # Default to overall RAM usage for this process on the GPU
         ram_str = torch.cuda.list_gpu_processes().split("\n")
         # Take the first process running on the GPU

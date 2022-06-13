@@ -7,6 +7,8 @@ import re
 import subprocess
 import warnings
 
+import torch
+
 __all__ = ["get_process_gpu_ram"]
 
 
@@ -27,6 +29,13 @@ def get_process_gpu_ram(pid: int) -> float:
         for idx, _pid in enumerate(pids):
             if int(_pid) == pid:
                 return float(re.findall(r"Used GPU Memory\s+:\s([^\D]*)", res)[idx])
+
+        # Default to overall RAM usage for this process on the GPU
+        if torch.cuda.is_available():
+            ram_str = torch.cuda.list_gpu_processes().split("\n")
+            # Take the first process running on the GPU
+            if ram_str[1].startswith("process"):
+                return float(ram_str[1].split()[3])
     except Exception as e:
         warnings.warn(f"raised: {e}. Assuming no GPU is available.")
 

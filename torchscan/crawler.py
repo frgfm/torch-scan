@@ -255,7 +255,7 @@ def crawl_module(
         overheads=dict(
             cuda=dict(
                 pre=cuda_overhead,
-                fwd=get_process_gpu_ram(os.getpid()) - reserved_ram if torch.cuda.is_available() else 0.0,
+                fwd=get_process_gpu_ram(os.getpid()) - reserved_ram,
             ),
             framework=dict(pre=framework_overhead, fwd=diff_ram),
         ),

@@ -21,6 +21,11 @@ def get_process_gpu_ram(pid: int) -> float:
         RAM usage in Megabytes
     """
 
+    # PyTorch is not responsible for GPU usage
+    if not torch.is_available():
+        warnings.warn("CUDA is unavailable to PyTorch.")
+        return 0.
+
     # Query the running processes on GPUs
     try:
         res = subprocess.run(["nvidia-smi", "-q", "-d", "PIDS"], capture_output=True).stdout.decode()
@@ -29,15 +34,20 @@ def get_process_gpu_ram(pid: int) -> float:
         for idx, _pid in enumerate(pids):
             if int(_pid) == pid:
                 return float(re.findall(r"Used GPU Memory\s+:\s([^\D]*)", res)[idx])
-    except Exception as e:
-        warnings.warn(f"raised: {e}. Assuming no GPU is available.")
 
-    if torch.cuda.is_available():
-        # Default to overall RAM usage for this process on the GPU
-        ram_str = torch.cuda.list_gpu_processes().split("\n")
-        # Take the first process running on the GPU
-        if ram_str[1].startswith("process"):
-            return float(ram_str[1].split()[3])
+        # Query total memory used by nvidia
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv"], capture_output=True
+        ).stdout.decode()
+        return float(res.split("\n")[1].split()[0])
+    except Exception as e:
+        warnings.warn(f"raised: {e}. Parsing NVIDIA-SMI failed.")
+
+    # Default to overall RAM usage for this process on the GPU
+    ram_str = torch.cuda.list_gpu_processes().split("\n")
+    # Take the first process running on the GPU
+    if ram_str[1].startswith("process"):
+        return float(ram_str[1].split()[3])
 
     # Otherwise assume the process is running exclusively on CPU
-    return 0.0
+    return 0.

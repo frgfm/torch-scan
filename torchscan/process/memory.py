@@ -24,7 +24,7 @@ def get_process_gpu_ram(pid: int) -> float:
     # PyTorch is not responsible for GPU usage
     if not torch.is_available():
         warnings.warn("CUDA is unavailable to PyTorch.")
-        return 0.
+        return 0.0
 
     # Query the running processes on GPUs
     try:
@@ -50,4 +50,4 @@ def get_process_gpu_ram(pid: int) -> float:
         return float(ram_str[1].split()[3])
 
     # Otherwise assume the process is running exclusively on CPU
-    return 0.
+    return 0.0

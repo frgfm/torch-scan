@@ -22,7 +22,7 @@ def get_process_gpu_ram(pid: int) -> float:
     """
 
     # PyTorch is not responsible for GPU usage
-    if not torch.is_available():
+    if not torch.cuda.is_available():
         warnings.warn("CUDA is unavailable to PyTorch.")
         return 0.0
 

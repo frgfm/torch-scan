@@ -253,7 +253,10 @@ def crawl_module(
 
     return dict(
         overheads=dict(
-            cuda=dict(pre=cuda_overhead, fwd=get_process_gpu_ram(os.getpid()) - reserved_ram),
+            cuda=dict(
+                pre=cuda_overhead,
+                fwd=get_process_gpu_ram(os.getpid()) - reserved_ram,
+            ),
             framework=dict(pre=framework_overhead, fwd=diff_ram),
         ),
         layers=info,

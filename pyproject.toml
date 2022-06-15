@@ -87,7 +87,7 @@ exclude = ["docs*", "scripts*", "tests*"]
 
 
 [tool.mypy]
-files = "torchscan/*.py"
+files = "torchscan/"
 show_error_codes = true
 pretty = true
 warn_unused_ignores = true

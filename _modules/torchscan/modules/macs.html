@@ -13,10 +13,10 @@
 </script>
     <link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" />
 
-    <link rel="shortcut icon" href="../../../_static/favicon.ico"/><meta name="generator" content="sphinx-4.5.0, furo 2022.04.07"/>
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"/><meta name="generator" content="sphinx-5.0.1, furo 2022.06.04.1"/>
         <title>torchscan.modules.macs - Torchscan</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?digest=68f4518137b9aefe99b631505a2064c3c42c9852" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?digest=40978830699223671f4072448e654b5958f38b89" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
@@ -187,7 +187,8 @@
           </svg>
           <span>Back to top</span>
         </a>
-        <div class="content-icon-container"><div class="theme-toggle-container theme-toggle-content">
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle">
               <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
               <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
@@ -204,9 +205,9 @@
           <h1>Source code for torchscan.modules.macs</h1><div class="highlight"><pre>
 <span></span><span class="c1"># -*- coding: utf-8 -*-</span>
 
-<span class="sd">"""</span>
+<span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">Module MACs</span>
-<span class="sd">"""</span>
+<span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">import</span> <span class="nn">warnings</span>
 <span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">reduce</span>
@@ -218,11 +219,11 @@
 <span class="kn">from</span> <span class="nn">torch.nn.modules.pooling</span> <span class="kn">import</span> <span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span>
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">'module_macs'</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;module_macs&#39;</span><span class="p">]</span>
 
 
 <div class="viewcode-block" id="module_macs"><a class="viewcode-back" href="../../../modules.html#torchscan.modules.module_macs">[docs]</a><span class="k">def</span> <span class="nf">module_macs</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""Estimate the number of multiply-accumulation operations performed by the module</span>
+    <span class="sd">&quot;&quot;&quot;Estimate the number of multiply-accumulation operations performed by the module</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        module (torch.nn.Module): PyTorch module</span>
@@ -230,7 +231,7 @@
 <span class="sd">        output (torch.Tensor): output of the module</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        int: number of MACs</span>
-<span class="sd">    """</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">)):</span>
@@ -252,12 +253,12 @@
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">):</span>
         <span class="k">return</span> <span class="mi">0</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
         <span class="k">return</span> <span class="mi">0</span></div>
 
 
 <span class="k">def</span> <span class="nf">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.Linear`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.Linear`&quot;&quot;&quot;</span>
 
     <span class="c1"># batch size * out_chan * macs_per_elt (bias already counted in accumulation)</span>
     <span class="n">mm_mac</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
@@ -266,7 +267,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`&quot;&quot;&quot;</span>
 
     <span class="c1"># Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)</span>
     <span class="c1"># Define min and max sizes, then subtract them</span>
@@ -279,7 +280,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.conv._ConvNd`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.conv._ConvNd`&quot;&quot;&quot;</span>
 
     <span class="c1"># For each position, # mult = kernel size, # adds = kernel size - 1</span>
     <span class="n">window_macs_per_chan</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span>
@@ -294,7 +295,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_bn</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.batchnorm._BatchNorm`&quot;&quot;&quot;</span>
 
     <span class="c1"># sub mean, div by denom</span>
     <span class="n">norm_mac</span> <span class="o">=</span> <span class="mi">1</span>
@@ -320,7 +321,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._MaxPoolNd`&quot;&quot;&quot;</span>
 
     <span class="n">k_size</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
 
@@ -329,7 +330,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._AvgPoolNd`&quot;&quot;&quot;</span>
 
     <span class="n">k_size</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
 
@@ -338,7 +339,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`&quot;&quot;&quot;</span>
 
     <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
     <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
@@ -350,7 +351,7 @@
 
 
 <span class="k">def</span> <span class="nf">macs_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
-    <span class="sd">"""MACs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""</span>
+    <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`&quot;&quot;&quot;</span>
 
     <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
     <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
@@ -401,6 +402,7 @@
 </div><script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
     <script src="../../../_static/jquery.js"></script>
     <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="../../../_static/doctools.js"></script>
     <script src="../../../_static/scripts/furo.js"></script>
     <script src="../../../_static/clipboard.min.js"></script>

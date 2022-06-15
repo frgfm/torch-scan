@@ -13,10 +13,10 @@
 </script>
     <link rel="index" title="Index" href="../../../genindex.html" /><link rel="search" title="Search" href="../../../search.html" />
 
-    <link rel="shortcut icon" href="../../../_static/favicon.ico"/><meta name="generator" content="sphinx-4.5.0, furo 2022.04.07"/>
+    <link rel="shortcut icon" href="../../../_static/favicon.ico"/><meta name="generator" content="sphinx-5.0.1, furo 2022.06.04.1"/>
         <title>torchscan.process.memory - Torchscan</title>
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?digest=68f4518137b9aefe99b631505a2064c3c42c9852" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?digest=40978830699223671f4072448e654b5958f38b89" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?digest=30d1aed668e5c3a91c3e3bf6a60b675221979f0e" />
@@ -195,7 +195,8 @@
           </svg>
           <span>Back to top</span>
         </a>
-        <div class="content-icon-container"><div class="theme-toggle-container theme-toggle-content">
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
             <button class="theme-toggle">
               <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
               <svg class="theme-icon-when-auto"><use href="#svg-sun-half"></use></svg>
@@ -219,28 +220,47 @@
 <span class="kn">import</span> <span class="nn">subprocess</span>
 <span class="kn">import</span> <span class="nn">warnings</span>
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"get_process_gpu_ram"</span><span class="p">]</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;get_process_gpu_ram&quot;</span><span class="p">]</span>
 
 
 <div class="viewcode-block" id="get_process_gpu_ram"><a class="viewcode-back" href="../../../process.html#torchscan.process.get_process_gpu_ram">[docs]</a><span class="k">def</span> <span class="nf">get_process_gpu_ram</span><span class="p">(</span><span class="n">pid</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-    <span class="sd">"""Gets the amount of RAM used by a given process on GPU devices</span>
+    <span class="sd">&quot;&quot;&quot;Gets the amount of RAM used by a given process on GPU devices</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        pid: process ID</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        RAM usage in Megabytes</span>
-<span class="sd">    """</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># PyTorch is not responsible for GPU usage</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;CUDA is unavailable to PyTorch.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mf">0.0</span>
 
     <span class="c1"># Query the running processes on GPUs</span>
     <span class="k">try</span><span class="p">:</span>
-        <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s2">"nvidia-smi"</span><span class="p">,</span> <span class="s2">"-q"</span><span class="p">,</span> <span class="s2">"-d"</span><span class="p">,</span> <span class="s2">"PIDS"</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">([</span><span class="s2">&quot;nvidia-smi&quot;</span><span class="p">,</span> <span class="s2">&quot;-q&quot;</span><span class="p">,</span> <span class="s2">&quot;-d&quot;</span><span class="p">,</span> <span class="s2">&quot;PIDS&quot;</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
         <span class="c1"># Try to locate the process</span>
-        <span class="n">pids</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">"Process ID\s+:\s([^\D]*)"</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+        <span class="n">pids</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;Process ID\s+:\s([^\D]*)&quot;</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">_pid</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">pids</span><span class="p">):</span>
             <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">_pid</span><span class="p">)</span> <span class="o">==</span> <span class="n">pid</span><span class="p">:</span>
-                <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">"Used GPU Memory\s+:\s([^\D]*)"</span><span class="p">,</span> <span class="n">res</span><span class="p">)[</span><span class="n">idx</span><span class="p">])</span>
+                <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;Used GPU Memory\s+:\s([^\D]*)&quot;</span><span class="p">,</span> <span class="n">res</span><span class="p">)[</span><span class="n">idx</span><span class="p">])</span>
+
+        <span class="c1"># Query total memory used by nvidia</span>
+        <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+            <span class="p">[</span><span class="s2">&quot;nvidia-smi&quot;</span><span class="p">,</span> <span class="s2">&quot;--query-gpu=memory.used&quot;</span><span class="p">,</span> <span class="s2">&quot;--format=csv&quot;</span><span class="p">],</span> <span class="n">capture_output</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">res</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">"raised: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. Assuming no GPU is available."</span><span class="p">)</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;raised: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">. Parsing NVIDIA-SMI failed.&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Default to overall RAM usage for this process on the GPU</span>
+    <span class="n">ram_str</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">list_gpu_processes</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="c1"># Take the first process running on the GPU</span>
+    <span class="k">if</span> <span class="n">ram_str</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;process&quot;</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">ram_str</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">3</span><span class="p">])</span>
 
     <span class="c1"># Otherwise assume the process is running exclusively on CPU</span>
     <span class="k">return</span> <span class="mf">0.0</span></div>
@@ -286,6 +306,7 @@
 </div><script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
     <script src="../../../_static/jquery.js"></script>
     <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="../../../_static/doctools.js"></script>
     <script src="../../../_static/scripts/furo.js"></script>
     <script src="../../../_static/clipboard.min.js"></script>

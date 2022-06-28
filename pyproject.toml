@@ -30,7 +30,7 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "torch>=1.5.0",
+    "torch>=1.5.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -47,12 +47,12 @@ quality = [
 ]
 docs = [
     "sphinx>=3.0.0,!=3.5.0",
+    "furo>=2022.3.4",
     "sphinxemoji>=0.1.8",
     "sphinx-copybutton>=0.3.1",
-    "docutils<0.18",
+    # Indirect deps
     # cf. https://github.com/readthedocs/readthedocs.org/issues/9038
     "Jinja2<3.1",
-    "furo>=2022.3.4",
 ]
 dev = [
     # test
@@ -66,17 +66,17 @@ dev = [
     "black>=22.1,<23.0",
     # docs
     "sphinx>=3.0.0,!=3.5.0",
+    "furo>=2022.3.4",
     "sphinxemoji>=0.1.8",
     "sphinx-copybutton>=0.3.1",
-    "docutils<0.18",
     "Jinja2<3.1",
-    "furo>=2022.3.4",
 ]
 
 [project.urls]
 documentation = "https://frgfm.github.io/torch-scan"
 repository = "https://github.com/frgfm/torch-scan"
 tracker = "https://github.com/frgfm/torch-scan/issues"
+changelog = "https://frgfm.github.io/torch-scan/latest/changelog.html"
 
 [tool.setuptools]
 zip-safe = true

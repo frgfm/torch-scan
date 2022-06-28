@@ -311,7 +311,8 @@ def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: T
     tot_flops += flops_dropout(module.dropout1, inputs) + inputs[0].numel()
     tot_flops += flops_layernorm(module.norm1, inputs)
     # get linear 1 output size
-    tot_flops += flops_linear(module.linear1, inputs) + module_flops(module.activation, inputs, torch.empty(1))
+    tot_flops += flops_linear(module.linear1, inputs)
+    tot_flops += module_flops(module.activation, inputs, torch.empty(1))  # type: ignore[arg-type]
     tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
     # get linear 2 output size
     tot_flops += flops_dropout(module.dropout2, inputs) + inputs[0].numel()
@@ -332,7 +333,8 @@ def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: T
     tot_flops += flops_layernorm(module.norm2, inputs)
 
     # get linear 1 output size
-    tot_flops += flops_linear(module.linear1, inputs) + module_flops(module.activation, inputs, torch.empty(1))
+    tot_flops += flops_linear(module.linear1, inputs)
+    tot_flops += module_flops(module.activation, inputs, torch.empty(1))  # type: ignore[arg-type]
     tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
     # get linear 2 output size
     tot_flops += flops_dropout(module.dropout3, inputs) + inputs[0].numel()

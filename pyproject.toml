@@ -99,7 +99,7 @@ implicit_reexport = false
 
 [tool.isort]
 line_length = 120
-src_paths = ["torchscan", "tests"]
+src_paths = ["torchscan", "tests", "scripts", "docs", ".github"]
 skip_glob = "**/__init__.py"
 known_third_party = ["torch", "torchvision"]
 

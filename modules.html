@@ -2,7 +2,7 @@
 <html class="no-js" lang="en">
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+    <meta name="color-scheme" content="light dark"><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
     <!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=UA-148140560-3"></script>
@@ -190,7 +190,7 @@
         </a>
         <div class="content-icon-container">
           <div class="edit-this-page">
-  <a class="muted-link" href="https://github.com/frgfm/torch-scan/edit//modules.rst" title="Edit this page">
+  <a class="muted-link" href="https://github.com/frgfm/torch-scan/edit/main/modules.rst" title="Edit this page">
     <svg aria-hidden="true" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
       <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
       <path d="M4 20h4l10.5 -10.5a1.5 1.5 0 0 0 -4 -4l-10.5 10.5v4" />
@@ -223,17 +223,17 @@
 <span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_flops</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/modules/flops.html#module_flops"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_flops" title="Permalink to this definition">#</a></dt>
 <dd><p>Estimate the number of floating point operations performed by the module</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>module</strong> (<em>torch.nn.Module</em>) – PyTorch module</p></li>
 <li><p><strong>input</strong> (<em>torch.Tensor</em>) – input to the module</p></li>
 <li><p><strong>output</strong> (<em>torch.Tensor</em>) – output of the module</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>number of FLOPs</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>int</p>
 </dd>
 </dl>
@@ -248,17 +248,17 @@
 <span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_macs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/modules/macs.html#module_macs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_macs" title="Permalink to this definition">#</a></dt>
 <dd><p>Estimate the number of multiply-accumulation operations performed by the module</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>module</strong> (<em>torch.nn.Module</em>) – PyTorch module</p></li>
 <li><p><strong>input</strong> (<em>torch.Tensor</em>) – input to the module</p></li>
 <li><p><strong>output</strong> (<em>torch.Tensor</em>) – output of the module</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>number of MACs</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>int</p>
 </dd>
 </dl>
@@ -274,17 +274,17 @@
 <dd><p>Estimate the number of direct memory accesses by the module.
 The implementation overhead is neglected</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>module</strong> (<em>torch.nn.Module</em>) – PyTorch module</p></li>
 <li><p><strong>input</strong> (<em>torch.Tensor</em>) – input to the module</p></li>
 <li><p><strong>output</strong> (<em>torch.Tensor</em>) – output of the module</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>number of DMAs</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>int</p>
 </dd>
 </dl>
@@ -299,19 +299,19 @@ The implementation overhead is neglected</p>
 <span class="sig-prename descclassname"><span class="pre">torchscan.modules.</span></span><span class="sig-name descname"><span class="pre">module_rf</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/modules/receptive.html#module_rf"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.modules.module_rf" title="Permalink to this definition">#</a></dt>
 <dd><p>Estimate the spatial receptive field of the module</p>
 <dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>module</strong> (<em>torch.nn.Module</em>) – PyTorch module</p></li>
 <li><p><strong>input</strong> (<em>torch.Tensor</em>) – input to the module</p></li>
 <li><p><strong>output</strong> (<em>torch.Tensor</em>) – output of the module</p></li>
 </ul>
 </dd>
-<dt class="field-even">Returns</dt>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>receptive field
 int: effective stride
 int: effective padding</p>
 </dd>
-<dt class="field-odd">Return type</dt>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p>int</p>
 </dd>
 </dl>

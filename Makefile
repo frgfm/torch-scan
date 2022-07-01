@@ -15,6 +15,10 @@ style:
 test:
 	coverage run -m pytest tests/
 
+# Build documentation for current version
+single-docs:
+	sphinx-build docs/source docs/_build -a
+
 # Check that docs can build
-docs:
+full-docs:
 	cd docs && bash build.sh

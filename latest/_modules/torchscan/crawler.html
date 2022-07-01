@@ -153,8 +153,11 @@
   <aside class="sidebar-drawer">
     <div class="sidebar-container">
       
-      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+      <div class="sidebar-sticky"><a class="sidebar-brand centered" href="../../index.html">
   
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo" src="../../_static/logo.png" alt="Logo"/>
+  </div>
   
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
@@ -252,11 +255,10 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
     <span class="sd">&quot;&quot;&quot;Retrieves module information for an expected input tensor shape</span>
 
-<span class="sd">    Example::</span>
-<span class="sd">        &gt;&gt;&gt; import torch.nn as nn</span>
-<span class="sd">        &gt;&gt;&gt; from torchscan import summary</span>
-<span class="sd">        &gt;&gt;&gt; mod = nn.Conv2d(3, 8, 3)</span>
-<span class="sd">        &gt;&gt;&gt; module_info = crawl_module(mod, (3, 224, 224))</span>
+<span class="sd">    &gt;&gt;&gt; import torch.nn as nn</span>
+<span class="sd">    &gt;&gt;&gt; from torchscan import summary</span>
+<span class="sd">    &gt;&gt;&gt; mod = nn.Conv2d(3, 8, 3)</span>
+<span class="sd">    &gt;&gt;&gt; module_info = crawl_module(mod, (3, 224, 224))</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        module: module to inspect</span>
@@ -493,11 +495,10 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Print module summary for an expected input tensor shape</span>
 
-<span class="sd">    Example::</span>
-<span class="sd">        &gt;&gt;&gt; import torch.nn as nn</span>
-<span class="sd">        &gt;&gt;&gt; from torchscan import summary</span>
-<span class="sd">        &gt;&gt;&gt; mod = nn.Conv2d(3, 8, 3)</span>
-<span class="sd">        &gt;&gt;&gt; summary(mod, (3, 224, 224), receptive_field=True)</span>
+<span class="sd">    &gt;&gt;&gt; import torch.nn as nn</span>
+<span class="sd">    &gt;&gt;&gt; from torchscan import summary</span>
+<span class="sd">    &gt;&gt;&gt; mod = nn.Conv2d(3, 8, 3)</span>
+<span class="sd">    &gt;&gt;&gt; summary(mod, (3, 224, 224), receptive_field=True)</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        module: module to inspect</span>

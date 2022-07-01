@@ -39,11 +39,10 @@ def crawl_module(
 ) -> Dict[str, Any]:
     """Retrieves module information for an expected input tensor shape
 
-    Example::
-        >>> import torch.nn as nn
-        >>> from torchscan import summary
-        >>> mod = nn.Conv2d(3, 8, 3)
-        >>> module_info = crawl_module(mod, (3, 224, 224))
+    >>> import torch.nn as nn
+    >>> from torchscan import summary
+    >>> mod = nn.Conv2d(3, 8, 3)
+    >>> module_info = crawl_module(mod, (3, 224, 224))
 
     Args:
         module: module to inspect
@@ -280,11 +279,10 @@ def summary(
 ) -> None:
     """Print module summary for an expected input tensor shape
 
-    Example::
-        >>> import torch.nn as nn
-        >>> from torchscan import summary
-        >>> mod = nn.Conv2d(3, 8, 3)
-        >>> summary(mod, (3, 224, 224), receptive_field=True)
+    >>> import torch.nn as nn
+    >>> from torchscan import summary
+    >>> mod = nn.Conv2d(3, 8, 3)
+    >>> summary(mod, (3, 224, 224), receptive_field=True)
 
     Args:
         module: module to inspect

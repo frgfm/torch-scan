@@ -81,7 +81,7 @@ def crawl_module(
 
     # Hook definition
     def _hook_info(module: Module, name: str) -> None:
-        def _pre_hook(module: Module, input: torch.Tensor) -> None:
+        def _pre_hook(module: Module, inp: torch.Tensor) -> None:
             """Pre-forward hook"""
             # Check that another hook has not been triggered at this forward stage
             if not pre_hook_tracker[id(module)]["is_used"] and (
@@ -123,7 +123,7 @@ def crawl_module(
                         name=name.rpartition(".")[-1],
                         depth=len(name.split(".")) - 1,
                         type=module.__class__.__name__,
-                        input_shape=(-1, *input[0][0].shape[1:]),
+                        input_shape=(-1, *inp[0][0].shape[1:]),
                         output_shape=None,
                         grad_params=grad_params,
                         nograd_params=nograd_params,
@@ -150,7 +150,7 @@ def crawl_module(
                 pre_hook_tracker[id(module)]["current"] = 0
                 pre_hook_tracker[id(module)]["is_used"] = False
 
-        def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], output: torch.Tensor) -> None:
+        def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], out: torch.Tensor) -> None:
             """Post-forward hook"""
 
             # Check that another hook has not been triggered at this forward stage
@@ -173,13 +173,13 @@ def crawl_module(
                     current_rf, current_stride, current_padding = 1.0, 1.0, 0.0
                 else:
                     # Compute stats for standalone layers
-                    tot_flops = module_flops(module, inputs, output)
-                    tot_macs = module_macs(module, inputs[0], output)
-                    tot_dmas = module_dmas(module, inputs[0], output)
-                    current_rf, current_stride, current_padding = module_rf(module, inputs[0], output)
+                    tot_flops = module_flops(module, inputs, out)
+                    tot_macs = module_macs(module, inputs[0], out)
+                    tot_dmas = module_dmas(module, inputs[0], out)
+                    current_rf, current_stride, current_padding = module_rf(module, inputs[0], out)
 
                 # Update layer information
-                info[fw_idx]["output_shape"] = (-1, *output.shape[1:])
+                info[fw_idx]["output_shape"] = (-1, *out.shape[1:])
                 # Add them, since some modules can be used several times
                 info[fw_idx]["flops"] = tot_flops
                 info[fw_idx]["macs"] = tot_macs

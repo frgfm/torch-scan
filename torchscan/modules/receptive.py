@@ -16,13 +16,13 @@ from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _Av
 __all__ = ["module_rf"]
 
 
-def module_rf(module: Module, input: Tensor, output: Tensor) -> Tuple[float, float, float]:
+def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, float]:
     """Estimate the spatial receptive field of the module
 
     Args:
         module (torch.nn.Module): PyTorch module
-        input (torch.Tensor): input to the module
-        output (torch.Tensor): output of the module
+        inp (torch.Tensor): input to the module
+        out (torch.Tensor): output of the module
     Returns:
         receptive field
         effective stride
@@ -46,24 +46,24 @@ def module_rf(module: Module, input: Tensor, output: Tensor) -> Tuple[float, flo
     ):
         return 1.0, 1.0, 0.0
     elif isinstance(module, _ConvTransposeNd):
-        return rf_convtransposend(module, input, output)
+        return rf_convtransposend(module, inp, out)
     elif isinstance(module, (_ConvNd, _MaxPoolNd, _AvgPoolNd)):
-        return rf_aggregnd(module, input, output)
+        return rf_aggregnd(module, inp, out)
     elif isinstance(module, (_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd)):
-        return rf_adaptive_poolnd(module, input, output)
+        return rf_adaptive_poolnd(module, inp, out)
     else:
         warnings.warn(f"Module type not supported: {module.__class__.__name__}")
         return 1.0, 1.0, 0.0
 
 
-def rf_convtransposend(module: _ConvTransposeNd, intput: Tensor, output: Tensor) -> Tuple[float, float, float]:
+def rf_convtransposend(module: _ConvTransposeNd, intput: Tensor, out: Tensor) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
     s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
     return -k, 1.0 / s, 0.0
 
 
 def rf_aggregnd(
-    module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], input: Tensor, output: Tensor
+    module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor
 ) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
     if hasattr(module, "dilation"):
@@ -75,11 +75,11 @@ def rf_aggregnd(
 
 
 def rf_adaptive_poolnd(
-    module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], input: Tensor, output: Tensor
+    module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Tensor, out: Tensor
 ) -> Tuple[int, int, float]:
 
-    stride = math.ceil(input.shape[-1] / output.shape[-1])
+    stride = math.ceil(inp.shape[-1] / out.shape[-1])
     kernel_size = stride
-    padding = (input.shape[-1] - kernel_size * stride) / 2
+    padding = (inp.shape[-1] - kernel_size * stride) / 2
 
     return kernel_size, stride, padding

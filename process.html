@@ -167,12 +167,20 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="torchscan.html">torchscan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">torchscan.modules</a></li>
 <li class="toctree-l1 current current-page"><a class="current reference internal" href="#">torchscan.process</a></li>
 <li class="toctree-l1"><a class="reference internal" href="utils.html">torchscan.utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 </ul>
 
 </div>
@@ -221,17 +229,14 @@
 <p>The following models are available:</p>
 <span class="target" id="module-torchscan.process"></span><dl class="py function">
 <dt class="sig sig-object py" id="torchscan.process.get_process_gpu_ram">
-<span class="sig-prename descclassname"><span class="pre">torchscan.process.</span></span><span class="sig-name descname"><span class="pre">get_process_gpu_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pid</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/torchscan/process/memory.html#get_process_gpu_ram"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.process.get_process_gpu_ram" title="Permalink to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">torchscan.process.</span></span><span class="sig-name descname"><span class="pre">get_process_gpu_ram</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pid</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">float</span></span></span><a class="reference internal" href="_modules/torchscan/process/memory.html#get_process_gpu_ram"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#torchscan.process.get_process_gpu_ram" title="Permalink to this definition">#</a></dt>
 <dd><p>Gets the amount of RAM used by a given process on GPU devices</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>pid</strong> (<em>int</em>) – process ID</p>
+<dd class="field-odd"><p><strong>pid</strong> – process ID</p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>RAM usage in Megabytes</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>float</p>
 </dd>
 </dl>
 </dd></dl>

@@ -166,12 +166,20 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../installing.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../../torchscan.html">torchscan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../modules.html">torchscan.modules</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../process.html">torchscan.process</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../utils.html">torchscan.utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../changelog.html">Changelog</a></li>
 </ul>
 
 </div>
@@ -206,70 +214,69 @@
         </div>
         <article role="main">
           <h1>Source code for torchscan.modules.macs</h1><div class="highlight"><pre>
-<span></span><span class="c1"># -*- coding: utf-8 -*-</span>
+<span></span><span class="c1"># Copyright (C) 2020-2022, François-Guillaume Fernandez.</span>
 
-<span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">Module MACs</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="c1"># This program is licensed under the Apache License 2.0.</span>
+<span class="c1"># See LICENSE or go to &lt;https://www.apache.org/licenses/LICENSE-2.0&gt; for full license details.</span>
 
 <span class="kn">import</span> <span class="nn">warnings</span>
 <span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">reduce</span>
 <span class="kn">from</span> <span class="nn">operator</span> <span class="kn">import</span> <span class="n">mul</span>
 
-<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">nn</span>
-<span class="kn">from</span> <span class="nn">torch.nn.modules.conv</span> <span class="kn">import</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="n">_ConvTransposeNd</span>
+<span class="kn">from</span> <span class="nn">torch</span> <span class="kn">import</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">nn</span>
+<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">Module</span>
 <span class="kn">from</span> <span class="nn">torch.nn.modules.batchnorm</span> <span class="kn">import</span> <span class="n">_BatchNorm</span>
-<span class="kn">from</span> <span class="nn">torch.nn.modules.pooling</span> <span class="kn">import</span> <span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span>
+<span class="kn">from</span> <span class="nn">torch.nn.modules.conv</span> <span class="kn">import</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="n">_ConvTransposeNd</span>
+<span class="kn">from</span> <span class="nn">torch.nn.modules.pooling</span> <span class="kn">import</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">,</span> <span class="n">_MaxPoolNd</span>
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;module_macs&quot;</span><span class="p">]</span>
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;module_macs&#39;</span><span class="p">]</span>
-
-
-<div class="viewcode-block" id="module_macs"><a class="viewcode-back" href="../../../modules.html#torchscan.modules.module_macs">[docs]</a><span class="k">def</span> <span class="nf">module_macs</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<div class="viewcode-block" id="module_macs"><a class="viewcode-back" href="../../../modules.html#torchscan.modules.module_macs">[docs]</a><span class="k">def</span> <span class="nf">module_macs</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Estimate the number of multiply-accumulation operations performed by the module</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        module (torch.nn.Module): PyTorch module</span>
-<span class="sd">        input (torch.Tensor): input to the module</span>
-<span class="sd">        output (torch.Tensor): output of the module</span>
+<span class="sd">        inp (torch.Tensor): input to the module</span>
+<span class="sd">        out (torch.Tensor): output of the module</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        int: number of MACs</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
-    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">)):</span>
+        <span class="k">return</span> <span class="n">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">)):</span>
         <span class="k">return</span> <span class="mi">0</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_ConvTransposeNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_ConvNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_BatchNorm</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_bn</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_bn</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_MaxPoolNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">macs_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">macs_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">):</span>
         <span class="k">return</span> <span class="mi">0</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="mi">0</span></div>
 
 
-<span class="k">def</span> <span class="nf">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_linear</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.Linear`&quot;&quot;&quot;</span>
 
     <span class="c1"># batch size * out_chan * macs_per_elt (bias already counted in accumulation)</span>
-    <span class="n">mm_mac</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">mm_mac</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">in_features</span> <span class="o">*</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">mm_mac</span>
 
 
-<span class="k">def</span> <span class="nf">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvTransposeNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`&quot;&quot;&quot;</span>
 
     <span class="c1"># Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)</span>
@@ -277,27 +284,27 @@
     <span class="n">padding_macs</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span>
 
     <span class="c1"># Rest of the operations are almost identical to a convolution (given the padding)</span>
-    <span class="n">conv_macs</span> <span class="o">=</span> <span class="n">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+    <span class="n">conv_macs</span> <span class="o">=</span> <span class="n">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">padding_macs</span> <span class="o">+</span> <span class="n">conv_macs</span>
 
 
-<span class="k">def</span> <span class="nf">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.conv._ConvNd`&quot;&quot;&quot;</span>
 
     <span class="c1"># For each position, # mult = kernel size, # adds = kernel size - 1</span>
     <span class="n">window_macs_per_chan</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span>
     <span class="c1"># Connections to input channels is controlled by the group parameter</span>
-    <span class="n">effective_in_chan</span> <span class="o">=</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="n">module</span><span class="o">.</span><span class="n">groups</span><span class="p">)</span>
+    <span class="n">effective_in_chan</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="n">module</span><span class="o">.</span><span class="n">groups</span>
     <span class="c1"># N * mac</span>
     <span class="n">window_mac</span> <span class="o">=</span> <span class="n">effective_in_chan</span> <span class="o">*</span> <span class="n">window_macs_per_chan</span>
-    <span class="n">conv_mac</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="n">window_mac</span>
+    <span class="n">conv_mac</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="n">window_mac</span>
 
     <span class="c1"># bias already counted in accumulation</span>
     <span class="k">return</span> <span class="n">conv_mac</span>
 
 
-<span class="k">def</span> <span class="nf">macs_bn</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_bn</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_BatchNorm</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.batchnorm._BatchNorm`&quot;&quot;&quot;</span>
 
     <span class="c1"># sub mean, div by denom</span>
@@ -306,16 +313,18 @@
     <span class="n">scale_mac</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">affine</span> <span class="k">else</span> <span class="mi">0</span>
 
     <span class="c1"># Sum everything up</span>
-    <span class="n">bn_mac</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">norm_mac</span> <span class="o">+</span> <span class="n">scale_mac</span><span class="p">)</span>
+    <span class="n">bn_mac</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">norm_mac</span> <span class="o">+</span> <span class="n">scale_mac</span><span class="p">)</span>
 
-    <span class="c1"># Count tracking stats update ops</span>
+    <span class="c1"># Count tracking stats update ops</span>
     <span class="c1"># cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101</span>
     <span class="n">tracking_mac</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">num_spatial_elts</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
     <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">track_running_stats</span> <span class="ow">and</span> <span class="n">module</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
         <span class="c1"># running_mean: by channel, sum value and div by batch size</span>
-        <span class="n">tracking_mac</span> <span class="o">+=</span> <span class="n">module</span><span class="o">.</span><span class="n">num_features</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">tracking_mac</span> <span class="o">+=</span> <span class="n">module</span><span class="o">.</span><span class="n">num_features</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">*</span> <span class="n">num_spatial_elts</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
         <span class="c1"># running_var: by channel, sub mean and square values, sum them, divide by batch size</span>
-        <span class="n">active_elts</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:]</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+        <span class="n">active_elts</span> <span class="o">=</span> <span class="n">b</span> <span class="o">*</span> <span class="n">num_spatial_elts</span>
         <span class="n">tracking_mac</span> <span class="o">+=</span> <span class="n">module</span><span class="o">.</span><span class="n">num_features</span> <span class="o">*</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">active_elts</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
         <span class="c1"># Update both runnning stat: rescale previous value (mul by N), add it the new one, then div by (N + 1)</span>
         <span class="n">tracking_mac</span> <span class="o">+=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">module</span><span class="o">.</span><span class="n">num_features</span> <span class="o">*</span> <span class="mi">2</span>
@@ -323,46 +332,48 @@
     <span class="k">return</span> <span class="n">bn_mac</span> <span class="o">+</span> <span class="n">tracking_mac</span>
 
 
-<span class="k">def</span> <span class="nf">macs_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._MaxPoolNd`&quot;&quot;&quot;</span>
 
     <span class="n">k_size</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
 
     <span class="c1"># for each spatial output element, check max element in kernel scope</span>
-    <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">k_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">k_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
 
 
-<span class="k">def</span> <span class="nf">macs_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_AvgPoolNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._AvgPoolNd`&quot;&quot;&quot;</span>
 
     <span class="n">k_size</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
 
     <span class="c1"># for each spatial output element, sum elements in kernel scope and div by kernel size</span>
-    <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">k_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">k_size</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">inp</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
 
 
-<span class="k">def</span> <span class="nf">macs_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_adaptive_maxpool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`&quot;&quot;&quot;</span>
 
-    <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
-    <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
-    <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">o_sizes</span><span class="p">))</span>
+    <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
+    <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
+    <span class="p">)</span>
 
     <span class="c1"># for each spatial output element, check max element in kernel scope</span>
-    <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
 
 
-<span class="k">def</span> <span class="nf">macs_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<span class="k">def</span> <span class="nf">macs_adaptive_avgpool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;MACs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`&quot;&quot;&quot;</span>
 
-    <span class="n">o_sizes</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">output_size</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="k">else</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">output_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
-    <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
-    <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-                        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">o_sizes</span><span class="p">))</span>
+    <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
+    <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+        <span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
+    <span class="p">)</span>
 
     <span class="c1"># for each spatial output element, sum elements in kernel scope and div by kernel size</span>
-    <span class="k">return</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_size</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="p">(</span><span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel_size</span><span class="p">))</span>
 </pre></div>
         </article>
       </div>

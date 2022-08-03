@@ -12,7 +12,7 @@
   gtag('js', new Date());
   gtag('config', 'UA-148140560-3');
 </script>
-    <link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="torchscan" href="torchscan.html" />
+    <link rel="index" title="Index" href="genindex.html" /><link rel="search" title="Search" href="search.html" /><link rel="next" title="Installation" href="installing.html" />
 
     <link rel="shortcut icon" href="_static/favicon.ico"/><meta name="generator" content="sphinx-5.1.1, furo 2022.06.21"/>
         <title>Torchscan</title>
@@ -145,7 +145,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -167,12 +167,20 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installing.html">Installation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="torchscan.html">torchscan</a></li>
 <li class="toctree-l1"><a class="reference internal" href="modules.html">torchscan.modules</a></li>
 <li class="toctree-l1"><a class="reference internal" href="process.html">torchscan.process</a></li>
 <li class="toctree-l1"><a class="reference internal" href="utils.html">torchscan.utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
 </ul>
 
 </div>
@@ -209,31 +217,92 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
         </div>
         <article role="main">
-          <section id="torchscan-documentation">
-<h1>Torchscan documentation<a class="headerlink" href="#torchscan-documentation" title="Permalink to this heading">#</a></h1>
-<p>The <a class="reference internal" href="#module-torchscan" title="torchscan"><code class="xref py py-mod docutils literal notranslate"><span class="pre">torchscan</span></code></a> package provides tools for analyzing your PyTorch modules and models. Additionally to performance benchmarks, a comprehensive architecture comparison require some insights in the model complexity, its usage of computational and memory resources.</p>
-<div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Package Reference</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="torchscan.html">torchscan</a></li>
-<li class="toctree-l1"><a class="reference internal" href="modules.html">torchscan.modules</a></li>
-<li class="toctree-l1"><a class="reference internal" href="process.html">torchscan.process</a></li>
-<li class="toctree-l1"><a class="reference internal" href="utils.html">torchscan.utils</a></li>
-</ul>
-</div>
-<span class="target" id="module-torchscan"></span></section>
-<section id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this heading">#</a></h1>
+          <section id="torchscan-inspect-your-pytorch-models">
+<h1>TorchScan: inspect your PyTorch models<a class="headerlink" href="#torchscan-inspect-your-pytorch-models" title="Permalink to this heading">#</a></h1>
+<p>The <code class="xref py py-mod docutils literal notranslate"><span class="pre">torchscan</span></code> package provides tools for analyzing your PyTorch modules and models. Additionally to performance benchmarks, a comprehensive architecture comparison require some insights in the model complexity, its usage of computational and memory resources.</p>
+<p>This project is meant for:</p>
 <ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p>⚡ <strong>exploration</strong>: easily assess the influence of your architecture on resource consumption</p></li>
+<li><p>👩‍🔬 <strong>research</strong>: quickly implement your own ideas to mitigate latency</p></li>
 </ul>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<section id="supported-layers">
+<h2>Supported layers<a class="headerlink" href="#supported-layers" title="Permalink to this heading">#</a></h2>
+<p>Here is the list of supported layers for FLOPS, MACs, DMAs and receptive field computation:</p>
+<section id="non-linear-activations">
+<h3>Non-linear activations<a class="headerlink" href="#non-linear-activations" title="Permalink to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ReLU.html">torch.nn.ReLU</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ELU.html">torch.nn.ELU</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.LeakyReLU.html">torch.nn.LeakyReLU</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ReLU6.html">torch.nn.ReLU6</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Tanh.html">torch.nn.Tanh</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Sigmoid.html">torch.nn.Sigmoid</a></p></li>
+</ul>
+</section>
+<section id="linear-layers">
+<h3>Linear layers<a class="headerlink" href="#linear-layers" title="Permalink to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Linear.html">torch.nn.Identity</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Linear.html">torch.nn.Linear</a></p></li>
+</ul>
+</section>
+<section id="convolutions">
+<h3>Convolutions<a class="headerlink" href="#convolutions" title="Permalink to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Conv1d.html">torch.nn.Conv1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html">torch.nn.Conv2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Conv3d.html">torch.nn.Conv3d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose1d.html">torch.nn.ConvTranspose1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose2d.html">torch.nn.ConvTranspose2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.ConvTranspose3d.html">torch.nn.ConvTranspose3d</a></p></li>
+</ul>
+</section>
+<section id="pooling">
+<h3>Pooling<a class="headerlink" href="#pooling" title="Permalink to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.MaxPool1d.html">torch.nn.MaxPool1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.MaxPool2d.html">torch.nn.MaxPool2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.MaxPool3d.html">torch.nn.MaxPool3d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AvgPool1d.html">torch.nn.AvgPool1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AvgPool2d.html">torch.nn.AvgPool2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AvgPool3d.html">torch.nn.AvgPool3d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AdaptiveMaxPool1d.html">torch.nn.AdaptiveMaxPool1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AdaptiveMaxPool2d.html">torch.nn.AdaptiveMaxPool2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AdaptiveMaxPool3d.html">torch.nn.AdaptiveMaxPool3d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AdaptiveAvgPool1d.html">torch.nn.AdaptiveAvgPool1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AdaptiveAvgPool2d.html">torch.nn.AdaptiveAvgPool2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.AdaptiveAvgPool3d.html">torch.nn.AdaptiveAvgPool3d</a></p></li>
+</ul>
+</section>
+<section id="normalization">
+<h3>Normalization<a class="headerlink" href="#normalization" title="Permalink to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm1d.html">torch.nn.BatchNorm1d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html">torch.nn.BatchNorm2d</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm3d.html">torch.nn.BatchNorm3d</a></p></li>
+</ul>
+</section>
+<section id="other">
+<h3>Other<a class="headerlink" href="#other" title="Permalink to this heading">#</a></h3>
+<ul class="simple">
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Linear.html">torch.nn.Flatten</a></p></li>
+<li><p><a class="reference external" href="https://pytorch.org/docs/stable/generated/torch.nn.Dropout.html">torch.nn.Dropout</a></p></li>
+</ul>
+<p><em>Please note that the functional API of PyTorch is not supported.</em></p>
+</section>
+</section>
 </section>
 
         </article>
@@ -241,12 +310,12 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="torchscan.html">
+          <a class="next-page" href="installing.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">torchscan</div>
+                <div class="title">Installation</div>
               </div>
               <svg><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -276,8 +345,35 @@
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            Contents
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">TorchScan: inspect your PyTorch models</a><ul>
+<li><a class="reference internal" href="#supported-layers">Supported layers</a><ul>
+<li><a class="reference internal" href="#non-linear-activations">Non-linear activations</a></li>
+<li><a class="reference internal" href="#linear-layers">Linear layers</a></li>
+<li><a class="reference internal" href="#convolutions">Convolutions</a></li>
+<li><a class="reference internal" href="#pooling">Pooling</a></li>
+<li><a class="reference internal" href="#normalization">Normalization</a></li>
+<li><a class="reference internal" href="#other">Other</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>

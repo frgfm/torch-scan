@@ -62,9 +62,7 @@ def rf_convtransposend(module: _ConvTransposeNd, intput: Tensor, out: Tensor) ->
     return -k, 1.0 / s, 0.0
 
 
-def rf_aggregnd(
-    module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor
-) -> Tuple[float, float, float]:
+def rf_aggregnd(module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
     if hasattr(module, "dilation"):
         d = module.dilation[0] if isinstance(module.dilation, tuple) else module.dilation

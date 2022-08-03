@@ -233,44 +233,44 @@
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;module_dmas&quot;</span><span class="p">]</span>
 
 
-<div class="viewcode-block" id="module_dmas"><a class="viewcode-back" href="../../../modules.html#torchscan.modules.module_dmas">[docs]</a><span class="k">def</span> <span class="nf">module_dmas</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<div class="viewcode-block" id="module_dmas"><a class="viewcode-back" href="../../../modules.html#torchscan.modules.module_dmas">[docs]</a><span class="k">def</span> <span class="nf">module_dmas</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Module</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;Estimate the number of direct memory accesses by the module.</span>
 <span class="sd">    The implementation overhead is neglected.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        module (torch.nn.Module): PyTorch module</span>
-<span class="sd">        input (torch.Tensor): input to the module</span>
-<span class="sd">        output (torch.Tensor): output of the module</span>
+<span class="sd">        inp (torch.Tensor): input to the module</span>
+<span class="sd">        out (torch.Tensor): output of the module</span>
 <span class="sd">    Returns:</span>
 <span class="sd">        int: number of DMAs</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_identity</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_identity</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_flatten</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_flatten</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_linear</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="n">dmas_relu</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_relu</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="n">dmas_act_single_param</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_act_single_param</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_sigmoid</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_sigmoid</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_tanh</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_tanh</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_ConvTransposeNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_ConvNd</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">_BatchNorm</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_bn</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_bn</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="n">dmas_pool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_pool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="p">(</span><span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">)):</span>
-        <span class="k">return</span> <span class="n">dmas_adaptive_pool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_adaptive_pool</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">dmas_dropout</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">dmas_dropout</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Module type not supported: </span><span class="si">{</span><span class="n">module</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="mi">0</span></div>
@@ -288,83 +288,83 @@
     <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">module</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_identity</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_identity</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Identity</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.Identity`&quot;&quot;&quot;</span>
 
-    <span class="k">return</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_flatten</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_flatten</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Flatten</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.Flatten`&quot;&quot;&quot;</span>
 
-    <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="k">return</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_linear</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_linear</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.Linear`&quot;&quot;&quot;</span>
 
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
     <span class="c1"># Access weight and bias</span>
     <span class="n">ops_dma</span> <span class="o">=</span> <span class="n">num_params</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">ops_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_relu</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">],</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_relu</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU6</span><span class="p">],</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.ReLU`&quot;&quot;&quot;</span>
 
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">inplace</span> <span class="k">else</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">inplace</span> <span class="k">else</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_act_single_param</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">],</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_act_single_param</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">ELU</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LeakyReLU</span><span class="p">],</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for activations with single parameter&quot;&quot;&quot;</span>
 
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
     <span class="c1"># Access alpha, slope or other</span>
     <span class="n">ops_dma</span> <span class="o">=</span> <span class="mi">1</span>
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">inplace</span> <span class="k">else</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">inplace</span> <span class="k">else</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">ops_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_sigmoid</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_sigmoid</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sigmoid</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.Sigmoid`&quot;&quot;&quot;</span>
 
     <span class="c1"># Access for both exp</span>
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_tanh</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_tanh</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Tanh</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.Tanh`&quot;&quot;&quot;</span>
 
     <span class="c1"># Access for both exp</span>
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="mi">2</span>
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">*</span> <span class="mi">2</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_dropout</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_dropout</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Dropout</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.Dropout`&quot;&quot;&quot;</span>
 
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="c1"># Access sampling probability</span>
     <span class="n">ops_dma</span> <span class="o">=</span> <span class="mi">1</span>
 
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">inplace</span> <span class="k">else</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">module</span><span class="o">.</span><span class="n">inplace</span> <span class="k">else</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">ops_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvTransposeNd</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_convtransposend</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvTransposeNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.modules.conv._ConvTransposeNd`&quot;&quot;&quot;</span>
 
     <span class="c1"># Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)</span>
@@ -373,29 +373,29 @@
     <span class="n">out_padding</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span>
 
     <span class="c1"># The rest is like a classic convolution</span>
-    <span class="n">conv_dmas</span> <span class="o">=</span> <span class="n">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">)</span>
+    <span class="n">conv_dmas</span> <span class="o">=</span> <span class="n">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">in_padding</span> <span class="o">+</span> <span class="n">out_padding</span> <span class="o">+</span> <span class="n">conv_dmas</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_convnd</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_ConvNd</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.modules.conv._ConvNd`&quot;&quot;&quot;</span>
 
     <span class="c1"># Each output element required K ** 2 memory access of each input channel</span>
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">in_channels</span> <span class="o">*</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">in_channels</span> <span class="o">*</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
     <span class="c1"># Correct with groups</span>
     <span class="n">input_dma</span> <span class="o">//=</span> <span class="n">module</span><span class="o">.</span><span class="n">groups</span>
 
     <span class="c1"># Access weight &amp; bias</span>
     <span class="n">ops_dma</span> <span class="o">=</span> <span class="n">num_params</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">ops_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_bn</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_BatchNorm</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_bn</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">_BatchNorm</span><span class="p">,</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for `torch.nn.modules.batchnorm._BatchNorm`&quot;&quot;&quot;</span>
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="nb">input</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">inp</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="c1"># Access running_mean, running_var and eps</span>
     <span class="n">ops_dma</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">running_mean</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">+</span> <span class="n">module</span><span class="o">.</span><span class="n">running_var</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">+</span> <span class="mi">1</span>  <span class="c1"># type: ignore[union-attr]</span>
@@ -411,40 +411,40 @@
         <span class="c1"># Update num of batches and running stats</span>
         <span class="n">ops_dma</span> <span class="o">+=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">module</span><span class="o">.</span><span class="n">running_mean</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="o">+</span> <span class="n">module</span><span class="o">.</span><span class="n">running_var</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>  <span class="c1"># type: ignore[union-attr]</span>
 
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">ops_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_pool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">],</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_pool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_MaxPoolNd</span><span class="p">,</span> <span class="n">_AvgPoolNd</span><span class="p">],</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for spatial pooling modules&quot;&quot;&quot;</span>
 
     <span class="c1"># Resolve kernel size and stride size (can be stored as a single integer or a tuple)</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
         <span class="n">kernel_size</span> <span class="o">=</span> <span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
-        <span class="n">kernel_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">kernel_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">kernel_size</span><span class="p">,)</span> <span class="o">*</span> <span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">ndim</span> <span class="o">-</span> <span class="mi">2</span><span class="p">)</span>
 
     <span class="c1"># Each output element required K ** 2 memory accesses</span>
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 
 
-<span class="k">def</span> <span class="nf">dmas_adaptive_pool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">],</span> <span class="nb">input</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">output</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="k">def</span> <span class="nf">dmas_adaptive_pool</span><span class="p">(</span><span class="n">module</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">_AdaptiveMaxPoolNd</span><span class="p">,</span> <span class="n">_AdaptiveAvgPoolNd</span><span class="p">],</span> <span class="n">inp</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">,</span> <span class="n">out</span><span class="p">:</span> <span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="sd">&quot;&quot;&quot;DMAs estimation for adaptive spatial pooling modules&quot;&quot;&quot;</span>
 
     <span class="c1"># Approximate kernel_size using ratio of spatial shapes between input and output</span>
     <span class="n">kernel_size</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
         <span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span> <span class="k">if</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">%</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="n">i_size</span> <span class="o">-</span> <span class="n">o_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i_size</span> <span class="o">//</span> <span class="n">o_size</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="nb">input</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">output</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
+        <span class="k">for</span> <span class="n">i_size</span><span class="p">,</span> <span class="n">o_size</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:],</span> <span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">:])</span>
     <span class="p">)</span>
     <span class="c1"># Each output element required K ** 2 memory accesses</span>
-    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">input_dma</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="n">kernel_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
-    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="n">output_dma</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
 
     <span class="k">return</span> <span class="n">input_dma</span> <span class="o">+</span> <span class="n">output_dma</span>
 </pre></div>

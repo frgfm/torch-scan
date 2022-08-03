@@ -21,6 +21,7 @@
   <a href="https://pypi.org/project/torchscan/">
     <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=python&amp;logoColor=fff&amp;style=flat-square" alt="PyPi Status">
   </a>
+  <a href="https://anaconda.org/frgfm/torchscan"> <img src="https://anaconda.org/frgfm/torchscan/badges/version.svg" /> </a>
   <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?style=flat-square" alt="pyversions">
   <img src="https://img.shields.io/pypi/l/torchscan.svg?style=flat-square" alt="license">
 </p>

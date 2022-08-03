@@ -13,6 +13,7 @@ source:
   url: ../dist/torchscan-{{ environ.get('BUILD_VERSION') }}.tar.gz
 
 build:
+  number: 0
   noarch: python
   script: python setup.py install --single-version-externally-managed --record=record.txt
 
@@ -29,8 +30,9 @@ test:
   # Python imports
   imports:
     - torchscan
-  requires:
-    - python
+    - torchscan.modules
+    - torchscan.process
+    - torchscan.utils
 
 about:
   home: https://github.com/frgfm/torch-scan

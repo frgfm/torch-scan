@@ -47,23 +47,23 @@ which would yield
 
 ```shell
 __________________________________________________________________________________________
-Layer                        Type                  Output Shape              Param #        
+Layer                        Type                  Output Shape              Param #
 ==========================================================================================
-densenet                     DenseNet              (-1, 1000)                0              
-├─features                   Sequential            (-1, 1024, 7, 7)          0              
-|    └─conv0                 Conv2d                (-1, 64, 112, 112)        9,408          
-|    └─norm0                 BatchNorm2d           (-1, 64, 112, 112)        257            
-|    └─relu0                 ReLU                  (-1, 64, 112, 112)        0              
-|    └─pool0                 MaxPool2d             (-1, 64, 56, 56)          0              
-|    └─denseblock1           _DenseBlock           (-1, 256, 56, 56)         338,316        
-|    └─transition1           _Transition           (-1, 128, 28, 28)         33,793         
-|    └─denseblock2           _DenseBlock           (-1, 512, 28, 28)         930,072        
-|    └─transition2           _Transition           (-1, 256, 14, 14)         133,121        
-|    └─denseblock3           _DenseBlock           (-1, 1024, 14, 14)        2,873,904      
-|    └─transition3           _Transition           (-1, 512, 7, 7)           528,385        
-|    └─denseblock4           _DenseBlock           (-1, 1024, 7, 7)          2,186,272      
-|    └─norm5                 BatchNorm2d           (-1, 1024, 7, 7)          4,097          
-├─classifier                 Linear                (-1, 1000)                1,025,000      
+densenet                     DenseNet              (-1, 1000)                0
+├─features                   Sequential            (-1, 1024, 7, 7)          0
+|    └─conv0                 Conv2d                (-1, 64, 112, 112)        9,408
+|    └─norm0                 BatchNorm2d           (-1, 64, 112, 112)        257
+|    └─relu0                 ReLU                  (-1, 64, 112, 112)        0
+|    └─pool0                 MaxPool2d             (-1, 64, 56, 56)          0
+|    └─denseblock1           _DenseBlock           (-1, 256, 56, 56)         338,316
+|    └─transition1           _Transition           (-1, 128, 28, 28)         33,793
+|    └─denseblock2           _DenseBlock           (-1, 512, 28, 28)         930,072
+|    └─transition2           _Transition           (-1, 256, 14, 14)         133,121
+|    └─denseblock3           _DenseBlock           (-1, 1024, 14, 14)        2,873,904
+|    └─transition3           _Transition           (-1, 512, 7, 7)           528,385
+|    └─denseblock4           _DenseBlock           (-1, 1024, 7, 7)          2,186,272
+|    └─norm5                 BatchNorm2d           (-1, 1024, 7, 7)          4,097
+├─classifier                 Linear                (-1, 1000)                1,025,000
 ==========================================================================================
 Trainable params: 7,978,856
 Non-trainable params: 0

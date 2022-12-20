@@ -29,7 +29,7 @@ As a contributor, you will only have to ensure coverage of your code by adding a
 
 ### Feature requests & bug report
 
-Whether you encountered a problem, or you have a feature suggestion, your input has value and can be used by contributors to reference it in their developments. For this purpose, we advise you to use Github [issues](https://github.com/frgfm/torch-scan/issues). 
+Whether you encountered a problem, or you have a feature suggestion, your input has value and can be used by contributors to reference it in their developments. For this purpose, we advise you to use Github [issues](https://github.com/frgfm/torch-scan/issues).
 
 First, check whether the topic wasn't already covered in an open / closed issue. If not, feel free to open a new one! When doing so, use issue templates whenever possible and provide enough information for other contributors to jump in.
 
@@ -60,6 +60,7 @@ git checkout -b a-short-description
 4 - You only have to set your development environment now. First uninstall any existing installation of the library with `pip uninstall torch-scan`, then:
 ```shell
 pip install -e ".[dev]"
+pre-commit install
 ```
 
 ### Developing your feature

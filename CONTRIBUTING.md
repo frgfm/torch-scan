@@ -60,6 +60,7 @@ git checkout -b a-short-description
 4 - You only have to set your development environment now. First uninstall any existing installation of the library with `pip uninstall torch-scan`, then:
 ```shell
 pip install -e ".[dev]"
+pre-commit install
 ```
 
 ### Developing your feature

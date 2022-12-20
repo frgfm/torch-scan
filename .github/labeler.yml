@@ -1,0 +1,31 @@
+'module: crawler':
+- torchscan/crawler.py
+
+'module: modules':
+- torchscan/modules/*
+
+'module: process':
+- torchscan/process/*
+
+'module: utils':
+- torchscan/utils.py
+
+'ext: docs':
+- docs/*
+
+'ext: scripts':
+- scripts/*
+
+'ext: tests':
+- tests/*
+
+'topic: ci':
+- .github/*
+
+'topic: documentation':
+- README.md
+- CONTRIBUTING.md
+
+'topic: build':
+- setup.py
+- pyproject.toml

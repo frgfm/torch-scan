@@ -226,7 +226,7 @@ If you wish to cite this project, feel free to use this [BibTeX](http://www.bibt
 
 Any sort of contribution is greatly appreciated!
 
-You can find a short guide in [`CONTRIBUTING`](CONTRIBUTING) to help grow this project!
+You can find a short guide in [`CONTRIBUTING`](CONTRIBUTING.md) to help grow this project!
 
 
 

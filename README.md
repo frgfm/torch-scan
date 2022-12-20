@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/frgfm/torch-scan/actions?query=workflow%3Abuilds">
-    <img alt="CI Status" src="https://img.shields.io/github/workflow/status/frgfm/torch-scan/builds?label=CI&logo=github&style=flat-square">
+  <a href="https://github.com/frgfm/torch-scan/actions/workflows/builds.yml">
+    <img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/builds.yml?branch=main&label=CI&logo=github&style=flat-square">
   </a>
   <a href="https://frgfm.github.io/torch-scan">
-    <img src="https://img.shields.io/github/workflow/status/frgfm/torch-scan/docs?label=docs&logo=read-the-docs&style=flat-square" alt="Documentation Status">
+    <img src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/docs.yaml?branch=main&label=docs&logo=read-the-docs&style=flat-square" alt="Documentation Status">
   </a>
   <a href="https://codecov.io/gh/frgfm/torch-scan">
     <img src="https://img.shields.io/codecov/c/github/frgfm/torch-scan.svg?logo=codecov&style=flat-square" alt="Test coverage percentage">

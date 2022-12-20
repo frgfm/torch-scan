@@ -125,5 +125,5 @@ remove-all-unused-imports = true
 ignore-init-module-imports = true
 
 [tool.bandit]
-exclude_dirs = [".github/collect_env.py"]
+exclude_dirs = [".github/collect_env.py", "torchscan/process/memory.py"]
 skips = ["B101"]

@@ -179,7 +179,7 @@ def crawl_module(
                     current_rf, current_stride, current_padding = module_rf(module, inputs[0], out)
 
                 # Update layer information
-                info[fw_idx]["output_shape"] = (-1, *out.shape[1:])
+                info[fw_idx]["output_shape"] = (-1, [dim for t in (*out,) for dim in t.shape[1:]])
                 # Add them, since some modules can be used several times
                 info[fw_idx]["flops"] = tot_flops
                 info[fw_idx]["macs"] = tot_macs

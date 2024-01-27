@@ -194,7 +194,7 @@ def crawl_module(
                 post_hook_tracker[id(module)]["current"] = 0
                 post_hook_tracker[id(module)]["is_used"] = False
 
-        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
+        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))  # type: ignore[arg-type]
         post_fw_handles.append(module.register_forward_hook(_fwd_hook))
         # Handle modules that are used multiple times (with several hooks)
         pre_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}

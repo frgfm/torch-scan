@@ -1,20 +1,30 @@
+default_language_version:
+    python: python3.9
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
+    rev: v4.5.0
     hooks:
-      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-ast
+      - id: check-case-conflict
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-symlinks
       - id: check-toml
+      - id: check-xml
+      - id: check-yaml
+        exclude: .conda
+      - id: debug-statements
+        language_version: python3
       - id: end-of-file-fixer
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+      - id: requirements-txt-fixer
       - id: trailing-whitespace
-  - repo: https://github.com/psf/black
-    rev: 22.3.0
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: 'v0.1.14'
     hooks:
-    - id: black
-  - repo: https://github.com/pycqa/isort
-    rev: 5.10.1
-    hooks:
-    - id: isort
-  - repo: https://github.com/PyCQA/autoflake
-    rev: v1.7.7
-    hooks:
-    - id: autoflake
+      - id: ruff
+        args:
+          - --fix
+      - id: ruff-format

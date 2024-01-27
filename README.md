@@ -1,30 +1,40 @@
 <p align="center">
-  <img src="https://github.com/frgfm/torch-scan/releases/download/v0.1.1/logo_text.png" width="40%">
+  <img src="https://github.com/frgfm/torch-scan/releases/download/v0.1.1/logo_text.png" width="30%">
 </p>
 
 <p align="center">
   <a href="https://github.com/frgfm/torch-scan/actions/workflows/builds.yml">
     <img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/builds.yml?branch=main&label=CI&logo=github&style=flat-square">
   </a>
-  <a href="https://frgfm.github.io/torch-scan">
-    <img src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/docs.yaml?branch=main&label=docs&logo=read-the-docs&style=flat-square" alt="Documentation Status">
+  <a href="https://github.com/astral-sh/ruff">
+    <img src="https://img.shields.io/badge/Linter-Ruff-FCC21B?style=flat-square&logo=ruff&logoColor=white" alt="ruff">
   </a>
-  <a href="https://codecov.io/gh/frgfm/torch-scan">
-    <img src="https://img.shields.io/codecov/c/github/frgfm/torch-scan.svg?logo=codecov&style=flat-square" alt="Test coverage percentage">
-  </a>
-  <a href="https://github.com/ambv/black">
-    <img src="https://img.shields.io/badge/code%20style-black-000000.svg?style=flat-square" alt="black">
+  <a href="https://github.com/astral-sh/ruff">
+    <img src="https://img.shields.io/badge/Formatter-Ruff-FCC21B?style=flat-square&logo=Python&logoColor=white" alt="ruff">
   </a>
   <a href="https://www.codacy.com/gh/frgfm/torch-scan/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade"><img src="https://app.codacy.com/project/badge/Grade/9dc68e8bfce34d9dbc8b44a350e9adc7"/></a>
+  <a href="https://codecov.io/gh/frgfm/torch-scan">
+    <img src="https://img.shields.io/codecov/c/github/frgfm/torch-scan.svg?logo=codecov&style=flat-square&label=Coverage" alt="Test coverage percentage">
+  </a>
 </p>
 <p align="center">
   <a href="https://pypi.org/project/torchscan/">
-    <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=python&amp;logoColor=fff&amp;style=flat-square" alt="PyPi Status">
+    <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=PyPI&logoColor=fff&style=flat-square&label=PyPI" alt="PyPi Version">
   </a>
-  <a href="https://anaconda.org/frgfm/torchscan"> <img src="https://anaconda.org/frgfm/torchscan/badges/version.svg" /> </a>
-  <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?style=flat-square" alt="pyversions">
-  <img src="https://img.shields.io/pypi/l/torchscan.svg?style=flat-square" alt="license">
+  <a href="https://anaconda.org/frgfm/torchscan">
+    <img src="https://img.shields.io/conda/v/frgfm/torchscan.svg?logo=anaconda&label=Conda&logoColor=fff&style=flat-square" alt="Conda Version">
+  </a>
+  <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?logo=Python&label=Python&logoColor=fff&style=flat-square" alt="pyversions">
+  <a href="https://github.com/frgfm/torch-scan/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/frgfm/torch-scan.svg?label=License&logoColor=fff&style=flat-square" alt="License">
+  </a>
 </p>
+<p align="center">
+  <a href="https://frgfm.github.io/torch-scan">
+    <img src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/docs.yml?branch=main&label=Documentation&logo=read-the-docs&logoColor=white&style=flat-square" alt="Documentation Status">
+  </a>
+</p>
+
 
 The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
 
@@ -104,7 +114,7 @@ which will add the layer's receptive field (relatively to the last convolutional
 
 ## Setup
 
-Python 3.6 (or higher) and [pip](https://pip.pypa.io/en/stable/)/[conda](https://docs.conda.io/en/latest/miniconda.html) are required to install Torchscan.
+Python 3.8 (or newer) and [pip](https://pip.pypa.io/en/stable/)/[conda](https://docs.conda.io/en/latest/miniconda.html) are required to install Torchscan.
 
 ### Stable release
 

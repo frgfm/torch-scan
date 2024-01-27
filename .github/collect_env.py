@@ -14,9 +14,10 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import locale
 import os
 import re
-import subprocess
+import subprocess  # noqa S404
 import sys
-from collections import namedtuple
+from pathlib import Path
+from typing import NamedTuple
 
 try:
     import torchscan
@@ -36,20 +37,16 @@ PY3 = sys.version_info >= (3, 0)
 
 
 # System Environment Information
-SystemEnv = namedtuple(
-    "SystemEnv",
-    [
-        "torchscan_version",
-        "torch_version",
-        "os",
-        "python_version",
-        "is_cuda_available",
-        "cuda_runtime_version",
-        "nvidia_driver_version",
-        "nvidia_gpu_models",
-        "cudnn_version",
-    ],
-)
+class SystemEnv(NamedTuple):
+    torchscan_version: str
+    torch_version: str
+    os: str
+    python_version: str
+    is_cuda_available: bool
+    cuda_runtime_version: str
+    nvidia_driver_version: str
+    nvidia_gpu_models: str
+    cudnn_version: str
 
 
 def run(command):
@@ -125,18 +122,18 @@ def get_cudnn_version(run_lambda):
     # find will return 1 if there are permission errors or if not found
     if len(out) == 0 or rc not in (1, 0):
         lib = os.environ.get("CUDNN_LIBRARY")
-        if lib is not None and os.path.isfile(lib):
+        if lib is not None and Path(lib).is_file():
             return os.path.realpath(lib)
         return None
     files = set()
     for fn in out.split("\n"):
         fn = os.path.realpath(fn)  # eliminate symbolic links
-        if os.path.isfile(fn):
+        if Path(fn).is_file():
             files.add(fn)
     if not files:
         return None
     # Alphabetize the result because the order is non-deterministic otherwise
-    files = list(sorted(files))
+    files = sorted(files)
     if len(files) == 1:
         return files[0]
     result = "\n".join(files)
@@ -149,11 +146,11 @@ def get_nvidia_smi():
     if get_platform() == "win32":
         system_root = os.environ.get("SYSTEMROOT", "C:\\Windows")
         program_files_root = os.environ.get("PROGRAMFILES", "C:\\Program Files")
-        legacy_path = os.path.join(program_files_root, "NVIDIA Corporation", "NVSMI", smi)
-        new_path = os.path.join(system_root, "System32", smi)
+        legacy_path = Path(program_files_root) / "NVIDIA Corporation" / "NVSMI" / smi
+        new_path = Path(system_root) / "System32" / smi
         smis = [new_path, legacy_path]
         for candidate_smi in smis:
-            if os.path.exists(candidate_smi):
+            if Path(candidate_smi).exists():
                 smi = '"{}"'.format(candidate_smi)
                 break
     return smi
@@ -220,10 +217,7 @@ def get_os(run_lambda):
 def get_env_info():
     run_lambda = run
 
-    if TORCHSCAN_AVAILABLE:
-        torchscan_str = torchscan.__version__
-    else:
-        torchscan_str = "N/A"
+    torchscan_str = torchscan.__version__ if TORCHSCAN_AVAILABLE else "N/A"
 
     if TORCH_AVAILABLE:
         torch_str = torch.__version__
@@ -261,14 +255,14 @@ cuDNN version: {cudnn_version}
 
 def pretty_str(envinfo):
     def replace_nones(dct, replacement="Could not collect"):
-        for key in dct.keys():
+        for key in dct:
             if dct[key] is not None:
                 continue
             dct[key] = replacement
         return dct
 
     def replace_bools(dct, true="Yes", false="No"):
-        for key in dct.keys():
+        for key in dct:
             if dct[key] is True:
                 dct[key] = true
             elif dct[key] is False:
@@ -292,7 +286,7 @@ def pretty_str(envinfo):
         "nvidia_gpu_models",
         "nvidia_driver_version",
     ]
-    all_cuda_fields = dynamic_cuda_fields + ["cudnn_version"]
+    all_cuda_fields = [*dynamic_cuda_fields, "cudnn_version"]
     all_dynamic_cuda_fields_missing = all(mutable_dict[field] is None for field in dynamic_cuda_fields)
     if TORCH_AVAILABLE and not torch.cuda.is_available() and all_dynamic_cuda_fields_missing:
         for field in all_cuda_fields:

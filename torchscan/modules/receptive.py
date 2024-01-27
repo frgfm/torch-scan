@@ -52,30 +52,29 @@ def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, f
     elif isinstance(module, (_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd)):
         return rf_adaptive_poolnd(module, inp, out)
     else:
-        warnings.warn(f"Module type not supported: {module.__class__.__name__}")
+        warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
         return 1.0, 1.0, 0.0
 
 
-def rf_convtransposend(module: _ConvTransposeNd, intput: Tensor, out: Tensor) -> Tuple[float, float, float]:
+def rf_convtransposend(module: _ConvTransposeNd, _: Tensor, __: Tensor) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
     s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
     return -k, 1.0 / s, 0.0
 
 
-def rf_aggregnd(module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor) -> Tuple[float, float, float]:
+def rf_aggregnd(module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], _: Tensor, __: Tensor) -> Tuple[float, float, float]:
     k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
     if hasattr(module, "dilation"):
         d = module.dilation[0] if isinstance(module.dilation, tuple) else module.dilation
-        k = d * (k - 1) + 1  # type: ignore[operator]
+        k = d * (k - 1) + 1
     s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
     p = module.padding[0] if isinstance(module.padding, tuple) else module.padding
     return k, s, p  # type: ignore[return-value]
 
 
 def rf_adaptive_poolnd(
-    module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Tensor, out: Tensor
+    _: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Tensor, out: Tensor
 ) -> Tuple[int, int, float]:
-
     stride = math.ceil(inp.shape[-1] / out.shape[-1])
     kernel_size = stride
     padding = (inp.shape[-1] - kernel_size * stride) / 2

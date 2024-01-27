@@ -1,4 +1,4 @@
 from .flops import *
-from .macs import *  # type: ignore[assignment]
+from .macs import *
 from .memory import *
 from .receptive import *

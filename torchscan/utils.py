@@ -3,6 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
+from itertools import starmap
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -15,7 +16,6 @@ def format_name(name: str, depth: int = 0) -> str:
     Returns:
         formatted string
     """
-
     if depth == 0:
         return name
     elif depth == 1:
@@ -36,7 +36,6 @@ def wrap_string(s: str, max_len: int, delimiter: str = ".", wrap: str = "[...]",
     Returns:
         wrapped string
     """
-
     if len(s) <= max_len or mode is None:
         return s
 
@@ -58,7 +57,6 @@ def unit_scale(val: float) -> Tuple[float, str]:
     Returns:
         tuple of rescaled value and unit
     """
-
     if val // 1e12 > 0:
         return val / 1e12, "T"
     elif val // 1e9 > 0:
@@ -71,7 +69,8 @@ def unit_scale(val: float) -> Tuple[float, str]:
         return val, ""
 
 
-def format_s(f_string, min_w: Optional[int] = None, max_w: Optional[int] = None) -> str:
+def format_s(f_string: str, min_w: Optional[int] = None, max_w: Optional[int] = None) -> str:
+    """Format number strings"""
     if isinstance(min_w, int):
         f_string = f"{f_string:<{min_w}}"
     if isinstance(max_w, int):
@@ -87,25 +86,25 @@ def format_line_str(
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
 ) -> List[str]:
-
+    """Wrap all information into multiple lines"""
     if not isinstance(col_w, list):
         col_w = [None] * 7  # type: ignore[list-item]
 
     max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
     line_str = [
-        format_s(wrap_string(format_name(layer["name"], layer["depth"]), max_len, mode=wrap_mode), col_w[0], col_w[0])
+        format_s(wrap_string(format_name(layer["name"], layer["depth"]), max_len, mode=wrap_mode), col_w[0], col_w[0]),
+        format_s(layer["type"], col_w[1], col_w[1]),
+        format_s(str(layer["output_shape"]), col_w[2], col_w[2]),
+        format_s(f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:,}", col_w[3], col_w[3]),
     ]
-    line_str.append(format_s(layer["type"], col_w[1], col_w[1]))
-    line_str.append(format_s(str(layer["output_shape"]), col_w[2], col_w[2]))
-    line_str.append(
-        format_s(f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:,}", col_w[3], col_w[3])
-    )
 
     if receptive_field:
         line_str.append(format_s(f"{layer['rf']:.0f}", col_w[4], col_w[4]))
         if effective_rf_stats:
-            line_str.append(format_s(f"{layer['s']:.0f}", col_w[5], col_w[5]))
-            line_str.append(format_s(f"{layer['p']:.0f}", col_w[6], col_w[6]))
+            line_str.extend((
+                format_s(f"{layer['s']:.0f}", col_w[5], col_w[5]),
+                format_s(f"{layer['p']:.0f}", col_w[6], col_w[6]),
+            ))
 
     return line_str
 
@@ -123,7 +122,6 @@ def format_info(
     Returns:
         formatted information
     """
-
     # Set margin between cols
     margin = 4
     # Dynamic col width
@@ -141,7 +139,7 @@ def format_info(
         ]
 
     # Truncate columns that are too long
-    col_w = [min(v, max_v) for v, max_v in zip(col_w, max_w)]
+    col_w = list(starmap(min, zip(col_w, max_w)))
 
     if not receptive_field:
         col_w = col_w[:4]
@@ -159,9 +157,11 @@ def format_info(
     margin_str = " " * margin
 
     # Header
-    info_str = [thin_line]
-    info_str.append(margin_str.join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, col_w)]))
-    info_str.append(thick_line)
+    info_str = [
+        thin_line,
+        margin_str.join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, col_w)]),
+        thick_line,
+    ]
 
     # Layers
     for layer in module_info["layers"]:
@@ -169,12 +169,13 @@ def format_info(
         info_str.append((" " * margin).join(line_str))
 
     # Parameter information
-    info_str.append(thick_line)
-
-    info_str.append(f"Trainable params: {module_info['overall']['grad_params']:,}")
-    info_str.append(f"Non-trainable params: {module_info['overall']['nograd_params']:,}")
     num_params = module_info["overall"]["grad_params"] + module_info["overall"]["nograd_params"]
-    info_str.append(f"Total params: {num_params:,}")
+    info_str.extend((
+        thick_line,
+        f"Trainable params: {module_info['overall']['grad_params']:,}",
+        f"Non-trainable params: {module_info['overall']['nograd_params']:,}",
+        f"Total params: {num_params:,}",
+    ))
 
     # Static RAM usage
     info_str.append(dot_line)
@@ -183,9 +184,11 @@ def format_info(
     param_size = (module_info["overall"]["param_size"] + module_info["overall"]["buffer_size"]) / 1024**2
     overhead = module_info["overheads"]["framework"]["fwd"] + module_info["overheads"]["cuda"]["fwd"]
 
-    info_str.append(f"Model size (params + buffers): {param_size:.2f} Mb")
-    info_str.append(f"Framework & CUDA overhead: {overhead:.2f} Mb")
-    info_str.append(f"Total RAM usage: {param_size + overhead:.2f} Mb")
+    info_str.extend((
+        f"Model size (params + buffers): {param_size:.2f} Mb",
+        f"Framework & CUDA overhead: {overhead:.2f} Mb",
+        f"Total RAM usage: {param_size + overhead:.2f} Mb",
+    ))
 
     # FLOPS information
     info_str.append(dot_line)
@@ -194,11 +197,12 @@ def format_info(
     macs, macs_units = unit_scale(sum(layer["macs"] for layer in module_info["layers"]))
     dmas, dmas_units = unit_scale(sum(layer["dmas"] for layer in module_info["layers"]))
 
-    info_str.append(f"Floating Point Operations on forward: {flops:.2f} {flops_units}FLOPs")
-    info_str.append(f"Multiply-Accumulations on forward: {macs:.2f} {macs_units}MACs")
-    info_str.append(f"Direct memory accesses on forward: {dmas:.2f} {dmas_units}DMAs")
-
-    info_str.append(thin_line)
+    info_str.extend((
+        f"Floating Point Operations on forward: {flops:.2f} {flops_units}FLOPs",
+        f"Multiply-Accumulations on forward: {macs:.2f} {macs_units}MACs",
+        f"Direct memory accesses on forward: {dmas:.2f} {dmas_units}DMAs",
+        thin_line,
+    ))
 
     return "\n".join(info_str)
 
@@ -212,7 +216,6 @@ def aggregate_info(info: Dict[str, Any], max_depth: int) -> Dict[str, Any]:
     Returns:
         edited dictionary information
     """
-
     if not any(layer["depth"] == max_depth for layer in info["layers"]):
         raise ValueError("The `max_depth` argument cannot be higher than module depth.")
 

@@ -24,7 +24,6 @@ def test_apply():
 
 
 def test_crawl_module():
-
     mod = nn.Conv2d(3, 8, 3)
 
     res = crawler.crawl_module(mod, (3, 32, 32))
@@ -34,7 +33,6 @@ def test_crawl_module():
 
 
 def test_summary():
-
     mod = nn.Conv2d(3, 8, 3)
 
     # Redirect stdout with StringIO object
@@ -67,13 +65,11 @@ def test_summary():
         crawler.summary(mod, (3, 32, 32), max_depth=1)
 
     mod = nn.Sequential(
-        OrderedDict(
-            [
-                ("features", nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(inplace=True))),
-                ("pool", nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(1))),
-                ("classifier", nn.Linear(8, 1)),
-            ]
-        )
+        OrderedDict([
+            ("features", nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(inplace=True))),
+            ("pool", nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(1))),
+            ("classifier", nn.Linear(8, 1)),
+        ])
     )
 
     captured_output = io.StringIO()

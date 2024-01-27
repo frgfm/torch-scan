@@ -1,22 +1,17 @@
 # this target runs checks on all files
 quality:
-	isort . -c
-	flake8
+	ruff format --check .
+	ruff check .
 	mypy
-	pydocstyle
-	black --check .
-	bandit -r . -c pyproject.toml
-	autoflake -r .
 
 # this target runs checks on all files and potentially modifies some of them
 style:
-	isort .
-	black .
-	autoflake --in-place -r .
+	ruff format .
+	ruff --fix .
 
 # Run tests for the library
 test:
-	coverage run -m pytest tests/
+	pytest --cov=torchscan tests/
 
 # Build documentation for current version
 single-docs:

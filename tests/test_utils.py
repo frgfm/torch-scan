@@ -11,7 +11,6 @@ def test_format_name():
 
 
 def test_wrap_string():
-
     example = ".".join(["a" for _ in range(10)])
     max_len = 10
     wrap = "[...]"
@@ -24,13 +23,13 @@ def test_wrap_string():
 
 
 @pytest.mark.parametrize(
-    "input_val, num_val, unit",
+    ("input_val", "num_val", "unit"),
     [
-        [3e14, 300, "T"],
-        [3e10, 30, "G"],
-        [3e7, 30, "M"],
-        [15e3, 15, "k"],
-        [500, 500, ""],
+        (3e14, 300, "T"),
+        (3e10, 30, "G"),
+        (3e7, 30, "M"),
+        (15e3, 15, "k"),
+        (500, 500, ""),
     ],
 )
 def test_unit_scale(input_val, num_val, unit):

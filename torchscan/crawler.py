@@ -24,7 +24,6 @@ def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str]
         fn: function to apply to each module
         name: name of the current module
     """
-
     if name is None:
         name = module.__class__.__name__.lower()
     fn(module, name)
@@ -51,7 +50,6 @@ def crawl_module(
     Returns:
         layer and overhead information
     """
-
     # Get device and data types from model
     p = next(module.parameters())
     device = p.device
@@ -118,28 +116,26 @@ def crawl_module(
                 else:
                     call_idxs[id(module)].append(len(info))
 
-                info.append(
-                    dict(
-                        name=name.rpartition(".")[-1],
-                        depth=len(name.split(".")) - 1,
-                        type=module.__class__.__name__,
-                        input_shape=(-1, *inp[0][0].shape[1:]),
-                        output_shape=None,
-                        grad_params=grad_params,
-                        nograd_params=nograd_params,
-                        param_size=param_size,
-                        num_buffers=num_buffers,
-                        buffer_size=buffer_size,
-                        flops=0,
-                        macs=0,
-                        dmas=0,
-                        rf=1,
-                        s=1,
-                        p=0,
-                        is_shared=is_shared,
-                        is_leaf=not any(module.children()),
-                    )
-                )
+                info.append({
+                    "name": name.rpartition(".")[-1],
+                    "depth": len(name.split(".")) - 1,
+                    "type": module.__class__.__name__,
+                    "input_shape": (-1, *inp[0][0].shape[1:]),
+                    "output_shape": None,
+                    "grad_params": grad_params,
+                    "nograd_params": nograd_params,
+                    "param_size": param_size,
+                    "num_buffers": num_buffers,
+                    "buffer_size": buffer_size,
+                    "flops": 0,
+                    "macs": 0,
+                    "dmas": 0,
+                    "rf": 1,
+                    "s": 1,
+                    "p": 0,
+                    "is_shared": is_shared,
+                    "is_leaf": not any(module.children()),
+                })
                 # Mark the next hook for execution
                 pre_hook_tracker[id(module)]["target"] += 1
                 # Current pass already used one of the hooks
@@ -152,7 +148,6 @@ def crawl_module(
 
         def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], out: torch.Tensor) -> None:
             """Post-forward hook"""
-
             # Check that another hook has not been triggered at this forward stage
             if not post_hook_tracker[id(module)]["is_used"] and (
                 post_hook_tracker[id(module)]["target"] == post_hook_tracker[id(module)]["current"]
@@ -199,11 +194,11 @@ def crawl_module(
                 post_hook_tracker[id(module)]["current"] = 0
                 post_hook_tracker[id(module)]["is_used"] = False
 
-        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
+        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))  # type: ignore[arg-type]
         post_fw_handles.append(module.register_forward_hook(_fwd_hook))
         # Handle modules that are used multiple times (with several hooks)
-        pre_hook_tracker[id(module)] = dict(current=0, target=0, is_used=False)
-        post_hook_tracker[id(module)] = dict(current=0, target=0, is_used=False)
+        pre_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}
+        post_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}
 
     # Hook model
     info: List[Dict[str, Any]] = []
@@ -250,23 +245,23 @@ def crawl_module(
         info[fw_idx]["s"] = _s
         info[fw_idx]["p"] = _p
 
-    return dict(
-        overheads=dict(
-            cuda=dict(
-                pre=cuda_overhead,
-                fwd=get_process_gpu_ram(os.getpid()) - reserved_ram,
-            ),
-            framework=dict(pre=framework_overhead, fwd=diff_ram),
-        ),
-        layers=info,
-        overall=dict(
-            grad_params=grad_params,
-            nograd_params=nograd_params,
-            param_size=param_size,
-            num_buffers=num_buffers,
-            buffer_size=buffer_size,
-        ),
-    )
+    return {
+        "overheads": {
+            "cuda": {
+                "pre": cuda_overhead,
+                "fwd": get_process_gpu_ram(os.getpid()) - reserved_ram,
+            },
+            "framework": {"pre": framework_overhead, "fwd": diff_ram},
+        },
+        "layers": info,
+        "overall": {
+            "grad_params": grad_params,
+            "nograd_params": nograd_params,
+            "param_size": param_size,
+            "num_buffers": num_buffers,
+            "buffer_size": buffer_size,
+        },
+    }
 
 
 def summary(
@@ -292,11 +287,10 @@ def summary(
         receptive_field: whether receptive field estimation should be performed
         effective_rf_stats: if `receptive_field` is True, displays effective stride and padding
     """
-
     # Get the summary dict
     module_info = crawl_module(module, input_shape)
     # Aggregate until max_depth
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)
     # Format it and print it
-    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))
+    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))  # noqa T201

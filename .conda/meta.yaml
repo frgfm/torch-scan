@@ -1,30 +1,26 @@
-# https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#loading-data-from-other-files
-# https://github.com/conda/conda-build/pull/4480
-# for conda-build > 3.21.9
-# {% set pyproject = load_file_data('../pyproject.toml', from_recipe_dir=True) %}
-# {% set project = pyproject.get('project') %}
-# {% set urls = pyproject.get('project', {}).get('urls') %}
+{% set pyproject = load_file_data('../pyproject.toml', from_recipe_dir=True) %}
+{% set project = pyproject.get('project') %}
+{% set urls = pyproject.get('project', {}).get('urls') %}
+{% set version = environ.get('BUILD_VERSION', '0.2.0.dev0') %}
 package:
-  name: torchscan
-  version: "{{ environ.get('BUILD_VERSION') }}"
+  name: {{ project.get('name') }}
+  version: {{ version }}
 
 source:
-  fn: torchscan-{{ environ.get('BUILD_VERSION') }}.tar.gz
-  url: ../dist/torchscan-{{ environ.get('BUILD_VERSION') }}.tar.gz
+  fn: {{ project.get('name') }}-{{ version }}}.tar.gz
+  url: ../dist/{{ project.get('name') }}-{{ version }}.tar.gz
 
 build:
-  number: 0
   noarch: python
   script: python setup.py install --single-version-externally-managed --record=record.txt
 
 requirements:
   host:
-    - python>=3.6, <4.0
+    - python>=3.8, <4.0
     - setuptools
 
   run:
-    - python>=3.6, <4.0
-    - pytorch >=1.5.0, <2.0.0
+    - pytorch >=2.0.0, <3.0.0
 
 test:
   # Python imports
@@ -33,13 +29,15 @@ test:
     - torchscan.modules
     - torchscan.process
     - torchscan.utils
+  requires:
+    - python
 
 about:
-  home: https://github.com/frgfm/torch-scan
+  home: {{ urls.get('repository') }}
   license: Apache 2.0
-  license_file: LICENSE
-  summary: 'Useful information about your Pytorch module'
+  license_file: {{ project.get('license', {}).get('file') }}
+  summary: {{ project.get('description') }}
   # description: |
   #   {{ data['long_description'] | replace("\n", "\n    ") | replace("#", '\#')}}
-  doc_url: https://frgfm.github.io/torch-scan/
-  dev_url: https://github.com/frgfm/torch-scan
+  doc_url: {{ urls.get('documentation') }}
+  dev_url: {{ urls.get('repository') }}

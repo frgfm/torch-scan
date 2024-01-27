@@ -153,9 +153,10 @@ indent-style = "space"
 "scripts/**.py" = ["D", "T201", "N812", "S101", "ANN"]
 ".github/**.py" = ["D", "T201", "S602", "S101", "ANN"]
 "docs/**.py" = ["E402", "D103", "ANN", "A001", "ARG001"]
-"tests/**.py" = ["D103", "CPY001", "S101", "PT011", "ANN"]
+"tests/**.py" = ["D101", "D103", "CPY001", "S101", "PT011", "ANN"]
 "demo/**.py" = ["D103", "ANN"]
 "setup.py" = ["T201"]
+"torchscan/process/memory.py" = ["S60"]
 
 [tool.ruff.flake8-quotes]
 docstring-quotes = "double"

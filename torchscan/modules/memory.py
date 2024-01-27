@@ -28,7 +28,6 @@ def module_dmas(module: Module, inp: Tensor, out: Tensor) -> int:
     Returns:
         int: number of DMAs
     """
-
     if isinstance(module, nn.Identity):
         return dmas_identity(module, inp, out)
     elif isinstance(module, nn.Flatten):
@@ -56,7 +55,7 @@ def module_dmas(module: Module, inp: Tensor, out: Tensor) -> int:
     elif isinstance(module, nn.Dropout):
         return dmas_dropout(module, inp, out)
     else:
-        warnings.warn(f"Module type not supported: {module.__class__.__name__}")
+        warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
         return 0
 
 
@@ -68,25 +67,21 @@ def num_params(module: Module) -> int:
     Returns:
         int: number of parameter elements
     """
-
     return sum(p.data.numel() for p in module.parameters())
 
 
-def dmas_identity(module: nn.Identity, inp: Tensor, out: Tensor) -> int:
+def dmas_identity(_: nn.Identity, inp: Tensor, __: Tensor) -> int:
     """DMAs estimation for `torch.nn.Identity`"""
-
     return inp.numel()
 
 
-def dmas_flatten(module: nn.Flatten, inp: Tensor, out: Tensor) -> int:
+def dmas_flatten(_: nn.Flatten, inp: Tensor, __: Tensor) -> int:
     """DMAs estimation for `torch.nn.Flatten`"""
-
     return 2 * inp.numel()
 
 
 def dmas_linear(module: nn.Linear, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Linear`"""
-
     input_dma = inp.numel()
     # Access weight and bias
     ops_dma = num_params(module)
@@ -97,7 +92,6 @@ def dmas_linear(module: nn.Linear, inp: Tensor, out: Tensor) -> int:
 
 def dmas_relu(module: Union[nn.ReLU, nn.ReLU6], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.ReLU`"""
-
     input_dma = inp.numel()
     output_dma = 0 if module.inplace else out.numel()
 
@@ -106,7 +100,6 @@ def dmas_relu(module: Union[nn.ReLU, nn.ReLU6], inp: Tensor, out: Tensor) -> int
 
 def dmas_act_single_param(module: Union[nn.ELU, nn.LeakyReLU], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for activations with single parameter"""
-
     input_dma = inp.numel()
     # Access alpha, slope or other
     ops_dma = 1
@@ -115,9 +108,8 @@ def dmas_act_single_param(module: Union[nn.ELU, nn.LeakyReLU], inp: Tensor, out:
     return input_dma + ops_dma + output_dma
 
 
-def dmas_sigmoid(module: nn.Sigmoid, inp: Tensor, out: Tensor) -> int:
+def dmas_sigmoid(_: nn.Sigmoid, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Sigmoid`"""
-
     # Access for both exp
     input_dma = inp.numel()
     output_dma = out.numel()
@@ -125,9 +117,8 @@ def dmas_sigmoid(module: nn.Sigmoid, inp: Tensor, out: Tensor) -> int:
     return input_dma + output_dma
 
 
-def dmas_tanh(module: nn.Tanh, inp: Tensor, out: Tensor) -> int:
+def dmas_tanh(_: nn.Tanh, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Tanh`"""
-
     # Access for both exp
     input_dma = inp.numel() * 2
     output_dma = out.numel()
@@ -137,7 +128,6 @@ def dmas_tanh(module: nn.Tanh, inp: Tensor, out: Tensor) -> int:
 
 def dmas_dropout(module: nn.Dropout, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Dropout`"""
-
     input_dma = inp.numel()
 
     # Access sampling probability
@@ -150,7 +140,6 @@ def dmas_dropout(module: nn.Dropout, inp: Tensor, out: Tensor) -> int:
 
 def dmas_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
-
     # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
     # Access stride, padding and kernel_size
     in_padding = len(module.kernel_size) * 4
@@ -162,9 +151,8 @@ def dmas_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> 
     return in_padding + out_padding + conv_dmas
 
 
-def dmas_convnd(module: _ConvNd, inp: Tensor, out: Tensor) -> int:
+def dmas_convnd(module: _ConvNd, _: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.modules.conv._ConvNd`"""
-
     # Each output element required K ** 2 memory access of each input channel
     input_dma = module.in_channels * reduce(mul, module.kernel_size) * out.numel()
     # Correct with groups
@@ -202,7 +190,6 @@ def dmas_bn(module: _BatchNorm, inp: Tensor, out: Tensor) -> int:
 
 def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for spatial pooling modules"""
-
     # Resolve kernel size and stride size (can be stored as a single integer or a tuple)
     if isinstance(module.kernel_size, tuple):
         kernel_size = module.kernel_size
@@ -217,9 +204,8 @@ def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor) -
     return input_dma + output_dma
 
 
-def dmas_adaptive_pool(module: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Tensor, out: Tensor) -> int:
+def dmas_adaptive_pool(_: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for adaptive spatial pooling modules"""
-
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1

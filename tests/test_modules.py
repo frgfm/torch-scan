@@ -16,38 +16,38 @@ def test_module_flops_warning():
 
 
 @pytest.mark.parametrize(
-    "mod, input_shape, output_shape, expected_val",
+    ("mod", "input_shape", "output_shape", "expected_val"),
     [
         # Check for unknown module that it returns 0 and throws a warning
-        [MyModule(), (1,), (1,), 0],
+        (MyModule(), (1,), (1,), 0),
         # Fully-connected
-        [nn.Linear(8, 4), (1, 8), (1, 4), 4 * (2 * 8 - 1) + 4],
-        [nn.Linear(8, 4, bias=False), (1, 8), (1, 4), 4 * (2 * 8 - 1)],
-        [nn.Linear(8, 4), (1, 2, 8), (1, 2, 4), 2 * (4 * (2 * 8 - 1) + 4)],
+        (nn.Linear(8, 4), (1, 8), (1, 4), 4 * (2 * 8 - 1) + 4),
+        (nn.Linear(8, 4, bias=False), (1, 8), (1, 4), 4 * (2 * 8 - 1)),
+        (nn.Linear(8, 4), (1, 2, 8), (1, 2, 4), 2 * (4 * (2 * 8 - 1) + 4)),
         # Activations
-        [nn.Identity(), (1, 8), (1, 8), 0],
-        [nn.Flatten(), (1, 8), (1, 8), 0],
-        [nn.ReLU(), (1, 8), (1, 8), 8],
-        [nn.ELU(), (1, 8), (1, 8), 48],
-        [nn.LeakyReLU(), (1, 8), (1, 8), 32],
-        [nn.ReLU6(), (1, 8), (1, 8), 16],
-        [nn.Tanh(), (1, 8), (1, 8), 48],
-        [nn.Sigmoid(), (1, 8), (1, 8), 32],
+        (nn.Identity(), (1, 8), (1, 8), 0),
+        (nn.Flatten(), (1, 8), (1, 8), 0),
+        (nn.ReLU(), (1, 8), (1, 8), 8),
+        (nn.ELU(), (1, 8), (1, 8), 48),
+        (nn.LeakyReLU(), (1, 8), (1, 8), 32),
+        (nn.ReLU6(), (1, 8), (1, 8), 16),
+        (nn.Tanh(), (1, 8), (1, 8), 48),
+        (nn.Sigmoid(), (1, 8), (1, 8), 32),
         # BN
-        [nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 144 + 32 + 32 * 3 + 48],
+        (nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 144 + 32 + 32 * 3 + 48),
         # Pooling
-        [nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32],
-        [nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32],
-        [nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32],
-        [nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32],
-        [nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32],
-        [nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32],
+        (nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
+        (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
+        (nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
+        (nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
         # Dropout
-        [nn.Dropout(), (1, 8), (1, 8), 8],
-        [nn.Dropout(p=0), (1, 8), (1, 8), 0],
+        (nn.Dropout(), (1, 8), (1, 8), 8),
+        (nn.Dropout(p=0), (1, 8), (1, 8), 0),
         # Conv
-        [nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 388800],
-        [nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 499408],
+        (nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 388800),
+        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 499408),
     ],
 )
 def test_module_flops(mod, input_shape, output_shape, expected_val):
@@ -67,33 +67,32 @@ def test_module_macs_warning():
 
 
 @pytest.mark.parametrize(
-    "mod, input_shape, output_shape, expected_val",
+    ("mod", "input_shape", "output_shape", "expected_val"),
     [
         # Check for unknown module that it returns 0 and throws a warning
-        [MyModule(), (1,), (1,), 0],
+        (MyModule(), (1,), (1,), 0),
         # Fully-connected
-        [nn.Linear(8, 4), (1, 8), (1, 4), 8 * 4],
-        [nn.Linear(8, 4), (1, 2, 8), (1, 2, 4), 8 * 4 * 2],
+        (nn.Linear(8, 4), (1, 8), (1, 4), 8 * 4),
+        (nn.Linear(8, 4), (1, 2, 8), (1, 2, 4), 8 * 4 * 2),
         # Activations
-        [nn.ReLU(), (1, 8), (1, 8), 0],
+        (nn.ReLU(), (1, 8), (1, 8), 0),
         # BN
-        [nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 64 + 24 + 56 + 32],
+        (nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 64 + 24 + 56 + 32),
         # Pooling
-        [nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32],
-        [nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32],
-        [nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32],
-        [nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32],
-        [nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32],
-        [nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32],
+        (nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
+        (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
+        (nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
+        (nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
         # Dropout
-        [nn.Dropout(), (1, 8), (1, 8), 0],
+        (nn.Dropout(), (1, 8), (1, 8), 0),
         # Conv
-        [nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 194400],
-        [nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 249704],
+        (nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 194400),
+        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 249704),
     ],
 )
 def test_module_macs(mod, input_shape, output_shape, expected_val):
-
     assert modules.module_macs(mod, torch.zeros(input_shape), torch.zeros(output_shape)) == expected_val
 
 
@@ -103,37 +102,36 @@ def test_module_dmas_warning():
 
 
 @pytest.mark.parametrize(
-    "mod, input_shape, output_shape, expected_val",
+    ("mod", "input_shape", "output_shape", "expected_val"),
     [
         # Check for unknown module that it returns 0 and throws a warning
-        [MyModule(), (1,), (1,), 0],
+        (MyModule(), (1,), (1,), 0),
         # Fully-connected
-        [nn.Linear(8, 4), (1, 8), (1, 4), 4 * (8 + 1) + 8 + 4],
-        [nn.Linear(8, 4), (1, 2, 8), (1, 2, 4), 4 * (8 + 1) + 2 * (8 + 4)],
+        (nn.Linear(8, 4), (1, 8), (1, 4), 4 * (8 + 1) + 8 + 4),
+        (nn.Linear(8, 4), (1, 2, 8), (1, 2, 4), 4 * (8 + 1) + 2 * (8 + 4)),
         # Activations
-        [nn.Identity(), (1, 8), (1, 8), 8],
-        [nn.Flatten(), (1, 8), (1, 8), 16],
-        [nn.ReLU(), (1, 8), (1, 8), 8 * 2],
-        [nn.ReLU(inplace=True), (1, 8), (1, 8), 8],
-        [nn.ELU(), (1, 8), (1, 8), 17],
-        [nn.Tanh(), (1, 8), (1, 8), 24],
-        [nn.Sigmoid(), (1, 8), (1, 8), 16],
+        (nn.Identity(), (1, 8), (1, 8), 8),
+        (nn.Flatten(), (1, 8), (1, 8), 16),
+        (nn.ReLU(), (1, 8), (1, 8), 8 * 2),
+        (nn.ReLU(inplace=True), (1, 8), (1, 8), 8),
+        (nn.ELU(), (1, 8), (1, 8), 17),
+        (nn.Tanh(), (1, 8), (1, 8), 24),
+        (nn.Sigmoid(), (1, 8), (1, 8), 16),
         # BN
-        [nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 32 + 17 + 16 + 1 + 17 + 32],
+        (nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 32 + 17 + 16 + 1 + 17 + 32),
         # Pooling
-        [nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32],
-        [nn.MaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32],
-        [nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32],
-        [nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32],
+        (nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32),
+        (nn.MaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32),
+        (nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32),
+        (nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32 + 32),
         # Dropout
-        [nn.Dropout(), (1, 8), (1, 8), 17],
+        (nn.Dropout(), (1, 8), (1, 8), 17),
         # Conv
-        [nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 201824],
-        [nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 259178],
+        (nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 201824),
+        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 259178),
     ],
 )
 def test_module_dmas(mod, input_shape, output_shape, expected_val):
-
     assert modules.module_dmas(mod, torch.zeros(input_shape), torch.zeros(output_shape)) == expected_val
 
 
@@ -169,7 +167,7 @@ def test_module_dmas(mod, input_shape, output_shape, expected_val):
 #     self.assertEqual(modules.module_rf(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
 #                      (1, 1, 0))
 
-#     # Pooling
+#     # Pooling
 #     self.assertEqual(modules.module_rf(nn.MaxPool2d((2, 2)),
 #                                        torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
 #                      (2, 2, 0))

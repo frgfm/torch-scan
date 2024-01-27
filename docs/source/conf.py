@@ -15,12 +15,11 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
 import sys
-
-sys.path.insert(0, os.path.abspath("../.."))
 from datetime import datetime
+from pathlib import Path
 
+sys.path.insert(0, Path().cwd().parent.parent)
 import torchscan
 
 # -- Project information -----------------------------------------------------
@@ -106,10 +105,10 @@ html_theme_options = {
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
 
+
 # Add googleanalytics id
 # ref: https://github.com/orenhecht/googleanalytics/blob/master/sphinxcontrib/googleanalytics.py
 def add_ga_javascript(app, pagename, templatename, context, doctree):
-
     metatags = context.get("metatags", "")
     metatags += """
     <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -120,9 +119,7 @@ def add_ga_javascript(app, pagename, templatename, context, doctree):
   gtag('js', new Date());
   gtag('config', '{0}');
 </script>
-    """.format(
-        app.config.googleanalytics_id
-    )
+    """.format(app.config.googleanalytics_id)
     context["metatags"] = metatags
 
 

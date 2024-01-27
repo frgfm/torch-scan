@@ -4,7 +4,7 @@
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 import re
-import subprocess
+import subprocess  # noqa S404
 import warnings
 
 import torch
@@ -20,10 +20,9 @@ def get_process_gpu_ram(pid: int) -> float:
     Returns:
         RAM usage in Megabytes
     """
-
     # PyTorch is not responsible for GPU usage
     if not torch.cuda.is_available():
-        warnings.warn("CUDA is unavailable to PyTorch.")
+        warnings.warn("CUDA is unavailable to PyTorch.", stacklevel=1)
         return 0.0
 
     # Query the running processes on GPUs
@@ -40,8 +39,8 @@ def get_process_gpu_ram(pid: int) -> float:
             ["nvidia-smi", "--query-gpu=memory.used", "--format=csv"], capture_output=True
         ).stdout.decode()
         return float(res.split("\n")[1].split()[0])
-    except Exception as e:
-        warnings.warn(f"raised: {e}. Parsing NVIDIA-SMI failed.")
+    except FileNotFoundError as e:
+        warnings.warn(f"raised: {e}. Parsing NVIDIA-SMI failed.", stacklevel=1)
 
     # Default to overall RAM usage for this process on the GPU
     ram_str = torch.cuda.list_gpu_processes().split("\n")

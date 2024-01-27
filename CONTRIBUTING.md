@@ -80,46 +80,21 @@ make test
 
 #### Code quality
 
-To run all quality checks together
+The CI will also run some sanity checks (header format, dependency consistency, etc.), which you can run as follows:
 
 ```shell
 make quality
 ```
 
-##### Lint verification
+This will read `pyproject.toml` and run:
+- lint checking, formatting ([ruff](https://docs.astral.sh/ruff/))
+- type annotation checking ([mypy](https://github.com/python/mypy))
 
-To ensure that your incoming PR complies with the lint settings, you need to install [flake8](https://flake8.pycqa.org/en/latest/), [black](https://black.readthedocs.io/en/stable/) and run the following command from the repository's root folder:
-
-```shell
-flake8 ./
-black --check .
-```
-
-##### Import order
-
-In order to ensure there is a common import order convention, run [isort](https://github.com/PyCQA/isort) as follows:
+You can apply automatic fix to most of those by running:
 
 ```shell
-isort .
+make style
 ```
-This will reorder the imports of your local files.
-
-##### Annotation typing
-
-Additionally, to catch type-related issues and have a cleaner codebase, annotation typing are expected. After installing [mypy](https://github.com/python/mypy), you can run the verifications as follows:
-
-```shell
-mypy torchscan/
-```
-
-##### Docstring style
-
-Finally, documentation being important, [pydocstyle](https://github.com/PyCQA/pydocstyle) will be checking the docstrings:
-
-```shell
-pydocstyle torchscan/
-```
-
 
 ### Submit your modifications
 

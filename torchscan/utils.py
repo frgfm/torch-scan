@@ -18,10 +18,9 @@ def format_name(name: str, depth: int = 0) -> str:
     """
     if depth == 0:
         return name
-    elif depth == 1:
+    if depth == 1:
         return f"├─{name}"
-    else:
-        return f"{'|    ' * (depth - 1)}└─{name}"
+    return f"{'|    ' * (depth - 1)}└─{name}"
 
 
 def wrap_string(s: str, max_len: int, delimiter: str = ".", wrap: str = "[...]", mode: str = "end") -> str:
@@ -41,12 +40,11 @@ def wrap_string(s: str, max_len: int, delimiter: str = ".", wrap: str = "[...]",
 
     if mode == "end":
         return s[: max_len - len(wrap)] + wrap
-    elif mode == "mid":
+    if mode == "mid":
         final_part = s.rpartition(delimiter)[-1]
         wrapped_end = f"{wrap}.{final_part}"
         return s[: max_len - len(wrapped_end)] + wrapped_end
-    else:
-        raise ValueError("received an unexpected value of argument `mode`")
+    raise ValueError("received an unexpected value of argument `mode`")
 
 
 def unit_scale(val: float) -> Tuple[float, str]:
@@ -59,14 +57,13 @@ def unit_scale(val: float) -> Tuple[float, str]:
     """
     if val // 1e12 > 0:
         return val / 1e12, "T"
-    elif val // 1e9 > 0:
+    if val // 1e9 > 0:
         return val / 1e9, "G"
-    elif val // 1e6 > 0:
+    if val // 1e6 > 0:
         return val / 1e6, "M"
-    elif val // 1e3 > 0:
+    if val // 1e3 > 0:
         return val / 1e3, "k"
-    else:
-        return val, ""
+    return val, ""
 
 
 def format_s(f_string: str, min_w: Optional[int] = None, max_w: Optional[int] = None) -> str:
@@ -135,11 +132,12 @@ def format_info(
             for v, s in zip(
                 col_w,
                 format_line_str(layer, col_w=None, wrap_mode=wrap_mode, receptive_field=True, effective_rf_stats=True),
+                strict=False,
             )
         ]
 
     # Truncate columns that are too long
-    col_w = list(starmap(min, zip(col_w, max_w)))
+    col_w = list(starmap(min, zip(col_w, max_w, strict=False)))
 
     if not receptive_field:
         col_w = col_w[:4]
@@ -159,7 +157,7 @@ def format_info(
     # Header
     info_str = [
         thin_line,
-        margin_str.join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, col_w)]),
+        margin_str.join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, col_w, strict=False)]),
         thick_line,
     ]
 

@@ -70,7 +70,8 @@ def crawl_module(
         dtype = [dtype] * len(input_shape)
     # Tensor arguments
     input_ts = [
-        torch.rand(1, *in_shape).to(dtype=_dtype, device=device) for in_shape, _dtype in zip(input_shape, dtype)
+        torch.rand(1, *in_shape).to(dtype=_dtype, device=device)
+        for in_shape, _dtype in zip(input_shape, dtype, strict=False)
     ]
 
     pre_fw_handles, post_fw_handles = [], []

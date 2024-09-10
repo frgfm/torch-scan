@@ -30,41 +30,40 @@ def module_flops(module: Module, inputs: Tuple[Tensor, ...], out: Tensor) -> int
     """
     if isinstance(module, (nn.Identity, nn.Flatten)):
         return 0
-    elif isinstance(module, nn.Linear):
+    if isinstance(module, nn.Linear):
         return flops_linear(module, inputs)
-    elif isinstance(module, nn.ReLU):
+    if isinstance(module, nn.ReLU):
         return flops_relu(module, inputs)
-    elif isinstance(module, nn.ELU):
+    if isinstance(module, nn.ELU):
         return flops_elu(module, inputs)
-    elif isinstance(module, nn.LeakyReLU):
+    if isinstance(module, nn.LeakyReLU):
         return flops_leakyrelu(module, inputs)
-    elif isinstance(module, nn.ReLU6):
+    if isinstance(module, nn.ReLU6):
         return flops_relu6(module, inputs)
-    elif isinstance(module, nn.Tanh):
+    if isinstance(module, nn.Tanh):
         return flops_tanh(module, inputs)
-    elif isinstance(module, nn.Sigmoid):
+    if isinstance(module, nn.Sigmoid):
         return flops_sigmoid(module, inputs)
-    elif isinstance(module, _ConvTransposeNd):
+    if isinstance(module, _ConvTransposeNd):
         return flops_convtransposend(module, inputs, out)
-    elif isinstance(module, _ConvNd):
+    if isinstance(module, _ConvNd):
         return flops_convnd(module, inputs, out)
-    elif isinstance(module, _BatchNorm):
+    if isinstance(module, _BatchNorm):
         return flops_bn(module, inputs)
-    elif isinstance(module, _MaxPoolNd):
+    if isinstance(module, _MaxPoolNd):
         return flops_maxpool(module, inputs, out)
-    elif isinstance(module, _AvgPoolNd):
+    if isinstance(module, _AvgPoolNd):
         return flops_avgpool(module, inputs, out)
-    elif isinstance(module, _AdaptiveMaxPoolNd):
+    if isinstance(module, _AdaptiveMaxPoolNd):
         return flops_adaptive_maxpool(module, inputs, out)
-    elif isinstance(module, _AdaptiveAvgPoolNd):
+    if isinstance(module, _AdaptiveAvgPoolNd):
         return flops_adaptive_avgpool(module, inputs, out)
-    elif isinstance(module, nn.Dropout):
+    if isinstance(module, nn.Dropout):
         return flops_dropout(module, inputs)
-    elif isinstance(module, nn.Transformer):
+    if isinstance(module, nn.Transformer):
         return flops_transformer(module, inputs)
-    else:
-        warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
-        return 0
+    warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
+    return 0
 
 
 def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
@@ -118,8 +117,7 @@ def flops_dropout(module: nn.Dropout, inputs: Tuple[Tensor, ...]) -> int:
     if module.p > 0:
         # Sample a random number for each input element
         return inputs[0].numel()
-    else:
-        return 0
+    return 0
 
 
 def flops_convtransposend(module: _ConvTransposeNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
@@ -198,7 +196,7 @@ def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], ou
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inputs[0].shape[2:], out.shape[2:])
+        for i_size, o_size in zip(inputs[0].shape[2:], out.shape[2:], strict=False)
     )
 
     # for each spatial output element, check max element in kernel scope
@@ -210,7 +208,7 @@ def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], ou
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inputs[0].shape[2:], out.shape[2:])
+        for i_size, o_size in zip(inputs[0].shape[2:], out.shape[2:], strict=False)
     )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size

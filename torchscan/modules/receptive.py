@@ -45,15 +45,14 @@ def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, f
         ),
     ):
         return 1.0, 1.0, 0.0
-    elif isinstance(module, _ConvTransposeNd):
+    if isinstance(module, _ConvTransposeNd):
         return rf_convtransposend(module, inp, out)
-    elif isinstance(module, (_ConvNd, _MaxPoolNd, _AvgPoolNd)):
+    if isinstance(module, (_ConvNd, _MaxPoolNd, _AvgPoolNd)):
         return rf_aggregnd(module, inp, out)
-    elif isinstance(module, (_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd)):
+    if isinstance(module, (_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd)):
         return rf_adaptive_poolnd(module, inp, out)
-    else:
-        warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
-        return 1.0, 1.0, 0.0
+    warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
+    return 1.0, 1.0, 0.0
 
 
 def rf_convtransposend(module: _ConvTransposeNd, _: Tensor, __: Tensor) -> Tuple[float, float, float]:

@@ -28,35 +28,32 @@ def module_macs(module: Module, inp: Tensor, out: Tensor) -> int:
     """
     if isinstance(module, nn.Linear):
         return macs_linear(module, inp, out)
-    elif isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid, nn.Flatten)):
+    if isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid, nn.Flatten)):
         return 0
-    elif isinstance(module, _ConvTransposeNd):
+    if isinstance(module, _ConvTransposeNd):
         return macs_convtransposend(module, inp, out)
-    elif isinstance(module, _ConvNd):
+    if isinstance(module, _ConvNd):
         return macs_convnd(module, inp, out)
-    elif isinstance(module, _BatchNorm):
+    if isinstance(module, _BatchNorm):
         return macs_bn(module, inp, out)
-    elif isinstance(module, _MaxPoolNd):
+    if isinstance(module, _MaxPoolNd):
         return macs_maxpool(module, inp, out)
-    elif isinstance(module, _AvgPoolNd):
+    if isinstance(module, _AvgPoolNd):
         return macs_avgpool(module, inp, out)
-    elif isinstance(module, _AdaptiveMaxPoolNd):
+    if isinstance(module, _AdaptiveMaxPoolNd):
         return macs_adaptive_maxpool(module, inp, out)
-    elif isinstance(module, _AdaptiveAvgPoolNd):
+    if isinstance(module, _AdaptiveAvgPoolNd):
         return macs_adaptive_avgpool(module, inp, out)
-    elif isinstance(module, nn.Dropout):
+    if isinstance(module, nn.Dropout):
         return 0
-    else:
-        warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
-        return 0
+    warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
+    return 0
 
 
 def macs_linear(module: nn.Linear, _: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.Linear`"""
     # batch size * out_chan * macs_per_elt (bias already counted in accumulation)
-    mm_mac = module.in_features * reduce(mul, out.shape)
-
-    return mm_mac
+    return module.in_features * reduce(mul, out.shape)
 
 
 def macs_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> int:
@@ -79,10 +76,9 @@ def macs_convnd(module: _ConvNd, inp: Tensor, out: Tensor) -> int:
     effective_in_chan = inp.shape[1] // module.groups
     # N * mac
     window_mac = effective_in_chan * window_macs_per_chan
-    conv_mac = out.numel() * window_mac
+    return out.numel() * window_mac
 
     # bias already counted in accumulation
-    return conv_mac
 
 
 def macs_bn(module: _BatchNorm, inp: Tensor, _: Tensor) -> int:
@@ -133,7 +129,7 @@ def macs_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inp: Tensor, out: Tensor) -> in
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inp.shape[2:], out.shape[2:])
+        for i_size, o_size in zip(inp.shape[2:], out.shape[2:], strict=False)
     )
 
     # for each spatial output element, check max element in kernel scope
@@ -145,7 +141,7 @@ def macs_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inp: Tensor, out: Tensor) -> in
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inp.shape[2:], out.shape[2:])
+        for i_size, o_size in zip(inp.shape[2:], out.shape[2:], strict=False)
     )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size

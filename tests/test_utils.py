@@ -16,7 +16,7 @@ def test_wrap_string():
     wrap = "[...]"
 
     assert utils.wrap_string(example, max_len, mode="end") == example[: max_len - len(wrap)] + wrap
-    assert utils.wrap_string(example, max_len, mode="mid") == f"{example[:max_len - 2 - len(wrap)]}{wrap}.a"
+    assert utils.wrap_string(example, max_len, mode="mid") == f"{example[: max_len - 2 - len(wrap)]}{wrap}.a"
     assert utils.wrap_string(example, len(example), mode="end") == example
     with pytest.raises(ValueError):
         _ = utils.wrap_string(example, max_len, mode="test")

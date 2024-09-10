@@ -30,33 +30,32 @@ def module_dmas(module: Module, inp: Tensor, out: Tensor) -> int:
     """
     if isinstance(module, nn.Identity):
         return dmas_identity(module, inp, out)
-    elif isinstance(module, nn.Flatten):
+    if isinstance(module, nn.Flatten):
         return dmas_flatten(module, inp, out)
-    elif isinstance(module, nn.Linear):
+    if isinstance(module, nn.Linear):
         return dmas_linear(module, inp, out)
-    elif isinstance(module, (nn.ReLU, nn.ReLU6)):
+    if isinstance(module, (nn.ReLU, nn.ReLU6)):
         return dmas_relu(module, inp, out)
-    elif isinstance(module, (nn.ELU, nn.LeakyReLU)):
+    if isinstance(module, (nn.ELU, nn.LeakyReLU)):
         return dmas_act_single_param(module, inp, out)
-    elif isinstance(module, nn.Sigmoid):
+    if isinstance(module, nn.Sigmoid):
         return dmas_sigmoid(module, inp, out)
-    elif isinstance(module, nn.Tanh):
+    if isinstance(module, nn.Tanh):
         return dmas_tanh(module, inp, out)
-    elif isinstance(module, _ConvTransposeNd):
+    if isinstance(module, _ConvTransposeNd):
         return dmas_convtransposend(module, inp, out)
-    elif isinstance(module, _ConvNd):
+    if isinstance(module, _ConvNd):
         return dmas_convnd(module, inp, out)
-    elif isinstance(module, _BatchNorm):
+    if isinstance(module, _BatchNorm):
         return dmas_bn(module, inp, out)
-    elif isinstance(module, (_MaxPoolNd, _AvgPoolNd)):
+    if isinstance(module, (_MaxPoolNd, _AvgPoolNd)):
         return dmas_pool(module, inp, out)
-    elif isinstance(module, (_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd)):
+    if isinstance(module, (_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd)):
         return dmas_adaptive_pool(module, inp, out)
-    elif isinstance(module, nn.Dropout):
+    if isinstance(module, nn.Dropout):
         return dmas_dropout(module, inp, out)
-    else:
-        warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
-        return 0
+    warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
+    return 0
 
 
 def num_params(module: Module) -> int:
@@ -209,7 +208,7 @@ def dmas_adaptive_pool(_: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Te
     # Approximate kernel_size using ratio of spatial shapes between input and output
     kernel_size = tuple(
         i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inp.shape[2:], out.shape[2:])
+        for i_size, o_size in zip(inp.shape[2:], out.shape[2:], strict=False)
     )
     # Each output element required K ** 2 memory accesses
     input_dma = reduce(mul, kernel_size) * out.numel()

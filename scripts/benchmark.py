@@ -58,7 +58,7 @@ def main():
     headers = ["Model", "Params (M)", "FLOPs (G)", "MACs (G)", "DMAs (G)", "RF"]
     max_w = [20, 10, 10, 10, 10, 10]
 
-    info_str = [(" " * margin).join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, max_w)])]
+    info_str = [(" " * margin).join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, max_w, strict=False)])]
     info_str.append("-" * len(info_str[0]))
     print("\n".join(info_str))
     for name in TORCHVISION_MODELS:

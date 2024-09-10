@@ -1,31 +1,50 @@
 'module: crawler':
-- torchscan/crawler.py
+- changed-files:
+  - any-glob-to-any-file: torchscan/crawler.py
 
 'module: modules':
-- torchscan/modules/*
+- changed-files:
+  - any-glob-to-any-file: torchscan/modules/*
 
 'module: process':
-- torchscan/process/*
+- changed-files:
+  - any-glob-to-any-file: torchscan/process/*
 
 'module: utils':
-- torchscan/utils.py
+- changed-files:
+  - any-glob-to-any-file: torchscan/utils.py
 
 'ext: docs':
-- docs/*
+- changed-files:
+  - any-glob-to-any-file: docs/*
 
 'ext: scripts':
-- scripts/*
+- changed-files:
+  - any-glob-to-any-file: scripts/*
 
 'ext: tests':
-- tests/*
+- changed-files:
+  - any-glob-to-any-file: tests/*
 
 'topic: ci':
-- .github/*
+- changed-files:
+  - any-glob-to-any-file: .github/*
 
-'topic: documentation':
-- README.md
-- CONTRIBUTING.md
+'topic: docs':
+- changed-files:
+  - any-glob-to-any-file:
+    - README.md
+    - CONTRIBUTING.md
+    - CODFE_OF_CONDUCT.md
+    - CITATION.cff
+    - LICENSE
 
 'topic: build':
-- setup.py
-- pyproject.toml
+- changed-files:
+  - any-glob-to-any-file: 
+    - setup.py
+    - pyproject.toml
+
+'topic: style':
+- changed-files:
+  - any-glob-to-any-file: .pre-commit-config.yaml

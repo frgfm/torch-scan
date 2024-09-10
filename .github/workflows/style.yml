@@ -12,16 +12,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: [3.9]
+        python: [3.11]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
       - name: Run ruff
         run: |
-          pip install ruff==0.1.14
+          python -m pip install --upgrade uv
+          uv pip install --system -e '.[quality]'
           ruff --version
           ruff check --diff .
 
@@ -30,24 +31,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: [3.9]
+        python: [3.11]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
-      - name: Cache python modules
-        uses: actions/cache@v2
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-python-${{ matrix.python }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[quality]" --upgrade
       - name: Run mypy
         run: |
+          python -m pip install --upgrade uv
+          uv pip install --system -e '.[quality]'
           mypy --version
           mypy
 
@@ -56,16 +50,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: [3.9]
+        python: [3.11]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
       - name: Run ruff
         run: |
-          pip install ruff==0.1.14
+          python -m pip install --upgrade uv
+          uv pip install --system -e '.[quality]'
           ruff --version
           ruff format --check --diff .
 
@@ -74,16 +69,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        python: [3.9]
+        python: [3.11]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
       - name: Run pre-commit hooks
         run: |
-          pip install pre-commit
+          python -m pip install --upgrade uv
+          uv pip install --system -e '.[quality]'
           git checkout -b temp
           pre-commit install
           pre-commit --version

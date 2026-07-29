@@ -1,12 +1,11 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
+import math
 import warnings
-from functools import reduce
-from operator import mul
-from typing import Tuple
+from typing import Callable, Tuple, cast
 
 import torch
 from torch import Tensor, nn
@@ -18,7 +17,7 @@ from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _Av
 __all__ = ["module_flops"]
 
 
-def module_flops(module: Module, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """Estimate the number of floating point operations performed by the module
 
     Args:
@@ -69,7 +68,7 @@ def module_flops(module: Module, inputs: Tuple[Tensor, ...], out: Tensor) -> int
 def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
     # batch size * out_chan * in_chan
-    num_out_feats = module.out_features * reduce(mul, inputs[0].shape[:-1])
+    num_out_feats = module.out_features * math.prod(inputs[0].shape[:-1])
     mm_flops = num_out_feats * (2 * module.in_features - 1)
     bias_flops = num_out_feats if module.bias is not None else 0
 
@@ -135,7 +134,7 @@ def flops_convtransposend(module: _ConvTransposeNd, inputs: Tuple[Tensor, ...], 
 def flops_convnd(module: _ConvNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.conv._ConvNd`"""
     # For each position, # mult = kernel size, # adds = kernel size - 1
-    window_flops_per_chan = 2 * reduce(mul, module.kernel_size) - 1
+    window_flops_per_chan = 2 * math.prod(module.kernel_size) - 1
     # Connections to input channels is controlled by the group parameter
     effective_in_chan = inputs[0].shape[1] // module.groups
     # N * flops + (N - 1) additions
@@ -177,7 +176,8 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
 
 def flops_maxpool(module: _MaxPoolNd, _: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
-    k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
+    kernel_size = module.kernel_size
+    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
 
     # for each spatial output element, check max element in kernel scope
     return out.numel() * (k_size - 1)
@@ -185,7 +185,8 @@ def flops_maxpool(module: _MaxPoolNd, _: Tuple[Tensor, ...], out: Tensor) -> int
 
 def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
-    k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
+    kernel_size = cast(int | Tuple[int, ...], module.kernel_size)
+    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return out.numel() * (k_size - 1 + inputs[0].ndim - 2)
@@ -200,7 +201,7 @@ def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], ou
     )
 
     # for each spatial output element, check max element in kernel scope
-    return out.numel() * (reduce(mul, kernel_size) - 1)
+    return out.numel() * (math.prod(kernel_size) - 1)
 
 
 def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
@@ -212,17 +213,17 @@ def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], ou
     )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (reduce(mul, kernel_size) - 1 + len(kernel_size))
+    return out.numel() * (math.prod(kernel_size) - 1 + len(kernel_size))
 
 
 def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
     # Compute current mean
-    norm_ops = reduce(mul, module.normalized_shape) * inputs[0].shape[: -len(module.normalized_shape)].numel()
+    norm_ops = math.prod(module.normalized_shape) * math.prod(inputs[0].shape[: -len(module.normalized_shape)])
     # current var (sub the mean, square it, sum them, divide by remaining shape)
     norm_ops += 3 * inputs[0].numel()
     # for each channel, add eps and running_var, sqrt it
-    norm_ops += reduce(mul, module.normalized_shape) * 2
+    norm_ops += math.prod(module.normalized_shape) * 2
     # For each element, sub running_mean, div by denom
     norm_ops += inputs[0].numel() * 2
     # For each element, mul by gamma, add beta
@@ -292,7 +293,7 @@ def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: T
     tot_flops += flops_layernorm(module.norm1, inputs)
     # get linear 1 output size
     tot_flops += flops_linear(module.linear1, inputs)
-    tot_flops += module_flops(module.activation, inputs, torch.empty(1))  # type: ignore[arg-type]
+    tot_flops += module_flops(module.activation, inputs, torch.empty(1))
     tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
     # get linear 2 output size
     tot_flops += flops_dropout(module.dropout2, inputs) + inputs[0].numel()
@@ -314,7 +315,7 @@ def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: T
 
     # get linear 1 output size
     tot_flops += flops_linear(module.linear1, inputs)
-    tot_flops += module_flops(module.activation, inputs, torch.empty(1))  # type: ignore[arg-type]
+    tot_flops += module_flops(module.activation, inputs, torch.empty(1))
     tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
     # get linear 2 output size
     tot_flops += flops_dropout(module.dropout3, inputs) + inputs[0].numel()
@@ -327,12 +328,12 @@ def flops_transformer(module: nn.Transformer, inputs: Tuple[Tensor, ...]) -> int
     """FLOPs estimation for `torch.nn.Transformer`"""
     encoder_flops = len(module.encoder.layers) * flops_transformer_encoderlayer(module.encoder.layers[0], inputs)
 
-    if module.encoder.norm is not None:
+    if isinstance(module.encoder.norm, nn.LayerNorm):
         encoder_flops += flops_layernorm(module.encoder.norm, inputs)
 
     decoder_flops = len(module.decoder.layers) * flops_transformer_decoderlayer(module.decoder.layers[0], inputs)
 
-    if module.decoder.norm is not None:
+    if isinstance(module.decoder.norm, nn.LayerNorm):
         decoder_flops += flops_layernorm(module.decoder.norm, inputs)
 
     return encoder_flops + decoder_flops

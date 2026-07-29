@@ -1,73 +1,55 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.12.0,<0.13.0"]
+build-backend = "uv_build"
 
 [project]
 name = "torchscan"
+version = "0.2.0.dev0"
 description = "Useful information about your Pytorch module"
 authors = [
     {name = "François-Guillaume Fernandez", email = "fg-feedback@protonmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.8,<4"
-license = {file = "LICENSE"}
+requires-python = ">=3.11,<4"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 keywords = ["pytorch", "deep learning", "summary", "memory", "ram"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dynamic = ["version"]
 dependencies = [
     "torch>=2.0.0,<3.0.0",
 ]
 
 [project.optional-dependencies]
 test = [
-    "pytest>=7.3.2",
-    "pytest-cov>=3.0.0,<5.0.0",
-    "pytest-pretty>=1.0.0,<2.0.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-pretty==1.3.0",
 ]
 quality = [
-    "ruff==0.6.4",
-    "mypy==1.14.0",
-    "pre-commit>=3.0.0,<4.0.0",
+    "prek==0.4.11",
+    "ruff==0.16.0",
+    "ty==0.0.65",
 ]
 docs = [
-    "sphinx>=3.0.0,!=3.5.0",
-    "furo>=2022.3.4",
-    "sphinxemoji>=0.1.8",
-    "sphinx-copybutton>=0.3.1",
-    # Indirect deps
-    # cf. https://github.com/readthedocs/readthedocs.org/issues/9038
-    "Jinja2<3.1",
-]
-dev = [
-    # test
-    "pytest>=7.3.2",
-    "pytest-cov>=3.0.0,<5.0.0",
-    "pytest-pretty>=1.0.0,<2.0.0",
-    # style
-    "ruff==0.6.4",
-    "mypy==1.14.0",
-    "pre-commit>=3.0.0,<4.0.0",
-    # docs
-    "sphinx>=3.0.0,!=3.5.0",
-    "furo>=2022.3.4",
-    "sphinxemoji>=0.1.8",
-    "sphinx-copybutton>=0.3.1",
-    "Jinja2<3.1",
+    "sphinx==9.0.4",
+    "furo==2025.12.19",
+    "sphinxemoji==0.3.2",
+    "sphinx-copybutton==0.5.2",
 ]
 
 [project.urls]
@@ -76,17 +58,18 @@ repository = "https://github.com/frgfm/torch-scan"
 tracker = "https://github.com/frgfm/torch-scan/issues"
 changelog = "https://frgfm.github.io/torch-scan/latest/changelog.html"
 
-[tool.setuptools]
-zip-safe = true
+[tool.uv]
+required-version = "==0.12.0"
 
-[tool.setuptools.packages.find]
-exclude = ["docs*", "scripts*", "tests*"]
+[tool.uv.build-backend]
+module-name = "torchscan"
+module-root = ""
 
 [tool.pytest.ini_options]
-testpaths = ["torchscan/"]
+testpaths = ["tests/"]
 
 [tool.coverage.run]
-source = ["torchscan/"]
+source = ["torchscan"]
 
 [tool.ruff]
 line-length = 120
@@ -120,7 +103,7 @@ select = [
     "T20",  # flake8-print
     "PYI",  # flake8-pyi
     "PT",  # flake8-pytest-style
-    "Q",    # flake8-quotes
+    "Q",  # flake8-quotes
     "RET",  # flake8-return
     "SLF",  # flake8-self
     "SIM",  # flake8-simplify
@@ -131,18 +114,15 @@ select = [
     "FAST",  # fastapi
     "FURB",  # refurb
     "RUF",  # ruff specific
-    "N",  # pep8-naming
 ]
 ignore = [
-    "E501",  # line too long, handled by black
+    "E501",  # line too long, handled by the formatter
     "B008",  # do not perform function calls in argument defaults
     "B904",  # raise from
     "C901",  # too complex
     "F403",  # star imports
     "E731",  # lambda assignment
     "C416",  # list comprehension to list()
-    "ANN101",  # missing type annotations on self
-    "ANN102",  # missing type annotations on cls
     "ANN002",  # missing type annotations on *args
     "ANN003",  # missing type annotations on **kwargs
     "COM812",  # trailing comma missing
@@ -150,6 +130,7 @@ ignore = [
     "ISC001",  # implicit string concatenation (handled by format)
     "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
     "SLF001",  # Private member accessed
+    "RUF201",  # preview-only rule for sorted lint selectors
 ]
 exclude = [".git"]
 
@@ -157,7 +138,7 @@ exclude = [".git"]
 docstring-quotes = "double"
 
 [tool.ruff.lint.isort]
-known-first-party = ["torchscan", "app"]
+known-first-party = ["torchscan"]
 known-third-party = ["torch", "torchvision"]
 
 [tool.ruff.lint.per-file-ignores]
@@ -167,24 +148,18 @@ known-third-party = ["torch", "torchvision"]
 "docs/**.py" = ["E402", "D103", "ANN", "A001", "ARG001"]
 "tests/**.py" = ["D101", "D103", "CPY001", "S101", "PT011", "ANN", "SLF001"]
 "demo/**.py" = ["D103", "ANN"]
-"setup.py" = ["T201"]
 "torchscan/process/memory.py" = ["S60"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
 
+[tool.ty.environment]
+python-version = "3.11"
+python-platform = "linux"
 
-[tool.mypy]
-python_version = "3.11"
-files = "torchscan/"
-show_error_codes = true
-pretty = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-no_implicit_optional = true
-disallow_untyped_calls = true
-check_untyped_defs = true
-implicit_reexport = false
-disallow_untyped_defs = true
-explicit_package_bases = true
+[tool.ty.rules]
+unresolved-import = "warn"
+
+[tool.ty.src]
+include = ["torchscan/"]

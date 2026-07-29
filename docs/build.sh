@@ -5,7 +5,7 @@ function deploy_doc(){
     fi
     COMMIT=$(git rev-parse --short HEAD)
     echo "Creating doc at commit" $COMMIT "and pushing to folder $2"
-    pip install -U ..
+    uv pip install --upgrade --no-deps ..
     if [ ! -z "$2" ]
     then
         if [ "$2" == "latest" ]; then
@@ -33,7 +33,11 @@ if [ -d build ]; then rm -Rf build; fi
 mkdir build
 cp -r source/_static .
 cp source/conf.py _conf.py
-git fetch --all --tags --unshallow
+if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+    git fetch --all --tags --unshallow
+else
+    git fetch --all --tags
+fi
 deploy_doc "" latest
 deploy_doc "7ac9c839" v0.1.0
 deploy_doc "900eb166" v0.1.1

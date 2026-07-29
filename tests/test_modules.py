@@ -11,7 +11,7 @@ class MyModule(nn.Module):
 
 
 def test_module_flops_warning():
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match="Module type not supported"):
         modules.module_flops(MyModule(), None, None)
 
 
@@ -62,7 +62,7 @@ def test_transformer_flops():
 
 
 def test_module_macs_warning():
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match="Module type not supported"):
         modules.module_macs(MyModule(), None, None)
 
 
@@ -97,7 +97,7 @@ def test_module_macs(mod, input_shape, output_shape, expected_val):
 
 
 def test_module_dmas_warning():
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match="Module type not supported"):
         modules.module_dmas(MyModule(), None, None)
 
 
@@ -133,6 +133,12 @@ def test_module_dmas_warning():
 )
 def test_module_dmas(mod, input_shape, output_shape, expected_val):
     assert modules.module_dmas(mod, torch.zeros(input_shape), torch.zeros(output_shape)) == expected_val
+
+
+def test_module_rf_conv_transpose():
+    mod = nn.ConvTranspose2d(3, 8, 3)
+    input_t = torch.rand((1, 3, 32, 32))
+    assert modules.module_rf(mod, input_t, mod(input_t)) == (-3, 1, 0)
 
 
 # @torch.no_grad()

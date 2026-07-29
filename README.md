@@ -21,9 +21,6 @@
   <a href="https://pypi.org/project/torchscan/">
     <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=PyPI&logoColor=fff&style=flat-square&label=PyPI" alt="PyPi Version">
   </a>
-  <a href="https://anaconda.org/frgfm/torchscan">
-    <img src="https://img.shields.io/conda/v/frgfm/torchscan.svg?logo=anaconda&label=Conda&logoColor=fff&style=flat-square" alt="Conda Version">
-  </a>
   <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?logo=Python&label=Python&logoColor=fff&style=flat-square" alt="pyversions">
   <a href="https://github.com/frgfm/torch-scan/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/frgfm/torch-scan.svg?label=License&logoColor=fff&style=flat-square" alt="License">
@@ -114,7 +111,7 @@ which will add the layer's receptive field (relatively to the last convolutional
 
 ## Setup
 
-Python 3.8 (or newer) and [pip](https://pip.pypa.io/en/stable/)/[conda](https://docs.conda.io/en/latest/miniconda.html) are required to install Torchscan.
+Python 3.11 (or newer) and [pip](https://pip.pypa.io/en/stable/) are required to install Torchscan.
 
 ### Stable release
 
@@ -124,19 +121,15 @@ You can install the last stable release of the package using [pypi](https://pypi
 pip install torchscan
 ```
 
-or using [conda](https://anaconda.org/frgfm/torchscan):
-
-```shell
-conda install -c frgfm torchscan
-```
-
 ### Developer installation
 
-Alternatively, if you wish to use the latest features of the project that haven't made their way to a release yet, you can install the package from source:
+Alternatively, if you wish to use the latest features of the project that haven't made their way to a release yet, you can install the package from source using [uv](https://docs.astral.sh/uv/):
 
 ```shell
 git clone https://github.com/frgfm/torch-scan.git
-pip install -e torch-scan/.
+cd torch-scan
+uv venv
+uv pip install -e .
 ```
 
 

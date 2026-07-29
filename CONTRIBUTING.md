@@ -57,10 +57,11 @@ git remote add upstream https://github.com/frgfm/torch-scan.git
 git checkout -b a-short-description
 ```
 
-4 - You only have to set your development environment now. First uninstall any existing installation of the library with `pip uninstall torch-scan`, then:
+4 - Create a development environment with [uv](https://docs.astral.sh/uv/), install the contributor dependencies, and configure [prek](https://prek.j178.dev/):
 ```shell
-pip install -e ".[dev]"
-pre-commit install
+uv venv
+make install-quality install-test install-docs
+prek install
 ```
 
 ### Developing your feature
@@ -84,11 +85,13 @@ The CI will also run some sanity checks (header format, dependency consistency, 
 
 ```shell
 make quality
+make precommit
 ```
 
 This will read `pyproject.toml` and run:
 - lint checking, formatting ([ruff](https://docs.astral.sh/ruff/))
-- type annotation checking ([mypy](https://github.com/python/mypy))
+- type annotation checking ([ty](https://docs.astral.sh/ty/))
+- repository hooks ([prek](https://prek.j178.dev/))
 
 You can apply automatic fix to most of those by running:
 

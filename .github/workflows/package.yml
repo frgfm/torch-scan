@@ -1,0 +1,166 @@
+name: package
+
+on:
+  push:
+    branches: main
+  pull_request:
+    branches: main
+  release:
+    types: [published]
+
+env:
+  UV_TORCH_BACKEND: cpu
+
+jobs:
+  install:
+    if: github.event_name != 'release'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - name: Install package
+        run: uv pip install -e .
+      - name: Import package
+        run: python -c "import torchscan; print(torchscan.__version__)"
+
+  quality:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - name: Install dependencies
+        run: make install-quality
+      - name: Run quality checks
+        run: |
+          make quality
+          make precommit
+
+  tests:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - name: Install dependencies
+        run: make install-test
+      - name: Run tests
+        run: make test
+      - name: Upload coverage
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: unittests
+          fail_ci_if_error: true
+
+  headers:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check headers
+        uses: frgfm/validate-python-headers@main
+        with:
+          license: Apache-2.0
+          owner: François-Guillaume Fernandez
+          starting-year: 2020
+          folders: torchscan,scripts,docs,.github
+          ignore-files: __init__.py
+
+  build:
+    if: github.event_name != 'release'
+    needs: [install, quality, tests, headers]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Build package
+        run: make build
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+      - name: Resolve release version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "BUILD_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Build and publish
+        run: |
+          make set-version
+          make build
+          make publish
+
+  verify-publish:
+    needs: publish
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - name: Install released package
+        working-directory: ${{ runner.temp }}
+        run: uv pip install "torchscan==${{ needs.publish.outputs.version }}"
+      - name: Verify released package
+        working-directory: ${{ runner.temp }}
+        run: python -c "import torchscan; assert torchscan.__version__ == '${{ needs.publish.outputs.version }}'"

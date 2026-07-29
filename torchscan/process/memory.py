@@ -1,10 +1,10 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 import re
-import subprocess  # noqa S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import] S404
 import warnings
 
 import torch
@@ -30,8 +30,8 @@ def get_process_gpu_ram(pid: int) -> float:
         res = subprocess.run(["nvidia-smi", "-q", "-d", "PIDS"], capture_output=True).stdout.decode()
         # Try to locate the process
         pids = re.findall(r"Process ID\s+:\s([^\D]*)", res)
-        for idx, _pid in enumerate(pids):
-            if int(_pid) == pid:
+        for idx, pid_ in enumerate(pids):
+            if int(pid_) == pid:
                 return float(re.findall(r"Used GPU Memory\s+:\s([^\D]*)", res)[idx])
 
         # Query total memory used by nvidia

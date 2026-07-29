@@ -2,7 +2,7 @@
 
 The documentation of this project is built using `sphinx`. In order to install all the build dependencies, run the following command from the root folder of the repository:
 ```shell
-pip install -e ".[docs]"
+make install-docs
 ```
 
 ---
@@ -19,7 +19,7 @@ You are only generating the documentation to inspect it locally. Only the source
 In most cases, you will only be changing the documentation of the latest version (dev version). In this case, you can build the documentation (the HTML files) with the following command:
 
 ```shell
-sphinx-build docs/source docs/_build -a
+make single-docs
 ```
 
 Then open `docs/_build/index.html` in your web browser to navigate in it.
@@ -27,7 +27,7 @@ Then open `docs/_build/index.html` in your web browser to navigate in it.
 
 ### Multi-version documentation
 
-In rare cases, you might want to modify the documentation for other versions. You will then have to build the documentation for the multiple versions of the package, which you can do by running this command from the `docs` folder:
+In rare cases, you might want to modify the documentation for other versions. You will then have to build the documentation for the multiple versions of the package:
 ```shell
-bash build.sh
+make full-docs
 ```

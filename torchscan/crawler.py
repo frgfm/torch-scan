@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
@@ -70,8 +70,8 @@ def crawl_module(
         dtype = [dtype] * len(input_shape)
     # Tensor arguments
     input_ts = [
-        torch.rand(1, *in_shape).to(dtype=_dtype, device=device)
-        for in_shape, _dtype in zip(input_shape, dtype, strict=False)
+        torch.rand(1, *in_shape).to(dtype=dtype_, device=device)
+        for in_shape, dtype_ in zip(input_shape, dtype, strict=False)
     ]
 
     pre_fw_handles, post_fw_handles = [], []
@@ -80,7 +80,7 @@ def crawl_module(
 
     # Hook definition
     def _hook_info(module: Module, name: str) -> None:
-        def _pre_hook(module: Module, inp: torch.Tensor) -> None:
+        def _pre_hook(module: Module, inp: Tuple[torch.Tensor, ...]) -> None:
             """Pre-forward hook"""
             # Check that another hook has not been triggered at this forward stage
             if not pre_hook_tracker[id(module)]["is_used"] and (
@@ -159,9 +159,9 @@ def crawl_module(
                     fw_idx = call_idxs[id(module)][0]
                 else:
                     # The first dictionary with output_shape=None is the correct one
-                    for _idx in call_idxs[id(module)]:
-                        if info[_idx]["output_shape"] is None:
-                            fw_idx = _idx
+                    for idx in call_idxs[id(module)]:
+                        if info[idx]["output_shape"] is None:
+                            fw_idx = idx
                             break
 
                 if any(module.children()):
@@ -195,7 +195,7 @@ def crawl_module(
                 post_hook_tracker[id(module)]["current"] = 0
                 post_hook_tracker[id(module)]["is_used"] = False
 
-        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))  # type: ignore[arg-type]
+        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
         post_fw_handles.append(module.register_forward_hook(_fwd_hook))
         # Handle modules that are used multiple times (with several hooks)
         pre_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}
@@ -237,14 +237,14 @@ def crawl_module(
         buffer_size += b.numel() * b.element_size()
 
     # Update cumulative receptive field
-    _rf, _s, _p = 1, 1, 0
-    for fw_idx, _layer in enumerate(info):
-        _rf += _s * (_layer["rf"] - 1)
-        _p += _s * _layer["p"]
-        _s *= _layer["s"]
-        info[fw_idx]["rf"] = _rf
-        info[fw_idx]["s"] = _s
-        info[fw_idx]["p"] = _p
+    rf, s, p_ = 1, 1, 0
+    for fw_idx, layer in enumerate(info):
+        rf += s * (layer["rf"] - 1)
+        p_ += s * layer["p"]
+        s *= layer["s"]
+        info[fw_idx]["rf"] = rf
+        info[fw_idx]["s"] = s
+        info[fw_idx]["p"] = p_
 
     return {
         "overheads": {
@@ -294,4 +294,4 @@ def summary(
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)
     # Format it and print it
-    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))  # noqa T201
+    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))  # ruff: ignore[print] T201

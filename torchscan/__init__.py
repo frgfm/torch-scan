@@ -1,6 +1,6 @@
-from contextlib import suppress
+from importlib.metadata import version
+
 from torchscan import modules, process, utils
 from torchscan.crawler import *
 
-with suppress(ImportError):
-    from .version import __version__
+__version__ = version("torchscan")

@@ -1,11 +1,11 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
+import math
 import warnings
-from functools import reduce
-from operator import mul
+from typing import Tuple, cast
 
 from torch import Tensor, nn
 from torch.nn import Module
@@ -53,7 +53,7 @@ def module_macs(module: Module, inp: Tensor, out: Tensor) -> int:
 def macs_linear(module: nn.Linear, _: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.Linear`"""
     # batch size * out_chan * macs_per_elt (bias already counted in accumulation)
-    return module.in_features * reduce(mul, out.shape)
+    return module.in_features * math.prod(out.shape)
 
 
 def macs_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> int:
@@ -71,7 +71,7 @@ def macs_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> 
 def macs_convnd(module: _ConvNd, inp: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.conv._ConvNd`"""
     # For each position, # mult = kernel size, # adds = kernel size - 1
-    window_macs_per_chan = reduce(mul, module.kernel_size)
+    window_macs_per_chan = math.prod(module.kernel_size)
     # Connections to input channels is controlled by the group parameter
     effective_in_chan = inp.shape[1] // module.groups
     # N * mac
@@ -95,7 +95,7 @@ def macs_bn(module: _BatchNorm, inp: Tensor, _: Tensor) -> int:
     # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
     tracking_mac = 0
     b = inp.shape[0]
-    num_spatial_elts = inp.shape[2:].numel()
+    num_spatial_elts = math.prod(inp.shape[2:])
     if module.track_running_stats and module.training:
         # running_mean: by channel, sum value and div by batch size
         tracking_mac += module.num_features * (b * num_spatial_elts - 1)
@@ -110,7 +110,8 @@ def macs_bn(module: _BatchNorm, inp: Tensor, _: Tensor) -> int:
 
 def macs_maxpool(module: _MaxPoolNd, _: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
-    k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
+    kernel_size = module.kernel_size
+    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
 
     # for each spatial output element, check max element in kernel scope
     return out.numel() * (k_size - 1)
@@ -118,7 +119,8 @@ def macs_maxpool(module: _MaxPoolNd, _: Tensor, out: Tensor) -> int:
 
 def macs_avgpool(module: _AvgPoolNd, inp: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
-    k_size = reduce(mul, module.kernel_size) if isinstance(module.kernel_size, tuple) else module.kernel_size
+    kernel_size = cast(int | Tuple[int, ...], module.kernel_size)
+    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return out.numel() * (k_size - 1 + inp.ndim - 2)
@@ -133,7 +135,7 @@ def macs_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inp: Tensor, out: Tensor) -> in
     )
 
     # for each spatial output element, check max element in kernel scope
-    return out.numel() * (reduce(mul, kernel_size) - 1)
+    return out.numel() * (math.prod(kernel_size) - 1)
 
 
 def macs_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inp: Tensor, out: Tensor) -> int:
@@ -145,4 +147,4 @@ def macs_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inp: Tensor, out: Tensor) -> in
     )
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (reduce(mul, kernel_size) - 1 + len(kernel_size))
+    return out.numel() * (math.prod(kernel_size) - 1 + len(kernel_size))

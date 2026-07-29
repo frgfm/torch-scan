@@ -1,10 +1,10 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 from itertools import starmap
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 def format_name(name: str, depth: int = 0) -> str:
@@ -78,14 +78,14 @@ def format_s(f_string: str, min_w: Optional[int] = None, max_w: Optional[int] = 
 
 def format_line_str(
     layer: Dict[str, Any],
-    col_w: Optional[List[int]] = None,
+    col_w: Optional[Sequence[Optional[int]]] = None,
     wrap_mode: str = "mid",
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
 ) -> List[str]:
     """Wrap all information into multiple lines"""
-    if not isinstance(col_w, list):
-        col_w = [None] * 7  # type: ignore[list-item]
+    if col_w is None:
+        col_w = [None] * 7
 
     max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
     line_str = [
@@ -222,29 +222,29 @@ def aggregate_info(info: Dict[str, Any], max_depth: int) -> Dict[str, Any]:
         if not layer["is_leaf"] and layer["depth"] == max_depth:
             grad_p, nograd_p, p_size, num_buffers, b_size = 0, 0, 0, 0, 0
             flops, macs, dmas = 0, 0, 0
-            for _layer in info["layers"][fw_idx + 1 :]:
+            for layer_ in info["layers"][fw_idx + 1 :]:
                 # Children have superior depth and were hooked after parent
-                if _layer["depth"] <= max_depth:
+                if layer_["depth"] <= max_depth:
                     break
                 # Aggregate all information (flops, macc, ram)
-                flops += _layer["flops"]
-                macs += _layer["macs"]
-                dmas += _layer["dmas"]
-                grad_p += _layer["grad_params"]
-                nograd_p += _layer["nograd_params"]
-                p_size += _layer["param_size"]
-                num_buffers += _layer["num_buffers"]
-                b_size += _layer["buffer_size"]
+                flops += layer_["flops"]
+                macs += layer_["macs"]
+                dmas += layer_["dmas"]
+                grad_p += layer_["grad_params"]
+                nograd_p += layer_["nograd_params"]
+                p_size += layer_["param_size"]
+                num_buffers += layer_["num_buffers"]
+                b_size += layer_["buffer_size"]
                 # Take last child effective RF
-                _rf, _s, _p = _layer["rf"], _layer["s"], _layer["p"]
+                rf, s, p = layer_["rf"], layer_["s"], layer_["p"]
 
             # Update info
             info["layers"][fw_idx]["flops"] = flops
             info["layers"][fw_idx]["macs"] = macs
             info["layers"][fw_idx]["dmas"] = dmas
-            info["layers"][fw_idx]["rf"] = _rf
-            info["layers"][fw_idx]["s"] = _s
-            info["layers"][fw_idx]["p"] = _p
+            info["layers"][fw_idx]["rf"] = rf
+            info["layers"][fw_idx]["s"] = s
+            info["layers"][fw_idx]["p"] = p
             info["layers"][fw_idx]["grad_params"] = grad_p
             info["layers"][fw_idx]["nograd_params"] = nograd_p
             info["layers"][fw_idx]["param_size"] = p_size

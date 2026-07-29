@@ -1,11 +1,11 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 import math
 import warnings
-from typing import Tuple, Union
+from typing import Tuple, Union, cast
 
 from torch import Tensor, nn
 from torch.nn import Module
@@ -14,6 +14,10 @@ from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 __all__ = ["module_rf"]
+
+
+def _first(value: Union[int, Tuple[int, ...]]) -> int:
+    return value[0] if isinstance(value, tuple) else value
 
 
 def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, float]:
@@ -56,19 +60,19 @@ def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, f
 
 
 def rf_convtransposend(module: _ConvTransposeNd, _: Tensor, __: Tensor) -> Tuple[float, float, float]:
-    k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
-    s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
+    k = _first(cast(Union[int, Tuple[int, ...]], module.kernel_size))
+    s = _first(cast(Union[int, Tuple[int, ...]], module.stride))
     return -k, 1.0 / s, 0.0
 
 
 def rf_aggregnd(module: Union[_ConvNd, _MaxPoolNd, _AvgPoolNd], _: Tensor, __: Tensor) -> Tuple[float, float, float]:
-    k = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
+    k = _first(cast(Union[int, Tuple[int, ...]], module.kernel_size))
     if hasattr(module, "dilation"):
-        d = module.dilation[0] if isinstance(module.dilation, tuple) else module.dilation
+        d = _first(cast(Union[int, Tuple[int, ...]], module.dilation))
         k = d * (k - 1) + 1
-    s = module.stride[0] if isinstance(module.stride, tuple) else module.stride
-    p = module.padding[0] if isinstance(module.padding, tuple) else module.padding
-    return k, s, p  # type: ignore[return-value]
+    s = _first(cast(Union[int, Tuple[int, ...]], module.stride))
+    p = _first(cast(Union[int, Tuple[int, ...]], module.padding))
+    return k, s, p
 
 
 def rf_adaptive_poolnd(

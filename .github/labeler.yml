@@ -35,14 +35,14 @@
   - any-glob-to-any-file:
     - README.md
     - CONTRIBUTING.md
-    - CODFE_OF_CONDUCT.md
+    - CODE_OF_CONDUCT.md
     - CITATION.cff
     - LICENSE
 
 'topic: build':
 - changed-files:
   - any-glob-to-any-file:
-    - setup.py
+    - Makefile
     - pyproject.toml
 
 'topic: style':

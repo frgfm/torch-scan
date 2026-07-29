@@ -2,7 +2,7 @@ default_language_version:
     python: python3.11
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
       - id: check-ast
@@ -13,18 +13,23 @@ repos:
       - id: check-toml
       - id: check-xml
       - id: check-yaml
-        exclude: .conda
       - id: debug-statements
         language_version: python3
       - id: end-of-file-fixer
       - id: no-commit-to-branch
         args: ['--branch', 'main']
-      - id: requirements-txt-fixer
       - id: trailing-whitespace
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: 'v0.6.4'
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
     hooks:
-      - id: ruff
+      - id: ruff-check
         args:
           - --fix
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: make typing-check
+        language: system
+        pass_filenames: false

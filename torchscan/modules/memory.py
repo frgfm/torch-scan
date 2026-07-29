@@ -1,12 +1,11 @@
-# Copyright (C) 2020-2024, François-Guillaume Fernandez.
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
 
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
+import math
 import warnings
-from functools import reduce
-from operator import mul
-from typing import Union
+from typing import Tuple, Union, cast
 
 from torch import Tensor, nn
 from torch.nn import Module
@@ -153,7 +152,7 @@ def dmas_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> 
 def dmas_convnd(module: _ConvNd, _: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.modules.conv._ConvNd`"""
     # Each output element required K ** 2 memory access of each input channel
-    input_dma = module.in_channels * reduce(mul, module.kernel_size) * out.numel()
+    input_dma = module.in_channels * math.prod(module.kernel_size) * out.numel()
     # Correct with groups
     input_dma //= module.groups
 
@@ -168,19 +167,26 @@ def dmas_bn(module: _BatchNorm, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
     input_dma = inp.numel()
 
-    # Access running_mean, running_var and eps
-    ops_dma = module.running_mean.numel() + module.running_var.numel() + 1  # type: ignore[union-attr]
+    # Access eps, running_mean and running_var when tracked
+    ops_dma = 1
+    if module.running_mean is not None and module.running_var is not None:
+        ops_dma += module.running_mean.numel() + module.running_var.numel()
     # Access to weight and bias
-    if module.affine:
+    if module.affine and module.weight is not None and module.bias is not None:
         ops_dma += module.weight.data.numel() + module.bias.data.numel()
     # Exp avg factor
-    if module.momentum:
+    if module.momentum is not None:
         ops_dma += 1
     # Update stats
-    if module.training and module.track_running_stats:
+    if (
+        module.training
+        and module.track_running_stats
+        and module.running_mean is not None
+        and module.running_var is not None
+    ):
         # Current mean and std computation only requires access to input, already counted in input_dma
         # Update num of batches and running stats
-        ops_dma += 1 + module.running_mean.numel() + module.running_var.numel()  # type: ignore[union-attr]
+        ops_dma += 1 + module.running_mean.numel() + module.running_var.numel()
 
     output_dma = out.numel()
 
@@ -190,13 +196,12 @@ def dmas_bn(module: _BatchNorm, inp: Tensor, out: Tensor) -> int:
 def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for spatial pooling modules"""
     # Resolve kernel size and stride size (can be stored as a single integer or a tuple)
-    if isinstance(module.kernel_size, tuple):
-        kernel_size = module.kernel_size
-    elif isinstance(module.kernel_size, int):
-        kernel_size = (module.kernel_size,) * (inp.ndim - 2)
+    kernel_size = cast(Union[int, Tuple[int, ...]], module.kernel_size)
+    if not isinstance(kernel_size, tuple):
+        kernel_size = (kernel_size,) * (inp.ndim - 2)
 
     # Each output element required K ** 2 memory accesses
-    input_dma = reduce(mul, kernel_size) * out.numel()
+    input_dma = math.prod(kernel_size) * out.numel()
 
     output_dma = out.numel()
 
@@ -211,7 +216,7 @@ def dmas_adaptive_pool(_: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Te
         for i_size, o_size in zip(inp.shape[2:], out.shape[2:], strict=False)
     )
     # Each output element required K ** 2 memory accesses
-    input_dma = reduce(mul, kernel_size) * out.numel()
+    input_dma = math.prod(kernel_size) * out.numel()
 
     output_dma = out.numel()
 

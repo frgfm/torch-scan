@@ -16,7 +16,7 @@ jobs:
     env:
       TZ: Europe/Paris
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Update copyright years
         run: bash scripts/update_copyright_years.sh

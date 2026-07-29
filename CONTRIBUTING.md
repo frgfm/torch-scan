@@ -9,7 +9,7 @@ Whatever the way you wish to contribute to the project, please respect the [code
 
 - [torchscan](https://github.com/frgfm/torch-scan/blob/main/torchscan) - The actual torchscan library
 - [tests](https://github.com/frgfm/torch-scan/blob/main/tests) - Python unit tests
-- [docs](https://github.com/frgfm/torch-scan/blob/main/docs) - Sphinx documentation building
+- [docs](https://github.com/frgfm/torch-scan/blob/main/docs) - MkDocs documentation building
 - [scripts](https://github.com/frgfm/torch-scan/blob/main/scripts) - Example and utilities scripts
 
 
@@ -68,7 +68,7 @@ prek install
 
 #### Commits
 
-- **Code**: ensure to provide docstrings to your Python code. In doing so, please follow [Google-style](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) so it can ease the process of documentation later.
+- **Code**: ensure to provide docstrings to your Python code. In doing so, please follow [Google-style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) so it can ease the process of documentation later.
 - **Commit message**: please follow [Udacity guide](http://udacity.github.io/git-styleguide/)
 
 #### Unit tests

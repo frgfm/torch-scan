@@ -46,17 +46,16 @@ quality = [
     "ty==0.0.65",
 ]
 docs = [
-    "sphinx==9.0.4",
-    "furo==2025.12.19",
-    "sphinxemoji==0.3.2",
-    "sphinx-copybutton==0.5.2",
+    "mkdocs==1.6.1",
+    "mkdocs-material==9.6.22",
+    "mkdocstrings[python]==0.30.1",
 ]
 
 [project.urls]
 documentation = "https://frgfm.github.io/torch-scan"
 repository = "https://github.com/frgfm/torch-scan"
 tracker = "https://github.com/frgfm/torch-scan/issues"
-changelog = "https://frgfm.github.io/torch-scan/latest/changelog.html"
+changelog = "https://frgfm.github.io/torch-scan/changelog.html"
 
 [tool.uv]
 required-version = "==0.12.0"

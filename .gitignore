@@ -68,9 +68,6 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
-
 # PyBuilder
 target/
 
@@ -118,7 +115,7 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation
-/site
+docs/site/
 
 # Pyre type checker
 .pyre/

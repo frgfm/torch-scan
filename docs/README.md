@@ -1,33 +1,29 @@
 # Changing the documentation
 
-The documentation of this project is built using `sphinx`. In order to install all the build dependencies, run the following command from the root folder of the repository:
+The documentation is built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) using Python 3.11.
+
+Create and activate a virtual environment from the repository root:
+
 ```shell
+uv venv --python 3.11
+source .venv/bin/activate
 make install-docs
 ```
 
----
-**NOTE**
+## Preview the documentation
 
-You are only generating the documentation to inspect it locally. Only the source files are pushed to the remote repository, the documentation will be built automatically by the CI.
+Start the development server:
 
----
+```shell
+make serve-docs
+```
 
 ## Build the documentation
 
-### Latest version
-
-In most cases, you will only be changing the documentation of the latest version (dev version). In this case, you can build the documentation (the HTML files) with the following command:
+Run the same strict build used by CI:
 
 ```shell
-make single-docs
+make build-docs
 ```
 
-Then open `docs/_build/index.html` in your web browser to navigate in it.
-
-
-### Multi-version documentation
-
-In rare cases, you might want to modify the documentation for other versions. You will then have to build the documentation for the multiple versions of the package:
-```shell
-make full-docs
-```
+The generated site is written to `docs/site/`. Pull requests build the site automatically, and pushes to `main` deploy it to GitHub Pages.

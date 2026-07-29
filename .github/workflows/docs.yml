@@ -25,9 +25,16 @@ jobs:
       - name: Install dependencies
         run: make install-docs
       - name: Build documentation
-        run: make full-docs
+        run: make build-docs
       - name: Documentation sanity check
-        run: test -e docs/build/index.html || exit
+        run: |
+          test -e docs/site/index.html
+          test -e docs/site/installing.html
+          test -e docs/site/torchscan.html
+          test -e docs/site/modules.html
+          test -e docs/site/process.html
+          test -e docs/site/utils.html
+          test -e docs/site/changelog.html
       - name: Install SSH Client 🔑
         if: github.event_name == 'push'
         uses: webfactory/ssh-agent@v0.10.0
@@ -38,7 +45,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@v4.8.0
         with:
           BRANCH: gh-pages
-          FOLDER: docs/build
+          FOLDER: docs/site
           COMMIT_MESSAGE: "[skip ci] Documentation updates"
           CLEAN: true
           SSH: true

@@ -1,4 +1,4 @@
-.PHONY: install install-quality install-test install-docs lint-check lint-format typing-check precommit quality style test single-docs full-docs set-version build publish
+.PHONY: install install-quality install-test install-docs lint-check lint-format typing-check precommit quality style test serve-docs build-docs set-version build publish
 
 install:
 	uv pip install -e .
@@ -33,11 +33,13 @@ style: lint-format
 test:
 	pytest --cov=torchscan --cov-report=xml tests/
 
-single-docs:
-	sphinx-build docs/source docs/_build -a
+# Serve documentation locally
+serve-docs:
+	mkdocs serve -f docs/mkdocs.yml
 
-full-docs:
-	cd docs && bash build.sh
+# Build documentation
+build-docs:
+	mkdocs build --strict -f docs/mkdocs.yml
 
 set-version:
 	uv version --frozen --no-build "$(BUILD_VERSION)"

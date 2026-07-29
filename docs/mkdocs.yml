@@ -1,0 +1,85 @@
+site_name: TorchScan
+site_url: https://frgfm.github.io/torch-scan
+site_description: Useful information about your PyTorch module
+site_author: François-Guillaume Fernandez
+copyright: Copyright &copy; François-Guillaume Fernandez
+
+repo_name: frgfm/torch-scan
+repo_url: https://github.com/frgfm/torch-scan
+use_directory_urls: false
+
+theme:
+  name: material
+  language: en
+  logo: img/logo.png
+  favicon: img/favicon.ico
+  icon:
+    repo: fontawesome/brands/github-alt
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/lightbulb-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: cyan
+      toggle:
+        icon: material/lightbulb
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: white
+      accent: cyan
+      toggle:
+        icon: material/lightbulb-outline
+        name: Switch to system preference
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [..]
+          options:
+            allow_inspection: true
+            docstring_style: google
+            members_order: source
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            separate_signature: true
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: installing.md
+  - Package reference:
+      - TorchScan: torchscan.md
+      - Modules: modules.md
+      - Process: process.md
+      - Utilities: utils.md
+  - Notes:
+      - Changelog: changelog.md

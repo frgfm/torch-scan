@@ -28,7 +28,7 @@
 </p>
 <p align="center">
   <a href="https://frgfm.github.io/torch-scan">
-    <img src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/docs.yml?branch=main&label=Documentation&logo=read-the-docs&logoColor=white&style=flat-square" alt="Documentation Status">
+    <img src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/page-build.yml?branch=main&label=Documentation&logo=read-the-docs&logoColor=white&style=flat-square" alt="Documentation Status">
   </a>
 </p>
 

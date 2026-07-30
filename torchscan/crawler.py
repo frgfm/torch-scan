@@ -38,10 +38,11 @@ def crawl_module(
 ) -> Dict[str, Any]:
     """Collect module information using a synthetic forward pass.
 
-    >>> import torch.nn as nn
-    >>> from torchscan import crawl_module
-    >>> mod = nn.Conv2d(3, 8, 3)
-    >>> module_info = crawl_module(mod, (3, 224, 224))
+    Examples:
+        >>> import torch.nn as nn
+        >>> from torchscan import crawl_module
+        >>> mod = nn.Conv2d(3, 8, 3)
+        >>> module_info = crawl_module(mod, (3, 224, 224))
 
     Args:
         module: Module to inspect. It must contain at least one parameter.
@@ -286,10 +287,11 @@ def summary(
 ) -> None:
     """Print a module summary for one or more expected tensor input shapes.
 
-    >>> import torch.nn as nn
-    >>> from torchscan import summary
-    >>> mod = nn.Conv2d(3, 8, 3)
-    >>> summary(mod, (3, 224, 224), receptive_field=True)
+    Examples:
+        >>> import torch.nn as nn
+        >>> from torchscan import summary
+        >>> mod = nn.Conv2d(3, 8, 3)
+        >>> summary(mod, (3, 224, 224), receptive_field=True)
 
     Args:
         module: Module to inspect. It must contain at least one parameter.

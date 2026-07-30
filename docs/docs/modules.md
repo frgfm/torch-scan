@@ -1,6 +1,6 @@
 # `torchscan.modules`
 
-The modules subpackage contains tools for inspecting modules.
+The modules subpackage contains tools for inspecting modules. See [Understanding results](metrics.md) for counting conventions and [Model and input support](model-support.md) for the capability matrix.
 
 ## FLOPs
 

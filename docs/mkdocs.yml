@@ -1,6 +1,6 @@
 site_name: TorchScan
 site_url: https://frgfm.github.io/torch-scan
-site_description: Useful information about your PyTorch module
+site_description: PyTorch model summaries with parameter, memory, FLOP, MAC, DMA, and receptive-field estimates
 site_author: François-Guillaume Fernandez
 copyright: Copyright &copy; François-Guillaume Fernandez
 
@@ -10,6 +10,7 @@ use_directory_urls: false
 
 theme:
   name: material
+  custom_dir: overrides
   language: en
   logo: img/logo.png
   favicon: img/favicon.ico
@@ -57,9 +58,11 @@ plugins:
             show_root_heading: true
             show_root_full_path: false
             show_signature_annotations: true
+            show_source: false
             separate_signature: true
 
 markdown_extensions:
+  - tables
   - toc:
       permalink: true
   - pymdownx.emoji:
@@ -76,6 +79,9 @@ nav:
   - Home: index.md
   - Getting started:
       - Installation: installing.md
+  - Guides:
+      - Model and input support: model-support.md
+      - Understanding results: metrics.md
   - Package reference:
       - TorchScan: torchscan.md
       - Modules: modules.md

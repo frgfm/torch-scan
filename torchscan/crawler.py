@@ -36,19 +36,31 @@ def crawl_module(
     input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
     dtype: Optional[Union[torch.dtype, Iterable[torch.dtype]]] = None,
 ) -> Dict[str, Any]:
-    """Retrieves module information for an expected input tensor shape
+    """Collect module information using a synthetic forward pass.
 
-    >>> import torch.nn as nn
-    >>> from torchscan import summary
-    >>> mod = nn.Conv2d(3, 8, 3)
-    >>> module_info = crawl_module(mod, (3, 224, 224))
+    Examples:
+        >>> import torch.nn as nn
+        >>> from torchscan import crawl_module
+        >>> mod = nn.Conv2d(3, 8, 3)
+        >>> module_info = crawl_module(mod, (3, 224, 224))
 
     Args:
-        module: module to inspect
-        input_shape: expected input shapes
-        dtype: data type of each input argument to the module
+        module: Module to inspect. It must contain at least one parameter.
+        input_shape: Input shape without a batch dimension, or one shape per positional tensor input.
+        dtype: One data type for every input, or one data type per input. Defaults to the first parameter's data type.
+
     Returns:
-        layer and overhead information
+        A dictionary containing per-layer information in `layers`, parameter and buffer totals in `overall`, and
+        process and framework memory estimates in `overheads`.
+
+    Raises:
+        StopIteration: If the module has no parameters.
+        AttributeError: If a hooked module returns something other than a tensor.
+
+    Notes:
+        This runs a random batch of one on the first parameter's device, without gradients, in the module's current
+        training mode. Functional operations are not observed by module hooks. See the model-support and metrics guides
+        for the complete limitations.
     """
     # Get device and data types from model
     p = next(module.parameters())
@@ -267,26 +279,35 @@ def crawl_module(
 
 def summary(
     module: Module,
-    input_shape: Tuple[int, ...],
+    input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
     wrap_mode: str = "mid",
     max_depth: Optional[int] = None,
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
 ) -> None:
-    """Print module summary for an expected input tensor shape
+    """Print a module summary for one or more expected tensor input shapes.
 
-    >>> import torch.nn as nn
-    >>> from torchscan import summary
-    >>> mod = nn.Conv2d(3, 8, 3)
-    >>> summary(mod, (3, 224, 224), receptive_field=True)
+    Examples:
+        >>> import torch.nn as nn
+        >>> from torchscan import summary
+        >>> mod = nn.Conv2d(3, 8, 3)
+        >>> summary(mod, (3, 224, 224), receptive_field=True)
 
     Args:
-        module: module to inspect
-        input_shape: expected input shapes (don't include batch size)
-        wrap_mode: if a value is too long, where the wrapping should be performed
-        max_depth: maximum depth of layer information
-        receptive_field: whether receptive field estimation should be performed
-        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding
+        module: Module to inspect. It must contain at least one parameter.
+        input_shape: Input shape without a batch dimension, or one shape per positional tensor input.
+        wrap_mode: Wrap long layer names at the middle (`"mid"`) or end (`"end"`).
+        max_depth: Maximum depth of layer information.
+        receptive_field: Whether to estimate receptive fields.
+        effective_rf_stats: If `receptive_field` is true, also display effective stride and padding.
+
+    Raises:
+        StopIteration: If the module has no parameters.
+        AttributeError: If a hooked module returns something other than a tensor.
+        ValueError: If `wrap_mode` is invalid or `max_depth` is greater than the module depth.
+
+    Notes:
+        This function has the same synthetic-forward and module-hook limitations as `crawl_module`.
     """
     # Get the summary dict
     module_info = crawl_module(module, input_shape)

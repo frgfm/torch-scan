@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">How TorchScan counts a Linear layer</title>
+  <desc id="desc">Three input features connect to two output elements, creating six weighted connections. TorchScan counts six MACs and twelve FLOPs when bias is enabled.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17222b; }
+    .heading { font-size: 26px; font-weight: 700; }
+    .label { font-size: 17px; font-weight: 650; }
+    .body { font-size: 16px; }
+    .metric { font-size: 30px; font-weight: 750; }
+    .muted { fill: #52616b; }
+  </style>
+
+  <rect x="1" y="1" width="958" height="418" rx="14" fill="#f8fafb" stroke="#d6e0e5" stroke-width="2"/>
+  <text x="48" y="52" class="heading">A Linear layer is a set of weighted connections</text>
+  <text x="48" y="82" class="body muted">Example: Linear(3, 2), one input vector, bias enabled</text>
+
+  <text x="76" y="122" class="label">3 input features</text>
+  <text x="486" y="122" class="label">2 output elements</text>
+
+  <g fill="none" stroke-linecap="round" stroke-width="4" opacity="0.78">
+    <path d="M150 160 L550 190" stroke="#4ca68f"/>
+    <path d="M150 160 L550 280" stroke="#ff5a3d"/>
+    <path d="M150 230 L550 190" stroke="#ff5a3d"/>
+    <path d="M150 230 L550 280" stroke="#4ca68f"/>
+    <path d="M150 300 L550 190" stroke="#4ca68f"/>
+    <path d="M150 300 L550 280" stroke="#ff5a3d"/>
+  </g>
+
+  <g stroke="#28454a" stroke-width="3">
+    <circle cx="135" cy="160" r="25" fill="#ffffff"/>
+    <circle cx="135" cy="230" r="25" fill="#ffffff"/>
+    <circle cx="135" cy="300" r="25" fill="#ffffff"/>
+    <circle cx="565" cy="190" r="29" fill="#e6f6f1"/>
+    <circle cx="565" cy="280" r="29" fill="#fff0ec"/>
+  </g>
+
+  <g text-anchor="middle" dominant-baseline="middle" class="label">
+    <text x="135" y="160">x₁</text>
+    <text x="135" y="230">x₂</text>
+    <text x="135" y="300">x₃</text>
+    <text x="565" y="190">y₁</text>
+    <text x="565" y="280">y₂</text>
+  </g>
+
+  <text x="250" y="350" class="body muted">Each line is one input–output pair</text>
+
+  <rect x="660" y="112" width="250" height="246" rx="12" fill="#ffffff" stroke="#bdd0d4" stroke-width="2"/>
+  <text x="690" y="151" class="label">TorchScan counts</text>
+  <text x="690" y="199" class="metric" fill="#287f6d">6 MACs</text>
+  <text x="690" y="226" class="body muted">3 inputs × 2 outputs</text>
+  <line x1="690" y1="247" x2="880" y2="247" stroke="#d6e0e5" stroke-width="2"/>
+  <text x="690" y="290" class="metric" fill="#d8452d">12 FLOPs</text>
+  <text x="690" y="318" class="body muted">6 multiplies + 4 sums</text>
+  <text x="690" y="341" class="body muted">+ 2 bias additions</text>
+</svg>

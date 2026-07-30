@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">Receptive-field growth through sequential convolutions</title>
+  <desc id="desc">One output position starts with a one by one receptive field. One three by three convolution expands it to three by three, and a second expands it to five by five. Skip connections can invalidate this sequential estimate.</desc>
+  <defs>
+    <pattern id="grid" width="18" height="18" patternUnits="userSpaceOnUse">
+      <path d="M18 0H0V18" fill="none" stroke="#9baeb6" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10Z" fill="#52616b"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17222b; }
+    .heading { font-size: 26px; font-weight: 700; }
+    .label { font-size: 17px; font-weight: 650; }
+    .body { font-size: 16px; }
+    .muted { fill: #52616b; }
+  </style>
+
+  <rect x="1" y="1" width="958" height="418" rx="14" fill="#f8fafb" stroke="#d6e0e5" stroke-width="2"/>
+  <text x="48" y="52" class="heading">Receptive field grows along a sequential path</text>
+  <text x="48" y="82" class="body muted">Two 3×3 convolutions expand the input area that can affect one output value</text>
+
+  <g>
+    <rect x="88" y="118" width="126" height="126" fill="#ffffff" stroke="#779099" stroke-width="2"/>
+    <rect x="142" y="172" width="18" height="18" fill="#ff5a3d"/>
+    <rect x="88" y="118" width="126" height="126" fill="url(#grid)"/>
+
+    <rect x="417" y="118" width="126" height="126" fill="#ffffff" stroke="#779099" stroke-width="2"/>
+    <rect x="453" y="154" width="54" height="54" fill="#ffb8a8"/>
+    <rect x="417" y="118" width="126" height="126" fill="url(#grid)"/>
+
+    <rect x="746" y="118" width="126" height="126" fill="#ffffff" stroke="#779099" stroke-width="2"/>
+    <rect x="764" y="136" width="90" height="90" fill="#91d2c2"/>
+    <rect x="746" y="118" width="126" height="126" fill="url(#grid)"/>
+  </g>
+
+  <path d="M244 181H380" stroke="#52616b" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M573 181H709" stroke="#52616b" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="312" y="163" text-anchor="middle" class="body muted">Conv 3×3</text>
+  <text x="641" y="163" text-anchor="middle" class="body muted">Conv 3×3</text>
+
+  <g text-anchor="middle">
+    <text x="151" y="279" class="label">Starting location</text>
+    <text x="151" y="307" class="body muted">1 × 1</text>
+    <text x="480" y="279" class="label">After one layer</text>
+    <text x="480" y="307" class="body muted">3 × 3</text>
+    <text x="809" y="279" class="label">After two layers</text>
+    <text x="809" y="307" class="body muted">5 × 5</text>
+  </g>
+
+  <rect x="74" y="340" width="812" height="49" rx="9" fill="#e5f5f1"/>
+  <text x="480" y="370" text-anchor="middle" class="body">TorchScan follows this order; branches and skip connections need extra caution.</text>
+</svg>

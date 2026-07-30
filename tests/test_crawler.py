@@ -32,6 +32,20 @@ def test_crawl_module():
     assert res["layers"][0]["output_shape"] == (-1, 8, 30, 30)
 
 
+def test_crawl_module_multiple_inputs():
+    class TwoInputs(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.left = nn.Linear(4, 2)
+            self.right = nn.Linear(6, 2)
+
+        def forward(self, left, right):
+            return self.left(left) + self.right(right)
+
+    res = crawler.crawl_module(TwoInputs(), [(4,), (6,)])
+    assert res["overall"]["grad_params"] == 24
+
+
 def test_summary():
     mod = nn.Conv2d(3, 8, 3)
 

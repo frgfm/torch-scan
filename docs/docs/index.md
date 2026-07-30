@@ -24,7 +24,7 @@ model = nn.Sequential(
 summary(model, (3, 32, 32), max_depth=1)
 ```
 
-The output includes the model hierarchy and totals:
+Representative output (abridged):
 
 ```text
 Layer                        Type                  Output Shape              Param #

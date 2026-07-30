@@ -60,9 +60,9 @@ Every hooked module must return one tensor. Tuple, list, and dictionary outputs 
 | BatchNorm1d/2d/3d | ✓ | ✓ | ✓ | ✓ |
 | Max, average, and adaptive pooling | ✓ | ✓ | ✓ | ✓ |
 | Dropout | ✓ | ✓ | ✓ | ✓ |
-| `torch.nn.Transformer` | ✓ | — | — | — |
+| `torch.nn.Transformer` | ✓* | — | — | — |
 
-`torch.nn.Transformer` support does not imply support for arbitrary Transformer or `einops` implementations.
+*The low-level FLOP calculator recognizes `torch.nn.Transformer`, but `summary()` does not currently support it end to end because hooked child modules return tuples. This does not imply support for arbitrary Transformer or `einops` implementations.*
 
 ## Custom and functional operations
 

@@ -96,6 +96,49 @@ def test_crawl_module_multihead_attention(capsys):
     assert "MultiheadAttention" in capsys.readouterr().out
 
 
+def _tiny_transformer(batch_first):
+    return nn.Transformer(
+        d_model=4,
+        nhead=2,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
+        dim_feedforward=8,
+        dropout=0,
+        batch_first=batch_first,
+    )
+
+
+def test_crawl_module_batch_first_transformer(capsys):
+    mod = _tiny_transformer(batch_first=True)
+
+    with pytest.warns(UserWarning, match="Module type not supported"):
+        result = crawler.crawl_module(mod, [(3, 4), (2, 4)])
+
+    assert len(result["layers"]) == 1
+    assert result["layers"][0]["type"] == "Transformer"
+    assert result["layers"][0]["flops"] == 2635
+    assert sum(layer["flops"] for layer in result["layers"]) == 2635
+
+    crawler.summary(mod, [(3, 4), (2, 4)])
+    assert "Transformer" in capsys.readouterr().out
+
+
+def test_crawl_module_sequence_first_transformer_input_data(capsys):
+    mod = _tiny_transformer(batch_first=False)
+    src = torch.rand((3, 1, 4))
+    tgt = torch.rand((2, 1, 4))
+
+    with pytest.warns(UserWarning, match="Module type not supported"):
+        result = crawler.crawl_module(mod, input_data=(src, tgt))
+
+    assert len(result["layers"]) == 1
+    assert result["layers"][0]["flops"] == 2635
+
+    with pytest.warns(UserWarning, match="Module type not supported"):
+        crawler.summary(mod, input_data=(src, tgt))
+    assert "Transformer" in capsys.readouterr().out
+
+
 def test_crawl_module_rejects_unsupported_output_leaf():
     class UnsupportedOutput(nn.Module):
         def __init__(self):

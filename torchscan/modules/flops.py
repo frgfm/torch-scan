@@ -245,9 +245,11 @@ def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Any, ...], out: Any =
         math.prod(tensor.shape[:-1]) * module.embed_dim * (2 * tensor.shape[-1] - 1 + projection_bias)
         for tensor in (q, k, v)
     )
+    # One reciprocal-square-root plus one scale multiplication per query element.
     tot_flops += 1 + batch_size * module.num_heads * target_length * module.head_dim
     tot_flops += batch_size * module.num_heads * target_length * source_length * (2 * module.head_dim - 1)
 
+    # Positional MHA slots 3 and 5 are key_padding_mask and attn_mask.
     visible_masks = int(len(inputs) > 3 and inputs[3] is not None) + int(len(inputs) > 5 and inputs[5] is not None)
     tot_flops += visible_masks * batch_size * module.num_heads * target_length * source_length
     tot_flops += batch_size * module.num_heads * target_length * (3 * source_length - 1)
@@ -274,10 +276,12 @@ def flops_transformer_feedforward(
     return flops_linear(module.linear1, inputs) + num_hidden + dropout_flops + flops_linear(module.linear2, inputs)
 
 
-def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: Tuple[Tensor, ...]) -> int:
+def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: Tuple[Any, ...]) -> int:
     """FLOPs estimation for `torch.nn.TransformerEncoderLayer`"""
     input_flops = inputs[0].numel()
-    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3)
+    src_mask = inputs[1] if len(inputs) > 1 else None
+    src_key_padding_mask = inputs[2] if len(inputs) > 2 else None
+    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3 + (src_key_padding_mask, False, src_mask))
 
     tot_flops += (flops_dropout(module.dropout1, inputs) if module.dropout1.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm1, inputs)
@@ -288,15 +292,22 @@ def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: T
     return tot_flops
 
 
-def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: Tuple[Tensor, ...]) -> int:
+def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: Tuple[Any, ...]) -> int:
     """FLOPs estimation for `torch.nn.TransformerDecoderLayer`"""
     input_flops = inputs[0].numel()
-    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3)
+    tgt_mask = inputs[2] if len(inputs) > 2 else None
+    memory_mask = inputs[3] if len(inputs) > 3 else None
+    tgt_key_padding_mask = inputs[4] if len(inputs) > 4 else None
+    memory_key_padding_mask = inputs[5] if len(inputs) > 5 else None
+    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3 + (tgt_key_padding_mask, False, tgt_mask))
 
     tot_flops += (flops_dropout(module.dropout1, inputs) if module.dropout1.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm1, inputs)
 
-    tot_flops += flops_mha(module.multihead_attn, (inputs[0], inputs[1], inputs[1]))
+    tot_flops += flops_mha(
+        module.multihead_attn,
+        (inputs[0], inputs[1], inputs[1], memory_key_padding_mask, False, memory_mask),
+    )
     tot_flops += (flops_dropout(module.dropout2, inputs) if module.dropout2.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm2, inputs)
 
@@ -307,17 +318,30 @@ def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: T
     return tot_flops
 
 
-def flops_transformer(module: nn.Transformer, inputs: Tuple[Tensor, ...]) -> int:
+def flops_transformer(module: nn.Transformer, inputs: Tuple[Any, ...]) -> int:
     """FLOPs estimation for `torch.nn.Transformer`"""
     if not isinstance(module.encoder, nn.TransformerEncoder) or not isinstance(module.decoder, nn.TransformerDecoder):
         raise NotImplementedError("Transformer FLOPs only support the native encoder and decoder stacks.")
 
-    src_inputs = (inputs[0],)
-    decoder_inputs = (inputs[1], inputs[0])
+    src_mask = inputs[2] if len(inputs) > 2 else None
+    tgt_mask = inputs[3] if len(inputs) > 3 else None
+    memory_mask = inputs[4] if len(inputs) > 4 else None
+    src_key_padding_mask = inputs[5] if len(inputs) > 5 else None
+    tgt_key_padding_mask = inputs[6] if len(inputs) > 6 else None
+    memory_key_padding_mask = inputs[7] if len(inputs) > 7 else None
+    src_inputs = (inputs[0], src_mask, src_key_padding_mask)
+    decoder_inputs = (
+        inputs[1],
+        inputs[0],
+        tgt_mask,
+        memory_mask,
+        tgt_key_padding_mask,
+        memory_key_padding_mask,
+    )
     encoder_flops = sum(flops_transformer_encoderlayer(layer, src_inputs) for layer in module.encoder.layers)
 
     if isinstance(module.encoder.norm, nn.LayerNorm):
-        encoder_flops += flops_layernorm(module.encoder.norm, src_inputs)
+        encoder_flops += flops_layernorm(module.encoder.norm, (inputs[0],))
 
     decoder_flops = sum(flops_transformer_decoderlayer(layer, decoder_inputs) for layer in module.decoder.layers)
 

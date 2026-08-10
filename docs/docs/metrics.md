@@ -12,7 +12,7 @@ FLOPs are floating-point operations performed during the forward pass. They are 
 
 Native `torch.nn.Transformer` summaries use one composite FLOP total. This deliberately avoids adding the same attention and projection work again from child modules. Its MAC, DMA, receptive-field, and child-level FLOP values remain unsupported and emit warnings rather than extending partial child totals to the full Transformer.
 
-The attention formula counts Q/K/V and output projections, scaling, both matrix multiplications, softmax, active training dropout, visible masks, and averaged attention weights when returned. Forward-hook inputs do not include keyword arguments, so masks supplied as kwargs cannot be counted.
+The attention formula counts Q/K/V and output projections, scaling, both matrix multiplications, softmax, active training dropout, visible positional masks, and averaged attention weights when returned. A root Transformer's positional masks are forwarded to each affected layer formula. Forward-hook inputs do not include keyword arguments, so masks supplied as kwargs cannot be counted.
 
 ## MACs
 

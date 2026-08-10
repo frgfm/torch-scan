@@ -6,7 +6,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from torchscan import crawler
+from torchscan import crawler, modules
 
 
 def test_apply():
@@ -91,6 +91,9 @@ def test_crawl_module_multihead_attention(capsys):
 
     res = crawler.crawl_module(mod, input_shapes)
     assert res["layers"][0]["output_shape"] == ((-1, 4, 8), (-1, 4, 4))
+    query = torch.rand((1, 4, 8))
+    assert len(res["layers"]) == 1
+    assert res["layers"][0]["flops"] == modules.module_flops(mod, (query, query, query), mod(query, query, query))
 
     crawler.summary(mod, input_shapes)
     assert "MultiheadAttention" in capsys.readouterr().out
@@ -134,9 +137,30 @@ def test_crawl_module_sequence_first_transformer_input_data(capsys):
     assert len(result["layers"]) == 1
     assert result["layers"][0]["flops"] == 2635
 
+    src_mask = torch.zeros((3, 3), dtype=torch.bool)
+    with pytest.warns(UserWarning, match="Module type not supported"):
+        masked_result = crawler.crawl_module(mod, input_data=(src, tgt, src_mask))
+    assert masked_result["layers"][0]["flops"] == 2653
+
     with pytest.warns(UserWarning, match="Module type not supported"):
         crawler.summary(mod, input_data=(src, tgt))
     assert "Transformer" in capsys.readouterr().out
+
+
+def test_crawl_module_rejects_wrapped_transformer():
+    with pytest.raises(NotImplementedError, match="passed directly"):
+        crawler.crawl_module(nn.Sequential(_tiny_transformer(batch_first=True)), [(3, 4), (2, 4)])
+
+
+def test_crawl_module_removes_hooks_after_metric_failure():
+    mod = nn.MultiheadAttention(4, 2, batch_first=True, add_zero_attn=True)
+    query = torch.rand((1, 3, 4))
+    expected_hook_counts = len(mod._forward_pre_hooks), len(mod._forward_hooks)
+
+    for _ in range(2):
+        with pytest.raises(NotImplementedError, match="add_bias_kv or add_zero_attn"):
+            crawler.crawl_module(mod, input_data=(query, query, query))
+        assert (len(mod._forward_pre_hooks), len(mod._forward_hooks)) == expected_hook_counts
 
 
 def test_crawl_module_rejects_unsupported_output_leaf():

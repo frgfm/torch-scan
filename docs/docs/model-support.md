@@ -95,7 +95,7 @@ This makes tuple-returning modules such as `torch.nn.MultiheadAttention` safe to
 
 *`MultiheadAttention` supports 3D self- and cross-attention in both layouts, standard projection bias, and masks passed positionally. Keyword masks are invisible to hooks; unbatched inputs, `add_bias_kv`, and `add_zero_attn` are rejected.*
 
-*A native `torch.nn.Transformer` passed directly to `summary()` is counted as one composite FLOP operation. The verified path covers native encoder/decoder stacks with ReLU, batched sequence-first or batch-first tensors, and no attention masks hidden in keyword arguments. Child-level FLOP detail, wrappers around a Transformer, custom stacks or activations, arbitrary Transformer families, Hugging Face internals, and `einops` operations are not supported.*
+*A native `torch.nn.Transformer` passed directly to `summary()` is counted as one composite FLOP operation. The verified path covers native encoder/decoder stacks with ReLU, batched sequence-first or batch-first tensors, and positional attention and key-padding masks; masks hidden in keyword arguments cannot be counted. Wrappers and standalone native Transformer components are rejected rather than partially counted. Child-level FLOP detail, custom stacks or activations, arbitrary Transformer families, Hugging Face internals, and `einops` operations remain unsupported.*
 
 ## Custom and functional operations
 

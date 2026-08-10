@@ -102,6 +102,16 @@ def test_transformer_flops():
     assert flops_transformer_decoderlayer(mod.decoder.layers[0], (tgt, src)) == 1270
     assert modules.module_flops(mod, (src, tgt), mod(src, tgt)) == 2635
 
+    masks = (
+        torch.zeros((3, 3), dtype=torch.bool),
+        torch.zeros((2, 2), dtype=torch.bool),
+        torch.zeros((2, 3), dtype=torch.bool),
+        torch.zeros((1, 3), dtype=torch.bool),
+        torch.zeros((1, 2), dtype=torch.bool),
+        torch.zeros((1, 3), dtype=torch.bool),
+    )
+    assert modules.module_flops(mod, (src, tgt, *masks), mod(src, tgt, *masks)) == 2711
+
 
 def test_transformer_flops_rejects_unverified_options():
     query = torch.rand((2, 3, 4))

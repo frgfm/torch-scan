@@ -143,7 +143,23 @@ def crawl_module(
     post_hook_tracker: dict[int, Any] = {}
     root_module = module
 
+    if not isinstance(module, nn.Transformer) and any(
+        isinstance(
+            child,
+            (
+                nn.Transformer,
+                nn.TransformerEncoder,
+                nn.TransformerDecoder,
+                nn.TransformerEncoderLayer,
+                nn.TransformerDecoderLayer,
+            ),
+        )
+        for child in module.modules()
+    ):
+        raise NotImplementedError("Only a native nn.Transformer passed directly to summary() is supported.")
+
     def _is_metric_leaf(current: Module) -> bool:
+        # MHA owns its functional out_proj; only a root Transformer owns its composite FLOPs.
         return (
             not any(current.children())
             or isinstance(current, nn.MultiheadAttention)
@@ -281,6 +297,7 @@ def crawl_module(
     param_ids: list[int] = []
     call_idxs: dict[int, list[int]] = {}
     if isinstance(module, nn.Transformer):
+        # Descendant hooks would double-count the root's analytic composite total.
         _hook_info(module, module.__class__.__name__.lower())
     else:
         apply(module, _hook_info)

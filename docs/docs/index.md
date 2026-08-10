@@ -4,10 +4,10 @@ TorchScan prints the structure, parameter count, memory use, computation estimat
 
 ## 60-second quickstart
 
-Install the stable release:
+Install the development version documented here:
 
 ```shell
-pip install torchscan
+pip install git+https://github.com/frgfm/torch-scan.git
 ```
 
 Then inspect a model on CPU:

@@ -210,3 +210,8 @@ def test_summary_trainable_column(capsys):
     crawler.summary(mod, (4,), max_depth=1)
     aggregated_output = capsys.readouterr().out.splitlines()
     assert next(line for line in aggregated_output if "├─nested" in line).split()[-1] == "True"
+
+    mod.nested[0].bias.requires_grad_(False)
+    crawler.summary(mod, (4,), max_depth=1)
+    frozen_aggregated_output = capsys.readouterr().out.splitlines()
+    assert next(line for line in frozen_aggregated_output if "├─nested" in line).split()[-1] == "False"

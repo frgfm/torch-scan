@@ -158,20 +158,22 @@ def crawl_module(
                     # Parameters
                     for p in module.parameters():
                         if id(p) not in param_ids:
+                            numel = p.numel()
                             if p.requires_grad:
-                                grad_params += p.data.numel()
+                                grad_params += numel
                             else:
-                                nograd_params += p.data.numel()
-                            param_size += p.data.numel() * p.data.element_size()
-                            param_ids.append(id(p))
+                                nograd_params += numel
+                            param_size += numel * p.element_size()
+                            param_ids.add(id(p))
                         else:
                             is_shared = True
                     # Buffers
                     for b in module.buffers():
                         if id(b) not in param_ids:
-                            num_buffers += b.numel()
-                            buffer_size += b.numel() * b.element_size()
-                            param_ids.append(id(b))
+                            numel = b.numel()
+                            num_buffers += numel
+                            buffer_size += numel * b.element_size()
+                            param_ids.add(id(b))
                         else:
                             is_shared = True
 
@@ -268,7 +270,7 @@ def crawl_module(
 
     # Hook model
     info: list[dict[str, Any]] = []
-    param_ids: list[int] = []
+    param_ids: set[int] = set()
     call_idxs: dict[int, list[int]] = {}
     apply(module, _hook_info)
 
@@ -291,14 +293,16 @@ def crawl_module(
     grad_params, nograd_params, param_size = 0, 0, 0
     num_buffers, buffer_size = 0, 0
     for p in module.parameters():
+        numel = p.numel()
         if p.requires_grad:
-            grad_params += p.data.numel()
+            grad_params += numel
         else:
-            nograd_params += p.data.numel()
-        param_size += p.data.numel() * p.data.element_size()
+            nograd_params += numel
+        param_size += numel * p.element_size()
     for b in module.buffers():
-        num_buffers += b.numel()
-        buffer_size += b.numel() * b.element_size()
+        numel = b.numel()
+        num_buffers += numel
+        buffer_size += numel * b.element_size()
 
     # Update cumulative receptive field
     rf, s, p_ = 1, 1, 0

@@ -64,8 +64,10 @@ stats = measure_peak_memory(run_training_step, device=device)
   tensor and operator allocations, not Python heap, process RSS, or arbitrary third-party native allocations.
 - CUDA and supported MPS versions report `pytorch_reserved_bytes`, the caching allocator's reserved memory. The result
   also includes `allocated_peak_bytes`, the peak bytes occupied by live tensors.
-- `baseline_bytes` is measured before the workload, `peak_bytes` is the backend-specific peak, and `delta_bytes` is
-  always their direct difference.
+- On CPU, `baseline_bytes` is the first summed profiler timeline point. On CUDA and MPS, it is reserved allocator
+  memory read immediately before peak reset. `peak_bytes` is the backend-specific peak, and `delta_bytes` is always
+  their direct difference. A CPU workload with no PyTorch-tracked memory event raises `RuntimeError` because it has no
+  timeline point to report.
 - MPS requires a PyTorch version exposing public resettable peak statistics through `torch.accelerator.memory`; older
   versions raise `NotImplementedError`.
 

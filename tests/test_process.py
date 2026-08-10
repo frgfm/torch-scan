@@ -60,6 +60,13 @@ def test_measure_peak_memory_cpu_training():
     assert stats["delta_bytes"] > 0
 
 
+def test_measure_peak_memory_cpu_without_memory_events():
+    with pytest.raises(RuntimeError, match="no memory timeline points for 'cpu'") as exc_info:
+        process.measure_peak_memory(lambda: None, device="cpu")
+
+    assert torch.__version__ in str(exc_info.value)
+
+
 def test_measure_peak_memory_preserves_workload_exception_and_cleans_temporary_file(monkeypatch, tmp_path):
     created_paths = []
     named_temporary_file = process_memory.tempfile.NamedTemporaryFile
@@ -193,6 +200,28 @@ def test_measure_peak_memory_missing_mps_api(monkeypatch):
     assert "mps" in str(exc_info.value)
     assert torch.__version__ in str(exc_info.value)
     assert "torch.accelerator.memory.memory_reserved" in str(exc_info.value)
+
+
+def test_measure_peak_memory_unimplemented_mps_api(monkeypatch):
+    workload = Mock()
+    memory = SimpleNamespace(
+        memory_reserved=Mock(side_effect=RuntimeError("Allocator for mps is not a DeviceAllocator")),
+        reset_peak_memory_stats=Mock(),
+        max_memory_reserved=Mock(),
+        max_memory_allocated=Mock(),
+    )
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    monkeypatch.setattr(torch.mps, "synchronize", Mock())
+    monkeypatch.setattr(torch, "accelerator", SimpleNamespace(memory=memory), raising=False)
+
+    with pytest.raises(NotImplementedError) as exc_info:
+        process.measure_peak_memory(workload, device="mps")
+
+    message = str(exc_info.value)
+    assert "mps" in message
+    assert torch.__version__ in message
+    assert "torch.accelerator.memory.memory_reserved" in message
+    workload.assert_not_called()
 
 
 def test_measure_peak_memory_unavailable_cuda(monkeypatch):

@@ -38,6 +38,11 @@ def _measure_cpu(workload: Callable[[], object]) -> dict[str, str | int]:
             _, category_points = json.load(timeline_file)
 
         totals = [sum(int(value) for value in point) for point in category_points]
+        if not totals:
+            raise RuntimeError(
+                f"PyTorch {torch.__version__} exported no memory timeline points for 'cpu'; "
+                "the workload produced no PyTorch-tracked CPU memory events."
+            )
         baseline = totals[0]
         peak = max(totals)
         return {
@@ -135,8 +140,15 @@ def _measure_mps(workload: Callable[[], object], device: torch.device) -> dict[s
     mps = cast(Any, mps)
     memory = cast(Any, memory)
     mps.synchronize()
-    baseline = int(memory.memory_reserved(normalized_device))
-    memory.reset_peak_memory_stats(normalized_device)
+    try:
+        baseline = int(memory.memory_reserved(normalized_device))
+        memory.reset_peak_memory_stats(normalized_device)
+    except (NotImplementedError, RuntimeError) as error:
+        api_names = ", ".join(f"torch.accelerator.memory.{name}" for name in required_apis)
+        raise NotImplementedError(
+            f"Peak memory measurement for '{normalized_device}' is unavailable in PyTorch {torch.__version__}; "
+            f"required APIs are not implemented for MPS: {api_names}."
+        ) from error
     workload()
     mps.synchronize()
     peak = int(memory.max_memory_reserved(normalized_device))

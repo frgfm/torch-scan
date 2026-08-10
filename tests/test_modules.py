@@ -3,6 +3,7 @@ import torch
 from torch import nn
 
 from torchscan import modules
+from torchscan.modules.flops import flops_transformer_decoderlayer, flops_transformer_encoderlayer
 
 
 class MyModule(nn.Module):
@@ -54,11 +55,73 @@ def test_module_flops(mod, input_shape, output_shape, expected_val):
     assert modules.module_flops(mod, (torch.zeros(input_shape),), torch.zeros(output_shape)) == expected_val
 
 
+@pytest.mark.parametrize(
+    ("elementwise_affine", "bias", "expected"), [(True, True, 204), (True, False, 180), (False, True, 156)]
+)
+def test_layernorm_flops(elementwise_affine, bias, expected):
+    mod = nn.LayerNorm(4, elementwise_affine=elementwise_affine, bias=bias)
+    input_t = torch.zeros((2, 3, 4))
+
+    assert modules.module_flops(mod, (input_t,), mod(input_t)) == expected
+
+
+@pytest.mark.parametrize("batch_first", [False, True])
+@pytest.mark.parametrize(("bias", "self_expected", "cross_expected"), [(False, 1021, 1485), (True, 1117, 1613)])
+def test_multihead_attention_flops(batch_first, bias, self_expected, cross_expected):
+    mod = nn.MultiheadAttention(4, 2, dropout=0, bias=bias, batch_first=batch_first)
+    shape = lambda length: (2, length, 4) if batch_first else (length, 2, 4)
+    query, key, value = torch.rand(shape(3)), torch.rand(shape(5)), torch.rand(shape(5))
+
+    self_out = mod(query, query, query, need_weights=False)
+    cross_out = mod(query, key, value, need_weights=False)
+    assert modules.module_flops(mod, (query, query, query), self_out) == self_expected
+    assert modules.module_flops(mod, (query, key, value), cross_out) == cross_expected
+
+    averaged_out = mod(query, key, value)
+    assert modules.module_flops(mod, (query, key, value), averaged_out) == cross_expected + 60
+
+    mask = torch.zeros((3, 5))
+    masked_out = mod(query, key, value, None, False, mask)
+    assert modules.module_flops(mod, (query, key, value, None, False, mask), masked_out) == cross_expected + 60
+
+
 def test_transformer_flops():
-    mod = nn.Transformer(d_model=64, nhead=4, num_encoder_layers=3)
-    src = torch.rand((10, 16, 64))
-    tgt = torch.rand((20, 16, 64))
-    assert modules.module_flops(mod, (src, tgt), mod(src, tgt)) == 774952841
+    mod = nn.Transformer(
+        d_model=4,
+        nhead=2,
+        num_encoder_layers=1,
+        num_decoder_layers=1,
+        dim_feedforward=8,
+        dropout=0,
+        batch_first=True,
+    )
+    src = torch.rand((1, 3, 4))
+    tgt = torch.rand((1, 2, 4))
+
+    assert flops_transformer_encoderlayer(mod.encoder.layers[0], (src,)) == 1195
+    assert flops_transformer_decoderlayer(mod.decoder.layers[0], (tgt, src)) == 1270
+    assert modules.module_flops(mod, (src, tgt), mod(src, tgt)) == 2635
+
+    masks = (
+        torch.zeros((3, 3), dtype=torch.bool),
+        torch.zeros((2, 2), dtype=torch.bool),
+        torch.zeros((2, 3), dtype=torch.bool),
+        torch.zeros((1, 3), dtype=torch.bool),
+        torch.zeros((1, 2), dtype=torch.bool),
+        torch.zeros((1, 3), dtype=torch.bool),
+    )
+    assert modules.module_flops(mod, (src, tgt, *masks), mod(src, tgt, *masks)) == 2711
+
+
+def test_transformer_flops_rejects_unverified_options():
+    query = torch.rand((2, 3, 4))
+    mod = nn.MultiheadAttention(4, 2, batch_first=True, add_zero_attn=True)
+    with pytest.raises(NotImplementedError, match="add_bias_kv or add_zero_attn"):
+        modules.module_flops(mod, (query, query, query), None)
+
+    transformer = nn.Transformer(d_model=4, nhead=2, dim_feedforward=8, activation="gelu", batch_first=True)
+    with pytest.raises(NotImplementedError, match="default ReLU"):
+        modules.module_flops(transformer, (query, query), None)
 
 
 def test_module_macs_warning():

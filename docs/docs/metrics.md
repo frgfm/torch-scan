@@ -10,6 +10,10 @@ Parameter and buffer counts come from the tensors registered on the model. Model
 
 FLOPs are floating-point operations performed during the forward pass. They are not FLOP/s, which is a throughput measurement. TorchScan uses formulas for recognized module types, so totals can omit unsupported or functional operations.
 
+Native `torch.nn.Transformer` summaries use one composite FLOP total. This deliberately avoids adding the same attention and projection work again from child modules. Its MAC, DMA, receptive-field, and child-level FLOP values remain unsupported and emit warnings rather than extending partial child totals to the full Transformer.
+
+The attention formula counts Q/K/V and output projections, scaling, both matrix multiplications, softmax, active training dropout, visible positional masks, and averaged attention weights when returned. A root Transformer's positional masks are forwarded to each affected layer formula. Forward-hook inputs do not include keyword arguments, so masks supplied as kwargs cannot be counted.
+
 ## MACs
 
 A MAC is a multiply-accumulate operation. For a Linear layer, TorchScan counts:

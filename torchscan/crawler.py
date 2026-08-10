@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 import torch
+from torch import nn
 from torch.nn import Module
 
 from .modules import module_dmas, module_flops, module_macs, module_rf
@@ -140,6 +141,30 @@ def crawl_module(
     pre_fw_handles, post_fw_handles = [], []
     pre_hook_tracker: dict[int, Any] = {}
     post_hook_tracker: dict[int, Any] = {}
+    root_module = module
+
+    if not isinstance(module, nn.Transformer) and any(
+        isinstance(
+            child,
+            (
+                nn.Transformer,
+                nn.TransformerEncoder,
+                nn.TransformerDecoder,
+                nn.TransformerEncoderLayer,
+                nn.TransformerDecoderLayer,
+            ),
+        )
+        for child in module.modules()
+    ):
+        raise NotImplementedError("Only a native nn.Transformer passed directly to summary() is supported.")
+
+    def _is_metric_leaf(current: Module) -> bool:
+        # MHA owns its functional out_proj; only a root Transformer owns its composite FLOPs.
+        return (
+            not any(current.children())
+            or isinstance(current, nn.MultiheadAttention)
+            or (current is root_module and isinstance(root_module, nn.Transformer))
+        )
 
     # Hook definition
     def _hook_info(module: Module, name: str) -> None:
@@ -154,7 +179,7 @@ def crawl_module(
                 grad_params, nograd_params, param_size = 0, 0, 0
                 num_buffers, buffer_size = 0, 0
                 is_shared = False
-                if not any(module.children()):
+                if _is_metric_leaf(module):
                     # Parameters
                     for p in module.parameters():
                         if id(p) not in param_ids:
@@ -198,7 +223,7 @@ def crawl_module(
                     "s": 1,
                     "p": 0,
                     "is_shared": is_shared,
-                    "is_leaf": not any(module.children()),
+                    "is_leaf": _is_metric_leaf(module),
                 })
                 # Mark the next hook for execution
                 pre_hook_tracker[id(module)]["target"] += 1
@@ -229,12 +254,13 @@ def crawl_module(
 
                 output_shape, primary_out = _normalize_output(out)
 
-                if any(module.children()):
+                if not _is_metric_leaf(module):
                     tot_flops, tot_macs, tot_dmas = 0, 0, 0
                     current_rf, current_stride, current_padding = 1.0, 1.0, 0.0
                 else:
                     # Compute stats for standalone layers
-                    tot_flops = module_flops(module, inputs, primary_out)
+                    flops_out = out if isinstance(module, nn.MultiheadAttention) else primary_out
+                    tot_flops = module_flops(module, inputs, flops_out)
                     tot_macs = module_macs(module, inputs[0], primary_out)
                     tot_dmas = module_dmas(module, inputs[0], primary_out)
                     current_rf, current_stride, current_padding = module_rf(module, inputs[0], primary_out)
@@ -270,7 +296,11 @@ def crawl_module(
     info: list[dict[str, Any]] = []
     param_ids: list[int] = []
     call_idxs: dict[int, list[int]] = {}
-    apply(module, _hook_info)
+    if isinstance(module, nn.Transformer):
+        # Descendant hooks would double-count the root's analytic composite total.
+        _hook_info(module, module.__class__.__name__.lower())
+    else:
+        apply(module, _hook_info)
 
     # Forward
     try:

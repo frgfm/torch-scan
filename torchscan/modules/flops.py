@@ -5,11 +5,11 @@
 
 import math
 import warnings
-from typing import Callable, Tuple, cast
+from typing import Any, Callable, Tuple, cast
 
-import torch
 from torch import Tensor, nn
 from torch.nn import Module
+from torch.nn import functional as F
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
@@ -17,7 +17,7 @@ from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _Av
 __all__ = ["module_flops"]
 
 
-def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...], out: Any) -> int:
     """Estimate the number of floating point operations performed by the module
 
     Args:
@@ -59,6 +59,10 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Tensor, .
         return flops_adaptive_avgpool(module, inputs, out)
     if isinstance(module, nn.Dropout):
         return flops_dropout(module, inputs)
+    if isinstance(module, nn.MultiheadAttention):
+        return flops_mha(module, inputs, out)
+    if isinstance(module, nn.LayerNorm):
+        return flops_layernorm(module, inputs)
     if isinstance(module, nn.Transformer):
         return flops_transformer(module, inputs)
     warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
@@ -217,123 +221,131 @@ def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], ou
 
 
 def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
-    """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
-    # Compute current mean
-    norm_ops = math.prod(module.normalized_shape) * math.prod(inputs[0].shape[: -len(module.normalized_shape)])
-    # current var (sub the mean, square it, sum them, divide by remaining shape)
-    norm_ops += 3 * inputs[0].numel()
-    # for each channel, add eps and running_var, sqrt it
-    norm_ops += math.prod(module.normalized_shape) * 2
-    # For each element, sub running_mean, div by denom
-    norm_ops += inputs[0].numel() * 2
-    # For each element, mul by gamma, add beta
-    scale_ops = inputs[0].numel() * 2 if module.elementwise_affine else 0
-
-    return norm_ops + scale_ops
+    """FLOPs estimation for `torch.nn.LayerNorm`"""
+    numel = inputs[0].numel()
+    rows = numel // math.prod(module.normalized_shape)
+    return 6 * numel + 2 * rows + numel * int(module.weight is not None) + numel * int(module.bias is not None)
 
 
-def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Tensor, ...]) -> int:
+def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Any, ...], out: Any = None) -> int:
     """FLOPs estimation for `torch.nn.MultiheadAttention`"""
-    # Input projection
-    q, k, _ = inputs[:3]
-    batch_size = q.shape[1]
-    if module._qkv_same_embed_dim:
-        tot_flops = 3 * flops_linear(
-            nn.Linear(
-                module.in_proj_weight.shape[1], module.in_proj_weight.shape[0], bias=module.in_proj_bias is not None
-            ),
-            (torch.empty((batch_size, module.in_proj_weight.shape[1])),),
-        )
-    else:
-        tot_flops = flops_linear(
-            nn.Linear(
-                module.q_proj_weight.shape[1], module.q_proj_weight.shape[0], bias=module.in_proj_bias is not None
-            ),
-            (torch.empty((batch_size, module.q_proj_weight.shape[1])),),
-        )
-        tot_flops += flops_linear(
-            nn.Linear(module.k_proj_weight.shape[1], module.k_proj_weight.shape[0], bias=module.bias_k is not None),
-            (torch.empty((batch_size, module.k_proj_weight.shape[1])),),
-        )
-        tot_flops += flops_linear(
-            nn.Linear(module.v_proj_weight.shape[1], module.v_proj_weight.shape[0], bias=module.bias_v is not None),
-            (torch.empty((batch_size, module.v_proj_weight.shape[1])),),
-        )
+    q, k, v = inputs[:3]
+    if q.ndim != 3 or k.ndim != 3 or v.ndim != 3:
+        raise NotImplementedError("MultiheadAttention FLOPs only support batched 3D inputs.")
+    if module.bias_k is not None or module.bias_v is not None or module.add_zero_attn:
+        raise NotImplementedError("MultiheadAttention FLOPs do not support add_bias_kv or add_zero_attn.")
 
-    # Q (L, B, embed_dim) --> (B * num_heads, L, head_dim=embed_dim / num_heads)
+    batch_dim, sequence_dim = (0, 1) if module.batch_first else (1, 0)
+    batch_size = q.shape[batch_dim]
+    target_length = q.shape[sequence_dim]
+    source_length = k.shape[sequence_dim]
+    projection_bias = int(module.in_proj_bias is not None)
 
-    # Scaled dot-product attention (cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/functional.py#L5083)
-    # sqrt the embedding dim and div the Q with it
-    tot_flops += 1 + batch_size * module.num_heads * module.head_dim * q.shape[0]
-    # batched matrix multiply
-    tot_flops += batch_size * module.num_heads * (q.shape[0] * k.shape[0]) * (2 * module.head_dim - 1)
-    # attention mask
-    if inputs[-1] is not None:
-        tot_flops += batch_size * module.num_heads * (q.shape[0] * k.shape[0])
+    tot_flops = sum(
+        math.prod(tensor.shape[:-1]) * module.embed_dim * (2 * tensor.shape[-1] - 1 + projection_bias)
+        for tensor in (q, k, v)
+    )
+    # One reciprocal-square-root plus one scale multiplication per query element.
+    tot_flops += 1 + batch_size * module.num_heads * target_length * module.head_dim
+    tot_flops += batch_size * module.num_heads * target_length * source_length * (2 * module.head_dim - 1)
 
-    # softmax
-    tot_flops += batch_size * module.num_heads * q.shape[0] * (3 * k.shape[0] - 1)
-    # dropout
-    if module.dropout > 0:
-        tot_flops += batch_size * module.num_heads * (q.shape[0] * k.shape[0])
+    # Positional MHA slots 3 and 5 are key_padding_mask and attn_mask.
+    visible_masks = int(len(inputs) > 3 and inputs[3] is not None) + int(len(inputs) > 5 and inputs[5] is not None)
+    tot_flops += visible_masks * batch_size * module.num_heads * target_length * source_length
+    tot_flops += batch_size * module.num_heads * target_length * (3 * source_length - 1)
+    if module.training and module.dropout > 0:
+        tot_flops += batch_size * module.num_heads * target_length * source_length
+    tot_flops += batch_size * module.num_heads * target_length * module.head_dim * (2 * source_length - 1)
+    tot_flops += flops_linear(module.out_proj, (q,))
 
-    # batched matrix multiply
-    tot_flops += batch_size * module.num_heads * (q.shape[0] * module.head_dim) * (2 * k.shape[0] - 1)
-    # Output linear projection
-    tot_flops += flops_linear(module.out_proj, (torch.empty((q.shape[0], module.out_proj.in_features)),))
+    if isinstance(out, (tuple, list)) and len(out) > 1 and isinstance(out[1], Tensor) and out[1].ndim == 3:
+        tot_flops += batch_size * module.num_heads * target_length * source_length
 
     return tot_flops
 
 
-def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: Tuple[Tensor, ...]) -> int:
-    """FLOPs estimation for `torch.nn.TransformerEncoderLayer`"""
-    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3)
+def flops_transformer_feedforward(
+    module: nn.TransformerEncoderLayer | nn.TransformerDecoderLayer, inputs: Tuple[Tensor, ...]
+) -> int:
+    """FLOPs estimation for a Transformer layer feed-forward block."""
+    if module.activation is not F.relu:
+        raise NotImplementedError("Transformer FLOPs only support the default ReLU activation.")
 
-    tot_flops += flops_dropout(module.dropout1, inputs) + inputs[0].numel()
+    num_hidden = math.prod(inputs[0].shape[:-1]) * module.linear1.out_features
+    dropout_flops = num_hidden if module.dropout.training and module.dropout.p > 0 else 0
+    return flops_linear(module.linear1, inputs) + num_hidden + dropout_flops + flops_linear(module.linear2, inputs)
+
+
+def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: Tuple[Any, ...]) -> int:
+    """FLOPs estimation for `torch.nn.TransformerEncoderLayer`"""
+    input_flops = inputs[0].numel()
+    src_mask = inputs[1] if len(inputs) > 1 else None
+    src_key_padding_mask = inputs[2] if len(inputs) > 2 else None
+    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3 + (src_key_padding_mask, False, src_mask))
+
+    tot_flops += (flops_dropout(module.dropout1, inputs) if module.dropout1.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm1, inputs)
-    # get linear 1 output size
-    tot_flops += flops_linear(module.linear1, inputs)
-    tot_flops += module_flops(module.activation, inputs, torch.empty(1))
-    tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
-    # get linear 2 output size
-    tot_flops += flops_dropout(module.dropout2, inputs) + inputs[0].numel()
+    tot_flops += flops_transformer_feedforward(module, inputs)
+    tot_flops += (flops_dropout(module.dropout2, inputs) if module.dropout2.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm2, inputs)
 
     return tot_flops
 
 
-def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: Tuple[Tensor, ...]) -> int:
-    """FLOPs estimation for `torch.nn.TransformerEncoderLayer`"""
-    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3)
+def flops_transformer_decoderlayer(module: nn.TransformerDecoderLayer, inputs: Tuple[Any, ...]) -> int:
+    """FLOPs estimation for `torch.nn.TransformerDecoderLayer`"""
+    input_flops = inputs[0].numel()
+    tgt_mask = inputs[2] if len(inputs) > 2 else None
+    memory_mask = inputs[3] if len(inputs) > 3 else None
+    tgt_key_padding_mask = inputs[4] if len(inputs) > 4 else None
+    memory_key_padding_mask = inputs[5] if len(inputs) > 5 else None
+    tot_flops = flops_mha(module.self_attn, (inputs[0],) * 3 + (tgt_key_padding_mask, False, tgt_mask))
 
-    tot_flops += flops_dropout(module.dropout1, inputs) + inputs[0].numel()
+    tot_flops += (flops_dropout(module.dropout1, inputs) if module.dropout1.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm1, inputs)
 
-    tot_flops = flops_mha(module.multihead_attn, (inputs[0], inputs[1], inputs[1]))
-    tot_flops += flops_dropout(module.dropout2, inputs) + inputs[0].numel()
+    tot_flops += flops_mha(
+        module.multihead_attn,
+        (inputs[0], inputs[1], inputs[1], memory_key_padding_mask, False, memory_mask),
+    )
+    tot_flops += (flops_dropout(module.dropout2, inputs) if module.dropout2.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm2, inputs)
 
-    # get linear 1 output size
-    tot_flops += flops_linear(module.linear1, inputs)
-    tot_flops += module_flops(module.activation, inputs, torch.empty(1))
-    tot_flops += flops_dropout(module.dropout, inputs) + flops_linear(module.linear2, inputs)
-    # get linear 2 output size
-    tot_flops += flops_dropout(module.dropout3, inputs) + inputs[0].numel()
+    tot_flops += flops_transformer_feedforward(module, inputs)
+    tot_flops += (flops_dropout(module.dropout3, inputs) if module.dropout3.training else 0) + input_flops
     tot_flops += flops_layernorm(module.norm3, inputs)
 
     return tot_flops
 
 
-def flops_transformer(module: nn.Transformer, inputs: Tuple[Tensor, ...]) -> int:
+def flops_transformer(module: nn.Transformer, inputs: Tuple[Any, ...]) -> int:
     """FLOPs estimation for `torch.nn.Transformer`"""
-    encoder_flops = len(module.encoder.layers) * flops_transformer_encoderlayer(module.encoder.layers[0], inputs)
+    if not isinstance(module.encoder, nn.TransformerEncoder) or not isinstance(module.decoder, nn.TransformerDecoder):
+        raise NotImplementedError("Transformer FLOPs only support the native encoder and decoder stacks.")
+
+    src_mask = inputs[2] if len(inputs) > 2 else None
+    tgt_mask = inputs[3] if len(inputs) > 3 else None
+    memory_mask = inputs[4] if len(inputs) > 4 else None
+    src_key_padding_mask = inputs[5] if len(inputs) > 5 else None
+    tgt_key_padding_mask = inputs[6] if len(inputs) > 6 else None
+    memory_key_padding_mask = inputs[7] if len(inputs) > 7 else None
+    src_inputs = (inputs[0], src_mask, src_key_padding_mask)
+    decoder_inputs = (
+        inputs[1],
+        inputs[0],
+        tgt_mask,
+        memory_mask,
+        tgt_key_padding_mask,
+        memory_key_padding_mask,
+    )
+    encoder_flops = sum(flops_transformer_encoderlayer(layer, src_inputs) for layer in module.encoder.layers)
 
     if isinstance(module.encoder.norm, nn.LayerNorm):
-        encoder_flops += flops_layernorm(module.encoder.norm, inputs)
+        encoder_flops += flops_layernorm(module.encoder.norm, (inputs[0],))
 
-    decoder_flops = len(module.decoder.layers) * flops_transformer_decoderlayer(module.decoder.layers[0], inputs)
+    decoder_flops = sum(flops_transformer_decoderlayer(layer, decoder_inputs) for layer in module.decoder.layers)
 
     if isinstance(module.decoder.norm, nn.LayerNorm):
-        decoder_flops += flops_layernorm(module.decoder.norm, inputs)
+        decoder_flops += flops_layernorm(module.decoder.norm, (inputs[1],))
 
     return encoder_flops + decoder_flops

@@ -3,6 +3,7 @@ import sys
 from collections import OrderedDict
 
 import pytest
+import torch
 import torch.nn as nn
 
 from torchscan import crawler
@@ -131,6 +132,111 @@ def test_crawl_module_multiple_inputs():
 
     res = crawler.crawl_module(TwoInputs(), [(4,), (6,)])
     assert res["overall"]["grad_params"] == 24
+
+
+def test_crawl_module_generated_integer_input():
+    class CaptureEmbedding(nn.Embedding):
+        def forward(self, tensor):
+            self.received = tensor
+            return super().forward(tensor)
+
+    mod = CaptureEmbedding(8, 4)
+    crawler.crawl_module(mod, (3,), dtype=torch.long)
+
+    assert mod.received.shape == (1, 3)
+    assert mod.received.dtype == torch.long
+    assert mod.received.device == mod.weight.device
+
+
+def test_crawl_module_input_data():
+    class CaptureLinear(nn.Linear):
+        def forward(self, tensor):
+            self.received = tensor
+            self.grad_enabled = torch.is_grad_enabled()
+            return super().forward(tensor)
+
+    mod = CaptureLinear(4, 2)
+    input_data = torch.randn(5, 2, 4)
+    expected = input_data.clone()
+    expected_device = input_data.device
+    expected_dtype = input_data.dtype
+
+    crawler.crawl_module(mod, input_data=input_data)
+
+    assert mod.received is input_data
+    assert torch.equal(input_data, expected)
+    assert input_data.shape == (5, 2, 4)
+    assert input_data.device == expected_device
+    assert input_data.dtype == expected_dtype
+    assert not mod.grad_enabled
+    assert mod.training
+
+
+def test_crawl_module_correlated_input_data():
+    class CorrelatedInputs(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.embedding = nn.Embedding(8, 4)
+
+        def forward(self, xs, xs_len):
+            self.received = (xs, xs_len)
+            if xs.shape[1] != xs_len.max().item():
+                raise ValueError("xs and xs_len are not correlated")
+            positions = torch.arange(xs.shape[1], device=xs.device)
+            mask = positions < xs_len[:, None]
+            return self.embedding(xs) * mask.unsqueeze(-1)
+
+    mod = CorrelatedInputs()
+    xs = torch.tensor([[1, 2, 0, 0], [3, 4, 5, 6]])
+    xs_len = torch.tensor([2, 4])
+    expected_xs = xs.clone()
+    expected_xs_len = xs_len.clone()
+
+    res = crawler.crawl_module(mod, input_data=(xs, xs_len))
+
+    assert mod.received[0] is xs
+    assert mod.received[1] is xs_len
+    assert torch.equal(xs, expected_xs)
+    assert torch.equal(xs_len, expected_xs_len)
+    assert res["overall"]["grad_params"] == 32
+
+
+def test_crawl_module_requires_one_input_source():
+    mod = nn.Linear(4, 2)
+
+    with pytest.raises(ValueError, match="Exactly one of input_shape and input_data"):
+        crawler.crawl_module(mod)
+    with pytest.raises(ValueError, match="Exactly one of input_shape and input_data"):
+        crawler.crawl_module(mod, (4,), input_data=torch.randn(2, 4))
+
+
+def test_crawl_module_rejects_dtype_with_input_data():
+    with pytest.raises(ValueError, match="dtype cannot be used with input_data"):
+        crawler.crawl_module(nn.Linear(4, 2), dtype=torch.float32, input_data=torch.randn(2, 4))
+
+
+@pytest.mark.parametrize("input_data", [[], ()])
+def test_crawl_module_rejects_empty_input_data(input_data):
+    with pytest.raises(ValueError, match="input_data must not be empty"):
+        crawler.crawl_module(nn.Linear(4, 2), input_data=input_data)
+
+
+@pytest.mark.parametrize(
+    ("input_data", "message"),
+    [
+        ({"input": torch.randn(2, 4)}, r"input_data.*dict"),
+        ([torch.randn(2, 4), "invalid"], r"input_data\[1\].*str"),
+        ((torch.randn(2, 4), 1), r"input_data\[1\].*int"),
+    ],
+)
+def test_crawl_module_rejects_invalid_input_data(input_data, message):
+    with pytest.raises(TypeError, match=message):
+        crawler.crawl_module(nn.Linear(4, 2), input_data=input_data)
+
+
+def test_summary_input_data(capsys):
+    crawler.summary(nn.Linear(4, 2), input_data=torch.randn(2, 4))
+    assert "Total params: 10" in capsys.readouterr().out
 
 
 def test_summary():

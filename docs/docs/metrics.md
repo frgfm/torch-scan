@@ -48,6 +48,6 @@ Receptive-field values are accumulated in module execution order. This works for
 
 > **`TypeError` involving an output path:** A hooked output contains an unsupported leaf or no tensor. Tuple, list, and dictionary outputs are supported when their leaves are tensors or `None`.
 
-> **Data-dependent inputs fail:** TorchScan generates independent random tensors from shapes. Correlated real inputs and an `input_data` argument are not supported.
+> **Data-dependent inputs:** Inputs generated from `input_shape` are independent random tensors. Use `input_data` for correlated, masked, integer, or otherwise caller-defined tensors.
 
 See [Model and input support](model-support.md) for the complete compatibility contract and the [package reference](torchscan.md) for API details.

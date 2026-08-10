@@ -4,7 +4,8 @@
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 import os
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import torch
 from torch.nn import Module
@@ -16,9 +17,9 @@ from .utils import aggregate_info, format_info
 __all__ = ["crawl_module", "summary"]
 
 
-def _normalize_output(out: Any) -> Tuple[Any, torch.Tensor]:
+def _normalize_output(out: Any) -> tuple[Any, torch.Tensor]:
     """Return recursive shape metadata and the first tensor in a hooked output."""
-    primary: Optional[torch.Tensor] = None
+    primary: torch.Tensor | None = None
 
     def _shape(value: Any, path: str) -> Any:
         nonlocal primary
@@ -44,7 +45,7 @@ def _normalize_output(out: Any) -> Tuple[Any, torch.Tensor]:
     return output_shape, primary
 
 
-def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str] = None) -> None:
+def apply(module: Module, fn: Callable[[Module, str], None], name: str | None = None) -> None:
     """Modified version of `torch.nn.Module.apply` method
 
     Args:
@@ -61,10 +62,12 @@ def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str]
 
 def crawl_module(
     module: Module,
-    input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
-    dtype: Optional[Union[torch.dtype, Iterable[torch.dtype]]] = None,
-) -> Dict[str, Any]:
-    """Collect module information using a synthetic forward pass.
+    input_shape: list[tuple[int, ...]] | tuple[int, ...] | None = None,
+    dtype: torch.dtype | Iterable[torch.dtype] | None = None,
+    *,
+    input_data: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...] | None = None,
+) -> dict[str, Any]:
+    """Collect module information using a forward pass.
 
     Examples:
         >>> import torch.nn as nn
@@ -76,6 +79,7 @@ def crawl_module(
         module: Module to inspect. It must contain at least one parameter.
         input_shape: Input shape without a batch dimension, or one shape per positional tensor input.
         dtype: One data type for every input, or one data type per input. Defaults to the first parameter's data type.
+        input_data: One tensor or a non-empty list or tuple of positional tensor inputs, including all dimensions.
 
     Returns:
         A dictionary containing per-layer information in `layers`, parameter and buffer totals in `overall`, and
@@ -83,16 +87,16 @@ def crawl_module(
 
     Raises:
         StopIteration: If the module has no parameters.
-        TypeError: If a hooked output has an unsupported leaf or contains no tensor.
+        TypeError: If `input_data` is invalid or a hooked output has an unsupported leaf or contains no tensor.
+        ValueError: If exactly one input source is not provided, `input_data` is empty, or `dtype` is used with it.
 
     Notes:
-        This runs a random batch of one on the first parameter's device, without gradients, in the module's current
-        training mode. Functional operations are not observed by module hooks. See the model-support and metrics guides
-        for the complete limitations.
+        `input_shape` creates a random batch of one on the first parameter's device. `input_data` is forwarded unchanged.
+        Both paths run without gradients in the module's current training mode. Functional operations are not observed
+        by module hooks. See the model-support and metrics guides for the complete limitations.
     """
     # Get device and data types from model
     p = next(module.parameters())
-    device = p.device
 
     cuda_overhead, framework_overhead = 0.0, 0.0
     if torch.cuda.is_available():
@@ -101,26 +105,45 @@ def crawl_module(
         # Allocator RAM - Used RAM
         framework_overhead = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024**2
 
-    # input
-    if not isinstance(input_shape, list):
-        input_shape = [input_shape]
-    if dtype is None:
-        dtype = p.data.dtype
-    if isinstance(dtype, torch.dtype):
-        dtype = [dtype] * len(input_shape)
-    # Tensor arguments
-    input_ts = [
-        torch.rand(1, *in_shape).to(dtype=dtype_, device=device)
-        for in_shape, dtype_ in zip(input_shape, dtype, strict=False)
-    ]
+    # Input
+    if (input_shape is None) == (input_data is None):
+        raise ValueError("Exactly one of input_shape and input_data must be provided.")
+    if input_data is not None:
+        if dtype is not None:
+            raise ValueError("dtype cannot be used with input_data.")
+        if isinstance(input_data, torch.Tensor):
+            input_ts = [input_data]
+        elif isinstance(input_data, (list, tuple)):
+            if not input_data:
+                raise ValueError("input_data must not be empty.")
+            for idx, input_t in enumerate(input_data):
+                if not isinstance(input_t, torch.Tensor):
+                    raise TypeError(f"input_data[{idx}] must be a torch.Tensor, got {type(input_t).__name__}.")
+            input_ts = list(input_data)
+        else:
+            raise TypeError(
+                "input_data must be a torch.Tensor or a non-empty list/tuple of torch.Tensor objects, "
+                f"got {type(input_data).__name__}."
+            )
+    elif input_shape is not None:
+        if not isinstance(input_shape, list):
+            input_shape = [input_shape]
+        if dtype is None:
+            dtype = p.data.dtype
+        if isinstance(dtype, torch.dtype):
+            dtype = [dtype] * len(input_shape)
+        input_ts = [
+            torch.rand(1, *in_shape).to(dtype=dtype_, device=p.device)
+            for in_shape, dtype_ in zip(input_shape, dtype, strict=False)
+        ]
 
     pre_fw_handles, post_fw_handles = [], []
-    pre_hook_tracker: Dict[int, Any] = {}
-    post_hook_tracker: Dict[int, Any] = {}
+    pre_hook_tracker: dict[int, Any] = {}
+    post_hook_tracker: dict[int, Any] = {}
 
     # Hook definition
     def _hook_info(module: Module, name: str) -> None:
-        def _pre_hook(module: Module, inp: Tuple[torch.Tensor, ...]) -> None:
+        def _pre_hook(module: Module, inp: tuple[torch.Tensor, ...]) -> None:
             """Pre-forward hook"""
             # Check that another hook has not been triggered at this forward stage
             if not pre_hook_tracker[id(module)]["is_used"] and (
@@ -187,7 +210,7 @@ def crawl_module(
                 pre_hook_tracker[id(module)]["current"] = 0
                 pre_hook_tracker[id(module)]["is_used"] = False
 
-        def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], out: Any) -> None:
+        def _fwd_hook(module: Module, inputs: tuple[torch.Tensor, ...], out: Any) -> None:
             """Post-forward hook"""
             # Check that another hook has not been triggered at this forward stage
             if not post_hook_tracker[id(module)]["is_used"] and (
@@ -244,9 +267,9 @@ def crawl_module(
         post_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}
 
     # Hook model
-    info: List[Dict[str, Any]] = []
-    param_ids: List[int] = []
-    call_idxs: Dict[int, List[int]] = {}
+    info: list[dict[str, Any]] = []
+    param_ids: list[int] = []
+    call_idxs: dict[int, list[int]] = {}
     apply(module, _hook_info)
 
     # Forward
@@ -308,13 +331,15 @@ def crawl_module(
 
 def summary(
     module: Module,
-    input_shape: Union[List[Tuple[int, ...]], Tuple[int, ...]],
+    input_shape: list[tuple[int, ...]] | tuple[int, ...] | None = None,
     wrap_mode: str = "mid",
-    max_depth: Optional[int] = None,
+    max_depth: int | None = None,
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
+    *,
+    input_data: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...] | None = None,
 ) -> None:
-    """Print a module summary for one or more expected tensor input shapes.
+    """Print a module summary for expected shapes or caller-provided tensors.
 
     Examples:
         >>> import torch.nn as nn
@@ -329,17 +354,18 @@ def summary(
         max_depth: Maximum depth of layer information.
         receptive_field: Whether to estimate receptive fields.
         effective_rf_stats: If `receptive_field` is true, also display effective stride and padding.
+        input_data: One tensor or a non-empty list or tuple of positional tensor inputs, including all dimensions.
 
     Raises:
         StopIteration: If the module has no parameters.
-        TypeError: If a hooked output has an unsupported leaf or contains no tensor.
-        ValueError: If `wrap_mode` is invalid or `max_depth` is greater than the module depth.
+        TypeError: If `input_data` is invalid or a hooked output has an unsupported leaf or contains no tensor.
+        ValueError: If the inputs, `wrap_mode`, or `max_depth` are invalid.
 
     Notes:
-        This function has the same synthetic-forward and module-hook limitations as `crawl_module`.
+        This function has the same forward-pass and module-hook limitations as `crawl_module`.
     """
     # Get the summary dict
-    module_info = crawl_module(module, input_shape)
+    module_info = crawl_module(module, input_shape, input_data=input_data)
     # Aggregate until max_depth
     if isinstance(max_depth, int):
         module_info = aggregate_info(module_info, max_depth)

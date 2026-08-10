@@ -1,6 +1,6 @@
 # Model and input support
 
-TorchScan attaches forward hooks to `torch.nn.Module` objects and executes one synthetic forward pass. This makes module-based models easy to inspect, but it does not trace arbitrary tensor operations.
+TorchScan attaches forward hooks to `torch.nn.Module` objects and executes one forward pass. This makes module-based models easy to inspect, but it does not trace arbitrary tensor operations.
 
 ## Inputs
 
@@ -30,9 +30,33 @@ class TwoInputs(nn.Module):
 summary(TwoInputs().eval(), [(4,), (6,)])
 ```
 
-The list maps to positional arguments in order. `crawl_module` also accepts one `dtype` for all inputs or an iterable with one dtype per input.
+The list maps to positional arguments in order. `crawl_module` also accepts one `dtype` for all generated inputs or an iterable with one dtype per input.
 
-TorchScan accepts shapes, not real input tensors. Inputs are generated independently with `torch.rand`, so correlated or data-dependent inputs cannot be represented. An `input_data` argument is not currently supported.
+For correlated, integer, masked, or otherwise data-dependent inputs, pass the tensors themselves:
+
+```python
+import torch
+import torch.nn as nn
+from torchscan import summary
+
+
+class Encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embedding = nn.Embedding(8, 4)
+
+    def forward(self, xs, xs_len):
+        positions = torch.arange(xs.shape[1], device=xs.device)
+        mask = positions < xs_len[:, None]
+        return self.embedding(xs) * mask.unsqueeze(-1)
+
+
+xs = torch.tensor([[1, 2, 0, 0], [3, 4, 5, 6]])
+xs_len = torch.tensor([2, 4])
+summary(Encoder().eval(), input_data=(xs, xs_len))
+```
+
+A single tensor is one positional model argument. A non-empty list or tuple supplies positional arguments in order. Each tensor already includes every dimension, and TorchScan forwards it without cloning, casting, moving, detaching, or adding a batch dimension. Exactly one of `input_shape` and `input_data` is required; `dtype` is only valid with generated `input_shape` inputs. Keyword/dictionary inputs and non-tensor leaves are not supported.
 
 ## Outputs
 
@@ -44,8 +68,9 @@ This makes tuple-returning modules such as `torch.nn.MultiheadAttention` safe to
 
 ## Synthetic execution
 
-- A batch dimension of one is added to every input shape.
-- Inputs use the first model parameter's device and, by default, its dtype.
+- A batch dimension of one is added to every generated input shape.
+- Generated inputs use the first model parameter's device and, by default, its dtype.
+- Caller-provided tensors retain their complete shape, value, device, and dtype.
 - The forward pass runs under `torch.no_grad()` but preserves the model's current training mode.
 - Calling `eval()` first is recommended because training-mode modules can update buffers.
 - The model must contain at least one parameter.

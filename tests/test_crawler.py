@@ -50,8 +50,9 @@ def test_crawl_module_shared_parameters_and_buffers():
     assert res["overall"]["param_size"] == num_params * mod[0].weight.element_size()
     assert res["overall"]["num_buffers"] == num_buffers
     assert res["overall"]["buffer_size"] == num_buffers * mod[0].stats.element_size()
-    assert sum(layer["grad_params"] for layer in res["layers"]) == num_params
-    assert sum(layer["num_buffers"] for layer in res["layers"]) == num_buffers
+    assert (layers["0"]["grad_params"], layers["1"]["grad_params"]) == (num_params, 0)
+    assert (layers["0"]["num_buffers"], layers["1"]["num_buffers"]) == (num_buffers, 0)
+    assert layers["0"]["is_shared"] is False
     assert layers["1"]["is_shared"] is True
 
 

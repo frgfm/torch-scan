@@ -1,4 +1,3 @@
-import os
 from unittest.mock import Mock
 
 import pytest
@@ -22,11 +21,11 @@ def test_get_process_gpu_ram_fallback(monkeypatch, output, expected):
     monkeypatch.setattr("torchscan.process.memory.subprocess.run", Mock(side_effect=FileNotFoundError("nvidia-smi")))
 
     with pytest.warns(UserWarning, match="Parsing NVIDIA-SMI failed"):
-        assert process.get_process_gpu_ram(os.getpid()) == expected
+        assert process.get_process_gpu_ram(123) == expected
 
 
 def test_get_process_gpu_ram_without_cuda(monkeypatch):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
     with pytest.warns(UserWarning, match=r"CUDA is unavailable to PyTorch\."):
-        assert process.get_process_gpu_ram(os.getpid()) == 0
+        assert process.get_process_gpu_ram(123) == 0

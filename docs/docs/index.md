@@ -27,18 +27,20 @@ summary(model, (3, 32, 32), max_depth=1)
 Representative output (abridged):
 
 ```text
-Layer                        Type                  Output Shape              Param #
-==========================================================================================
-sequential                   Sequential            (-1, 8, 30, 30)           0
-├─0                          Conv2d                (-1, 8, 30, 30)           224
-├─1                          ReLU                  (-1, 8, 30, 30)           0
-==========================================================================================
+Layer         Type          Output Shape       Param #    Trainable
+===================================================================
+sequential    Sequential    (-1, 8, 30, 30)    0          -
+├─0           Conv2d        (-1, 8, 30, 30)    224        True
+├─1           ReLU          (-1, 8, 30, 30)    0          -
+===================================================================
 Trainable params: 224
 Model size (params + buffers): 0.00 Mb
 Floating Point Operations on forward: 396.00 kFLOPs
 Multiply-Accumulations on forward: 194.40 kMACs
 Direct memory accesses on forward: 216.22 kDMAs
 ```
+
+`Trainable` is `True` when any parameter in the displayed layer requires gradients, including a layer with a frozen weight and trainable bias. It is `False` when the layer has parameters but all are frozen, and `-` when it has no parameters. The same rule applies to parameters aggregated by `max_depth`.
 
 `input_shape` excludes the batch dimension. TorchScan creates a synthetic batch of one on the model's current device, using its current mode; calling `eval()` avoids training-state updates during inspection.
 

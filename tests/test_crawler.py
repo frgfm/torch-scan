@@ -1,4 +1,5 @@
 import io
+import json
 import sys
 from collections import OrderedDict
 
@@ -30,7 +31,21 @@ def test_crawl_module(capsys):
     res = crawler.crawl_module(mod, (3, 32, 32))
     assert isinstance(res, dict)
     assert res["overall"]["grad_params"] == 224
+    assert set(res["overall"]) == {
+        "grad_params",
+        "nograd_params",
+        "param_size",
+        "num_buffers",
+        "buffer_size",
+        "flops",
+        "macs",
+        "dmas",
+    }
+    assert res["overall"]["flops"] == 388_800
+    assert res["overall"]["macs"] == 194_400
+    assert res["overall"]["dmas"] == 201_824
     assert res["layers"][0]["output_shape"] == (-1, 8, 30, 30)
+    json.dumps(res)
 
     crawler.summary(mod, (3, 32, 32))
     assert "conv2d    Conv2d    (-1, 8, 30, 30)    224" in capsys.readouterr().out
@@ -54,6 +69,17 @@ def test_crawl_module_shared_parameters_and_buffers():
     assert (layers["0"]["num_buffers"], layers["1"]["num_buffers"]) == (num_buffers, 0)
     assert layers["0"]["is_shared"] is False
     assert layers["1"]["is_shared"] is True
+
+
+def test_crawl_module_aggregates_compute_metrics():
+    mod = nn.Sequential(nn.Linear(8, 4), nn.ReLU(), nn.Linear(4, 2))
+
+    res = crawler.crawl_module(mod, (8,))
+    expected = {"flops": 84, "macs": 40, "dmas": 72}
+
+    assert {metric: res["overall"][metric] for metric in expected} == expected
+    for metric in expected:
+        assert res["overall"][metric] == sum(layer[metric] for layer in res["layers"])
 
 
 def test_crawl_module_two_outputs():

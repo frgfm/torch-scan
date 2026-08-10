@@ -94,6 +94,19 @@ For reference, here are explanations of a few acronyms:
 - **MACs**: mutiply-accumulate operations (cf. [wikipedia](https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation))
 - **DMAs**: direct memory accesses (many argue that it is more relevant than FLOPs or MACs to compare model inference speeds cf. [wikipedia](https://en.wikipedia.org/wiki/Direct_memory_access))
 
+For machine-readable output, inspect the same model with `crawl_module`:
+
+```python
+from torchscan import crawl_module
+
+report = crawl_module(model, (3, 224, 224))
+compute = {metric: report["overall"][metric] for metric in ("flops", "macs", "dmas")}
+```
+
+These are raw totals for separate metrics, suitable for serialization or before/after comparison; see
+[Understanding results](docs/docs/metrics.md) and [Model and input support](docs/docs/model-support.md) for their
+interpretation and coverage.
+
 
 
 Additionally, for highway nets (models without multiple branches / skip connections), `torchscan` supports receptive field estimation.

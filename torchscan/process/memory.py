@@ -43,10 +43,12 @@ def get_process_gpu_ram(pid: int) -> float:
         warnings.warn(f"raised: {e}. Parsing NVIDIA-SMI failed.", stacklevel=1)
 
     # Default to overall RAM usage for this process on the GPU
-    ram_str = torch.cuda.list_gpu_processes().split("\n")
+    ram_str = torch.cuda.list_gpu_processes().splitlines()
     # Take the first process running on the GPU
-    if ram_str[1].startswith("process"):
-        return float(ram_str[1].split()[3])
+    if len(ram_str) > 1:
+        process_info = ram_str[1].split()
+        if len(process_info) > 3 and process_info[0] == "process":
+            return float(process_info[3])
 
     # Otherwise assume the process is running exclusively on CPU
     return 0.0

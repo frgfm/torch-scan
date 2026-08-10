@@ -88,10 +88,14 @@ def format_line_str(
         col_w = [None] * 7
 
     max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
+    output_shape = layer["output_shape"]
+    output_shape_str = str(output_shape)
+    if not isinstance(output_shape, tuple) or not all(isinstance(dim, int) for dim in output_shape):
+        output_shape_str = wrap_string(output_shape_str, col_w[2] if isinstance(col_w[2], int) else 100, mode="end")
     line_str = [
         format_s(wrap_string(format_name(layer["name"], layer["depth"]), max_len, mode=wrap_mode), col_w[0], col_w[0]),
         format_s(layer["type"], col_w[1], col_w[1]),
-        format_s(str(layer["output_shape"]), col_w[2], col_w[2]),
+        format_s(output_shape_str, col_w[2], col_w[2]),
         format_s(f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:,}", col_w[3], col_w[3]),
     ]
 

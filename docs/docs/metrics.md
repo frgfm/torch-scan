@@ -46,7 +46,7 @@ Receptive-field values are accumulated in module execution order. This works for
 
 > **Negative RAM overhead:** Treat the value as measurement noise, especially for small models or multi-GPU processes. Parameter and buffer size remains separate from this estimate.
 
-> **`AttributeError` involving `shape`:** A hooked module returned a tuple, list, or dictionary. Multiple outputs are not supported.
+> **`TypeError` involving an output path:** A hooked output contains an unsupported leaf or no tensor. Tuple, list, and dictionary outputs are supported when their leaves are tensors or `None`.
 
 > **Data-dependent inputs fail:** TorchScan generates independent random tensors from shapes. Correlated real inputs and an `input_data` argument are not supported.
 

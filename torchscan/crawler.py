@@ -16,6 +16,34 @@ from .utils import aggregate_info, format_info
 __all__ = ["crawl_module", "summary"]
 
 
+def _normalize_output(out: Any) -> Tuple[Any, torch.Tensor]:
+    """Return recursive shape metadata and the first tensor in a hooked output."""
+    primary: Optional[torch.Tensor] = None
+
+    def _shape(value: Any, path: str) -> Any:
+        nonlocal primary
+        if isinstance(value, torch.Tensor):
+            if primary is None:
+                primary = value
+            return (-1, *value.shape[1:])
+        if value is None:
+            return None
+        if isinstance(value, tuple):
+            return tuple(_shape(item, f"{path}[{idx}]") for idx, item in enumerate(value))
+        if isinstance(value, list):
+            return [_shape(item, f"{path}[{idx}]") for idx, item in enumerate(value)]
+        if isinstance(value, dict):
+            return {key: _shape(item, f"{path}[{key!r}]") for key, item in value.items()}
+        raise TypeError(
+            f"Unsupported output at {path}: {type(value).__name__} is not a tensor, tuple, list, dict, or None"
+        )
+
+    output_shape = _shape(out, "output")
+    if primary is None:
+        raise TypeError("Unsupported output at output: no tensor found")
+    return output_shape, primary
+
+
 def apply(module: Module, fn: Callable[[Module, str], None], name: Optional[str] = None) -> None:
     """Modified version of `torch.nn.Module.apply` method
 
@@ -55,7 +83,7 @@ def crawl_module(
 
     Raises:
         StopIteration: If the module has no parameters.
-        AttributeError: If a hooked module returns something other than a tensor.
+        TypeError: If a hooked output has an unsupported leaf or contains no tensor.
 
     Notes:
         This runs a random batch of one on the first parameter's device, without gradients, in the module's current
@@ -159,7 +187,7 @@ def crawl_module(
                 pre_hook_tracker[id(module)]["current"] = 0
                 pre_hook_tracker[id(module)]["is_used"] = False
 
-        def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], out: torch.Tensor) -> None:
+        def _fwd_hook(module: Module, inputs: Tuple[torch.Tensor, ...], out: Any) -> None:
             """Post-forward hook"""
             # Check that another hook has not been triggered at this forward stage
             if not post_hook_tracker[id(module)]["is_used"] and (
@@ -176,18 +204,20 @@ def crawl_module(
                             fw_idx = idx
                             break
 
+                output_shape, primary_out = _normalize_output(out)
+
                 if any(module.children()):
                     tot_flops, tot_macs, tot_dmas = 0, 0, 0
                     current_rf, current_stride, current_padding = 1.0, 1.0, 0.0
                 else:
                     # Compute stats for standalone layers
-                    tot_flops = module_flops(module, inputs, out)
-                    tot_macs = module_macs(module, inputs[0], out)
-                    tot_dmas = module_dmas(module, inputs[0], out)
-                    current_rf, current_stride, current_padding = module_rf(module, inputs[0], out)
+                    tot_flops = module_flops(module, inputs, primary_out)
+                    tot_macs = module_macs(module, inputs[0], primary_out)
+                    tot_dmas = module_dmas(module, inputs[0], primary_out)
+                    current_rf, current_stride, current_padding = module_rf(module, inputs[0], primary_out)
 
                 # Update layer information
-                info[fw_idx]["output_shape"] = (-1, *out.shape[1:])
+                info[fw_idx]["output_shape"] = output_shape
                 # Add them, since some modules can be used several times
                 info[fw_idx]["flops"] = tot_flops
                 info[fw_idx]["macs"] = tot_macs
@@ -220,14 +250,13 @@ def crawl_module(
     apply(module, _hook_info)
 
     # Forward
-    with torch.no_grad():
-        module(*input_ts)
-
-    # Removes all hooks using their handles
-    for handle in pre_fw_handles:
-        handle.remove()
-    for handle in post_fw_handles:
-        handle.remove()
+    try:
+        with torch.no_grad():
+            module(*input_ts)
+    finally:
+        # Removes all hooks using their handles
+        for handle in (*pre_fw_handles, *post_fw_handles):
+            handle.remove()
 
     reserved_ram, diff_ram = 0.0, 0.0
     if torch.cuda.is_available():
@@ -303,7 +332,7 @@ def summary(
 
     Raises:
         StopIteration: If the module has no parameters.
-        AttributeError: If a hooked module returns something other than a tensor.
+        TypeError: If a hooked output has an unsupported leaf or contains no tensor.
         ValueError: If `wrap_mode` is invalid or `max_depth` is greater than the module depth.
 
     Notes:

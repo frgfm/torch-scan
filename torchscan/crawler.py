@@ -83,8 +83,8 @@ def crawl_module(
         input_data: One tensor or a non-empty list or tuple of positional tensor inputs, including all dimensions.
 
     Returns:
-        A dictionary containing per-layer information in `layers`, parameter and buffer totals in `overall`, and
-        process and framework memory estimates in `overheads`.
+        A dictionary containing per-layer information in `layers`, parameter, buffer, FLOP, MAC, and DMA totals in
+        `overall`, and process and framework memory estimates in `overheads`.
 
     Raises:
         StopIteration: If the module has no parameters.
@@ -359,6 +359,9 @@ def crawl_module(
             "param_size": param_size,
             "num_buffers": num_buffers,
             "buffer_size": buffer_size,
+            "flops": sum(layer["flops"] for layer in info),
+            "macs": sum(layer["macs"] for layer in info),
+            "dmas": sum(layer["dmas"] for layer in info),
         },
     }
 

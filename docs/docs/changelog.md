@@ -7,6 +7,7 @@ This version is available from `main` but is not published on PyPI.
 - Require Python 3.11 or later and PyTorch 2.x.
 - Modernize the packaging, development, and continuous-integration toolchain.
 - Migrate the documentation to MkDocs Material.
+- Expose raw model-wide `flops`, `macs`, and `dmas` totals under `crawl_module(...)['overall']`.
 
 ## v0.1.2 (2022-08-03)
 

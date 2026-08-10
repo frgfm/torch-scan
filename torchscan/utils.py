@@ -85,9 +85,10 @@ def format_line_str(
 ) -> List[str]:
     """Wrap all information into multiple lines"""
     if col_w is None:
-        col_w = [None] * 7
+        col_w = [None] * 8
 
     max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
+    num_params = layer["grad_params"] + layer["nograd_params"]
     output_shape = layer["output_shape"]
     output_shape_str = str(output_shape)
     if not isinstance(output_shape, tuple) or not all(isinstance(dim, int) for dim in output_shape):
@@ -96,15 +97,16 @@ def format_line_str(
         format_s(wrap_string(format_name(layer["name"], layer["depth"]), max_len, mode=wrap_mode), col_w[0], col_w[0]),
         format_s(layer["type"], col_w[1], col_w[1]),
         format_s(output_shape_str, col_w[2], col_w[2]),
-        format_s(f"{layer['grad_params'] + layer['nograd_params'] + layer['num_buffers']:,}", col_w[3], col_w[3]),
+        format_s(f"{num_params + layer['num_buffers']:,}", col_w[3], col_w[3]),
+        format_s("-" if num_params == 0 else str(layer["grad_params"] > 0), col_w[4], col_w[4]),
     ]
 
     if receptive_field:
-        line_str.append(format_s(f"{layer['rf']:.0f}", col_w[4], col_w[4]))
+        line_str.append(format_s(f"{layer['rf']:.0f}", col_w[5], col_w[5]))
         if effective_rf_stats:
             line_str.extend((
-                format_s(f"{layer['s']:.0f}", col_w[5], col_w[5]),
-                format_s(f"{layer['p']:.0f}", col_w[6], col_w[6]),
+                format_s(f"{layer['s']:.0f}", col_w[6], col_w[6]),
+                format_s(f"{layer['p']:.0f}", col_w[7], col_w[7]),
             ))
 
     return line_str
@@ -127,8 +129,17 @@ def format_info(
     margin = 4
     # Dynamic col width
     # Init with headers
-    headers = ["Layer", "Type", "Output Shape", "Param #", "Receptive field", "Effective stride", "Effective padding"]
-    max_w = [27, 20, 25, 15, 15, 16, 17]
+    headers = [
+        "Layer",
+        "Type",
+        "Output Shape",
+        "Param #",
+        "Trainable",
+        "Receptive field",
+        "Effective stride",
+        "Effective padding",
+    ]
+    max_w = [27, 20, 25, 15, 9, 15, 16, 17]
     col_w = [len(s) for s in headers]
     for layer in module_info["layers"]:
         col_w = [
@@ -144,11 +155,11 @@ def format_info(
     col_w = list(starmap(min, zip(col_w, max_w, strict=False)))
 
     if not receptive_field:
-        col_w = col_w[:4]
-        headers = headers[:4]
-    elif not effective_rf_stats:
         col_w = col_w[:5]
         headers = headers[:5]
+    elif not effective_rf_stats:
+        col_w = col_w[:6]
+        headers = headers[:6]
 
     # Define separating lines
     line_length = sum(col_w) + (len(col_w) - 1) * margin

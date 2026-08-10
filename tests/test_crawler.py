@@ -179,3 +179,39 @@ def test_summary():
     # Reset redirect.
     sys.stdout = sys.__stdout__
     assert captured_output.getvalue().split("\n")[4].startswith("├─features ")
+
+
+def test_summary_trainable_column(capsys):
+    mod = nn.Sequential(
+        OrderedDict([
+            ("activation", nn.ReLU()),
+            ("trainable", nn.Linear(4, 4)),
+            ("frozen", nn.Linear(4, 4)),
+            ("mixed", nn.Linear(4, 4)),
+            ("nested", nn.Sequential(nn.Linear(4, 4))),
+        ])
+    )
+    mod.frozen.requires_grad_(False)
+    mod.mixed.weight.requires_grad_(False)
+    mod.nested[0].weight.requires_grad_(False)
+
+    crawler.summary(mod, (4,))
+    output = capsys.readouterr().out.splitlines()
+
+    assert output[1].rpartition("  ")[-1] == "Trainable"
+    assert next(line for line in output if "├─activation" in line).split()[-1] == "-"
+    assert next(line for line in output if "├─trainable" in line).split()[-1] == "True"
+    assert next(line for line in output if "├─frozen" in line).split()[-1] == "False"
+    assert next(line for line in output if "├─mixed" in line).split()[-1] == "True"
+    assert "Trainable params: 28" in output
+    assert "Non-trainable params: 52" in output
+    assert "Total params: 80" in output
+
+    crawler.summary(mod, (4,), max_depth=1)
+    aggregated_output = capsys.readouterr().out.splitlines()
+    assert next(line for line in aggregated_output if "├─nested" in line).split()[-1] == "True"
+
+    mod.nested[0].bias.requires_grad_(False)
+    crawler.summary(mod, (4,), max_depth=1)
+    frozen_aggregated_output = capsys.readouterr().out.splitlines()
+    assert next(line for line in frozen_aggregated_output if "├─nested" in line).split()[-1] == "False"

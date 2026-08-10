@@ -36,7 +36,11 @@ TorchScan accepts shapes, not real input tensors. Inputs are generated independe
 
 ## Outputs
 
-Every hooked module must return one tensor. Tuple, list, and dictionary outputs are not currently supported and can raise an `AttributeError`.
+Hooked modules may return tensors nested in tuples, lists, or dictionaries. Output shapes preserve that structure, dictionary keys and insertion order, and `None` leaves. Unsupported leaves raise a `TypeError` that identifies their path.
+
+Metric calculators still receive one numerical output: the first tensor found in deterministic depth-first container order. Secondary tensors are displayed but are not folded into FLOP, MAC, DMA, or receptive-field totals. An output containing no tensor raises a `TypeError`.
+
+This makes tuple-returning modules such as `torch.nn.MultiheadAttention` safe to inspect. Native attention and Transformer metric coverage remains out of scope; tuple safety alone does not make those totals meaningful.
 
 ## Synthetic execution
 
@@ -62,7 +66,7 @@ Every hooked module must return one tensor. Tuple, list, and dictionary outputs 
 | Dropout | ✓ | ✓ | ✓ | ✓ |
 | `torch.nn.Transformer` | ✓* | — | — | — |
 
-*The low-level FLOP calculator recognizes `torch.nn.Transformer`, but `summary()` does not currently support it end to end because hooked child modules return tuples. This does not imply support for arbitrary Transformer or `einops` implementations.*
+*The low-level FLOP calculator recognizes `torch.nn.Transformer`, but native attention and Transformer coverage in `summary()` is not complete. This does not imply meaningful totals for arbitrary Transformer or `einops` implementations.*
 
 ## Custom and functional operations
 

@@ -38,7 +38,7 @@ TorchScan accepts shapes, not real input tensors. Inputs are generated independe
 
 Hooked modules may return tensors nested in tuples, lists, or dictionaries. Output shapes preserve that structure, dictionary keys and insertion order, and `None` leaves. Unsupported leaves raise a `TypeError` that identifies their path.
 
-Metric calculators still receive one numerical output: the first tensor found in deterministic depth-first container order. Secondary tensors are displayed but are not folded into FLOP, MAC, DMA, or receptive-field totals. An output containing no tensor raises a `TypeError`.
+Metric calculators still receive one numerical output: the first tensor found in deterministic depth-first container order. Secondary tensors remain in the displayed shape structure but are not folded into FLOP, MAC, DMA, or receptive-field totals. Long structures are abbreviated with `[...]` in the summary table; `crawl_module()` retains the complete value. An output containing no tensor raises a `TypeError`.
 
 This makes tuple-returning modules such as `torch.nn.MultiheadAttention` safe to inspect. Native attention and Transformer metric coverage remains out of scope; tuple safety alone does not make those totals meaningful.
 

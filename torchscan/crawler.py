@@ -250,14 +250,13 @@ def crawl_module(
     apply(module, _hook_info)
 
     # Forward
-    with torch.no_grad():
-        module(*input_ts)
-
-    # Removes all hooks using their handles
-    for handle in pre_fw_handles:
-        handle.remove()
-    for handle in post_fw_handles:
-        handle.remove()
+    try:
+        with torch.no_grad():
+            module(*input_ts)
+    finally:
+        # Removes all hooks using their handles
+        for handle in (*pre_fw_handles, *post_fw_handles):
+            handle.remove()
 
     reserved_ram, diff_ram = 0.0, 0.0
     if torch.cuda.is_available():

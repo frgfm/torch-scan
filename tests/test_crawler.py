@@ -36,20 +36,20 @@ def test_crawl_module(capsys):
 
 
 def test_crawl_module_two_outputs():
-    class TwoOutputs(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.linear = nn.Linear(4, 4)
-
+    class TwoOutputs(nn.Conv2d):
         def forward(self, x):
-            out = self.linear(x)
-            return out, out[:, :2]
+            out = super().forward(x)
+            return out, out[..., :1, :1]
 
-    res = crawler.crawl_module(TwoOutputs(), (4,))
-    assert res["layers"][0]["output_shape"] == ((-1, 4), (-1, 2))
+    layer = crawler.crawl_module(TwoOutputs(1, 2, 3), (1, 5, 5))["layers"][0]
+    plain_layer = crawler.crawl_module(nn.Conv2d(1, 2, 3), (1, 5, 5))["layers"][0]
+    assert layer["output_shape"] == ((-1, 2, 3, 3), (-1, 2, 1, 1))
+    assert tuple(layer[key] for key in ("flops", "macs", "dmas", "rf", "s", "p")) == tuple(
+        plain_layer[key] for key in ("flops", "macs", "dmas", "rf", "s", "p")
+    )
 
 
-def test_crawl_module_nested_outputs():
+def test_crawl_module_nested_outputs(capsys):
     class NestedOutputs(nn.Module):
         def __init__(self):
             super().__init__()
@@ -59,9 +59,14 @@ def test_crawl_module_nested_outputs():
             out = self.linear(x)
             return out, [out[:, :2], {"scores": out[:, :1], "optional": None}]
 
-    output_shape = crawler.crawl_module(NestedOutputs(), (4,))["layers"][0]["output_shape"]
+    mod = NestedOutputs()
+    output_shape = crawler.crawl_module(mod, (4,))["layers"][0]["output_shape"]
     assert output_shape == ((-1, 4), [(-1, 2), {"scores": (-1, 1), "optional": None}])
     assert list(output_shape[1][1]) == ["scores", "optional"]
+
+    crawler.summary(mod, (4,))
+    line = next(line for line in capsys.readouterr().out.splitlines() if "NestedOutputs" in line)
+    assert "[...]" in line
 
 
 def test_crawl_module_maxpool_with_indices():
@@ -99,8 +104,10 @@ def test_crawl_module_rejects_unsupported_output_leaf():
         def forward(self, x):
             return {"value": self.linear(x), "label": "unsupported"}
 
+    mod = UnsupportedOutput()
     with pytest.raises(TypeError, match=r"output\['label'\].*str"):
-        crawler.crawl_module(UnsupportedOutput(), (4,))
+        crawler.crawl_module(mod, (4,))
+    assert all(not child._forward_hooks and not child._forward_pre_hooks for child in mod.modules())
 
 
 def test_crawl_module_rejects_output_without_tensor():

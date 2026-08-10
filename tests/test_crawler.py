@@ -36,6 +36,26 @@ def test_crawl_module(capsys):
     assert "conv2d    Conv2d    (-1, 8, 30, 30)    224" in capsys.readouterr().out
 
 
+def test_crawl_module_shared_parameters_and_buffers():
+    mod = nn.Sequential(nn.Linear(4, 4, bias=False), nn.Linear(4, 4, bias=False))
+    mod[1].weight = mod[0].weight
+    mod[0].register_buffer("stats", torch.ones(4))
+    mod[1].register_buffer("stats", mod[0].stats)
+    res = crawler.crawl_module(mod, (4,))
+    layers = {layer["name"]: layer for layer in res["layers"]}
+    num_params = mod[0].weight.numel()
+    num_buffers = mod[0].stats.numel()
+
+    assert res["overall"]["grad_params"] == num_params
+    assert res["overall"]["param_size"] == num_params * mod[0].weight.element_size()
+    assert res["overall"]["num_buffers"] == num_buffers
+    assert res["overall"]["buffer_size"] == num_buffers * mod[0].stats.element_size()
+    assert (layers["0"]["grad_params"], layers["1"]["grad_params"]) == (num_params, 0)
+    assert (layers["0"]["num_buffers"], layers["1"]["num_buffers"]) == (num_buffers, 0)
+    assert layers["0"]["is_shared"] is False
+    assert layers["1"]["is_shared"] is True
+
+
 def test_crawl_module_two_outputs():
     class TwoOutputs(nn.Conv2d):
         def forward(self, x):

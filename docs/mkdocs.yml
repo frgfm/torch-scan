@@ -79,9 +79,14 @@ nav:
   - Home: index.md
   - Getting started:
       - Installation: installing.md
+      - Agent quickstart: agent-quickstart.md
+      - Examples: examples.md
+      - Migrating to v0.2: migration-v02.md
   - Guides:
       - Model and input support: model-support.md
       - Understanding results: metrics.md
+      - Methodology: methodology.md
+      - Report schema: report-schema.md
   - Package reference:
       - TorchScan: torchscan.md
       - Modules: modules.md

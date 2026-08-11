@@ -3,249 +3,125 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/frgfm/torch-scan/actions/workflows/builds.yml">
-    <img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/builds.yml?branch=main&label=CI&logo=github&style=flat-square">
+  <a href="https://github.com/frgfm/torch-scan/actions/workflows/package.yml">
+    <img alt="CI Status" src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/package.yml?branch=main&label=CI&logo=github&style=flat-square">
   </a>
-  <a href="https://github.com/astral-sh/ruff">
-    <img src="https://img.shields.io/badge/Linter-Ruff-FCC21B?style=flat-square&logo=ruff&logoColor=white" alt="ruff">
-  </a>
-  <a href="https://github.com/astral-sh/ruff">
-    <img src="https://img.shields.io/badge/Formatter-Ruff-FCC21B?style=flat-square&logo=Python&logoColor=white" alt="ruff">
-  </a>
-  <a href="https://www.codacy.com/gh/frgfm/torch-scan/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=frgfm/torch-scan&amp;utm_campaign=Badge_Grade"><img src="https://app.codacy.com/project/badge/Grade/9dc68e8bfce34d9dbc8b44a350e9adc7"/></a>
   <a href="https://codecov.io/gh/frgfm/torch-scan">
     <img src="https://img.shields.io/codecov/c/github/frgfm/torch-scan.svg?logo=codecov&style=flat-square&label=Coverage" alt="Test coverage percentage">
   </a>
-</p>
-<p align="center">
   <a href="https://pypi.org/project/torchscan/">
-    <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=PyPI&logoColor=fff&style=flat-square&label=PyPI" alt="PyPi Version">
+    <img src="https://img.shields.io/pypi/v/torchscan.svg?logo=PyPI&logoColor=fff&style=flat-square&label=PyPI" alt="PyPI version">
   </a>
-  <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?logo=Python&label=Python&logoColor=fff&style=flat-square" alt="pyversions">
+  <img src="https://img.shields.io/pypi/pyversions/torchscan.svg?logo=Python&label=Python&logoColor=fff&style=flat-square" alt="Supported Python versions">
   <a href="https://github.com/frgfm/torch-scan/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/frgfm/torch-scan.svg?label=License&logoColor=fff&style=flat-square" alt="License">
   </a>
 </p>
-<p align="center">
-  <a href="https://frgfm.github.io/torch-scan">
-    <img src="https://img.shields.io/github/actions/workflow/status/frgfm/torch-scan/page-build.yml?branch=main&label=Documentation&logo=read-the-docs&logoColor=white&style=flat-square" alt="Documentation Status">
-  </a>
-</p>
 
+TorchScan inspects a PyTorch model and returns a JSON-serializable report of its structure, parameters, inputs,
+module estimates, and operator FLOPs. Every metric says whether it is complete, partial, or unavailable, so an
+unsupported operation cannot masquerade as zero.
 
-The very useful [summary](https://www.tensorflow.org/api_docs/python/tf/keras/Model#summary) method of `tf.keras.Model` but for PyTorch, with more useful information.
-
-
-## Quick Tour
-
-### Inspecting your PyTorch architecture
-
-Similarly to the `torchsummary` implementation, `torchscan` brings useful module information into readable format. For nested complex architectures, you can use a maximum depth of display as follows:
+## Quickstart
 
 ```python
-from torchvision.models import densenet121
-from torchscan import summary
+import json
 
-model = densenet121().eval().cuda()
-summary(model, (3, 224, 224), max_depth=2)
+import torch.nn as nn
+from torchscan import crawl_module, summary
+
+model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU())
+
+# Print the human-readable table and receive the same structured report.
+report = summary(model, (3, 32, 32))
+json.dumps(report)
+
+# Or collect the report without printing the table.
+report = crawl_module(model, (3, 32, 32), strict=True)
 ```
 
-which would yield
-
-```shell
-_______________________________________________________________________________________________________
-Layer                        Type                  Output Shape              Param #          Trainable
-=======================================================================================================
-densenet                     DenseNet              (-1, 1000)                0                -
-├─features                   Sequential            (-1, 1024, 7, 7)          0                -
-|    └─conv0                 Conv2d                (-1, 64, 112, 112)        9,408            True
-|    └─norm0                 BatchNorm2d           (-1, 64, 112, 112)        257              True
-|    └─relu0                 ReLU                  (-1, 64, 112, 112)        0                -
-|    └─pool0                 MaxPool2d             (-1, 64, 56, 56)          0                -
-|    └─denseblock1           _DenseBlock           (-1, 256, 56, 56)         338,316          True
-|    └─transition1           _Transition           (-1, 128, 28, 28)         33,793           True
-|    └─denseblock2           _DenseBlock           (-1, 512, 28, 28)         930,072          True
-|    └─transition2           _Transition           (-1, 256, 14, 14)         133,121          True
-|    └─denseblock3           _DenseBlock           (-1, 1024, 14, 14)        2,873,904        True
-|    └─transition3           _Transition           (-1, 512, 7, 7)           528,385          True
-|    └─denseblock4           _DenseBlock           (-1, 1024, 7, 7)          2,186,272        True
-|    └─norm5                 BatchNorm2d           (-1, 1024, 7, 7)          4,097            True
-├─classifier                 Linear                (-1, 1000)                1,025,000        True
-=======================================================================================================
-Trainable params: 7,978,856
-Non-trainable params: 0
-Total params: 7,978,856
--------------------------------------------------------------------------------------------------------
-Model size (params + buffers): 30.76 Mb
-Framework & CUDA overhead: 423.57 Mb
-Total RAM usage: 454.32 Mb
--------------------------------------------------------------------------------------------------------
-Floating Point Operations on forward: 5.74 GFLOPs
-Multiply-Accumulations on forward: 2.87 GMACs
-Direct memory accesses on forward: 2.90 GDMAs
-_______________________________________________________________________________________________________
-```
-
-Results are aggregated to the selected depth for improved readability.
-
-For reference, here are explanations of a few acronyms:
-
-- **FLOPs**: floating-point operations (not to be confused with FLOPS which is FLOPs per second)
-- **MACs**: mutiply-accumulate operations (cf. [wikipedia](https://en.wikipedia.org/wiki/Multiply%E2%80%93accumulate_operation))
-- **DMAs**: direct memory accesses (many argue that it is more relevant than FLOPs or MACs to compare model inference speeds cf. [wikipedia](https://en.wikipedia.org/wiki/Direct_memory_access))
-
-For machine-readable output, inspect the same model with `crawl_module`:
+`input_shape` excludes the batch dimension. For realistic calls—including masks, scalars, `None`, and nested
+containers—pass complete `args` and `kwargs` instead:
 
 ```python
-from torchscan import crawl_module
-
-report = crawl_module(model, (3, 224, 224))
-compute = {metric: report["overall"][metric] for metric in ("flops", "macs", "dmas")}
+report = crawl_module(
+    model,
+    args=(pixel_values,),
+    kwargs={"attention_mask": attention_mask, "return_dict": True},
+)
 ```
 
-These are raw totals for separate metrics, suitable for serialization or before/after comparison; see
-[Understanding results](docs/docs/metrics.md) and [Model and input support](docs/docs/model-support.md) for their
-interpretation and coverage.
+TorchScan temporarily evaluates the model under inference mode and restores every module's original training state.
+It records input metadata, never tensor values.
 
+## Workload measurements
 
-
-Additionally, for highway nets (models without multiple branches / skip connections), `torchscan` supports receptive field estimation.
+Use zero-argument callables when the owner needs full control over execution:
 
 ```python
-from torchvision.models import vgg16
-from torchscan import summary
+from torchscan import measure_flops
+from torchscan.process import measure_peak_memory
 
-model = vgg16().eval().cuda()
-summary(model, (3, 224, 224), receptive_field=True, max_depth=0)
+flops = measure_flops(lambda: model(inputs))
+memory = measure_peak_memory(lambda: model(inputs), device=inputs.device)
 ```
 
-which will add the layer's receptive field (relatively to the last convolutional layer) to the summary.
+`measure_flops` uses PyTorch's operator dispatch. `measure_peak_memory` invokes the workload exactly once and reports
+backend-specific PyTorch memory—not process RSS or total device memory.
 
+## Before/after comparison
 
-## Setup
+```python
+from torchscan import compare_reports
 
-Python 3.11 (or newer) and [pip](https://pip.pypa.io/en/stable/) are required to install Torchscan.
+diff = compare_reports(before, after)
+```
 
-### Stable release
+`compare_reports` propagates incomplete metrics. It does not store baselines or decide whether a model fits a budget;
+the model owner supplies those policies.
 
-You can install the last stable release of the package using [pypi](https://pypi.org/project/torch-scan/) as follows:
+## Trust the status, not only the number
+
+- `complete`: the requested scope was counted; `value` is authoritative for the documented method.
+- `partial`: `known_value` is a lower bound and diagnostics identify missing work.
+- `unavailable`: TorchScan cannot produce the metric for this execution.
+
+Use `strict=True` when incomplete module analysis must stop automation. See the
+[report schema](https://frgfm.github.io/torch-scan/report-schema.html) and
+[methodology](https://frgfm.github.io/torch-scan/methodology.html) before comparing results.
+
+## Installation
+
+TorchScan v0.2 requires Python 3.11+ and PyTorch 2.1+:
 
 ```shell
 pip install torchscan
 ```
 
-### Developer installation
-
-Alternatively, if you wish to use the latest features of the project that haven't made their way to a release yet, you can install the package from source using [uv](https://docs.astral.sh/uv/):
+Development installation:
 
 ```shell
 git clone https://github.com/frgfm/torch-scan.git
 cd torch-scan
-uv venv
+uv venv --python 3.11
 uv pip install -e .
 ```
 
+## Documentation
 
-## Benchmark
+- [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html)
+- [Examples](https://frgfm.github.io/torch-scan/examples.html)
+- [Model and input support](https://frgfm.github.io/torch-scan/model-support.html)
+- [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html)
+- [API reference](https://frgfm.github.io/torch-scan/torchscan.html)
 
-Below are the results for classification models supported by `torchvision` for a single image with 3 color channels of size `224x224` (apart from  `inception_v3`   which uses `299x299`).
-
-| Model              | Params (M) | FLOPs (G) | MACs (G) | DMAs (G) | RF   |
-| ------------------ | ---------- | --------- | -------- | -------- | ---- |
-| alexnet            | 61.1       | 1.43      | 0.71     | 0.72     | 195  |
-| googlenet          | 6.62       | 3.01      | 1.51     | 1.53     | --   |
-| vgg11              | 132.86     | 15.23     | 7.61     | 7.64     | 150  |
-| vgg11_bn           | 132.87     | 15.26     | 7.63     | 7.66     | 150  |
-| vgg13              | 133.05     | 22.63     | 11.31    | 11.35    | 156  |
-| vgg13_bn           | 133.05     | 22.68     | 11.33    | 11.37    | 156  |
-| vgg16              | 138.36     | 30.96     | 15.47    | 15.52    | 212  |
-| vgg16_bn           | 138.37     | 31.01     | 15.5     | 15.55    | 212  |
-| vgg19              | 143.67     | 39.28     | 19.63    | 19.69    | 268  |
-| vgg19_bn           | 143.68     | 39.34     | 19.66    | 19.72    | 268  |
-| resnet18           | 11.69      | 3.64      | 1.82     | 1.84     | --   |
-| resnet34           | 21.8       | 7.34      | 3.67     | 3.7      | --   |
-| resnet50           | 25.56      | 8.21      | 4.11     | 4.15     | --   |
-| resnet101          | 44.55      | 15.66     | 7.83     | 7.9      | --   |
-| resnet152          | 60.19      | 23.1      | 11.56    | 11.65    | --   |
-| inception_v3       | 27.16      | 11.45     | 5.73     | 5.76     | --   |
-| squeezenet1_0      | 1.25       | 1.64      | 0.82     | 0.83     | --   |
-| squeezenet1_1      | 1.24       | 0.7       | 0.35     | 0.36     | --   |
-| wide_resnet50_2    | 68.88      | 22.84     | 11.43    | 11.51    | --   |
-| wide_resnet101_2   | 126.89     | 45.58     | 22.8     | 22.95    | --   |
-| densenet121        | 7.98       | 5.74      | 2.87     | 2.9      | --   |
-| densenet161        | 28.68      | 15.59     | 7.79     | 7.86     | --   |
-| densenet169        | 14.15      | 6.81      | 3.4      | 3.44     | --   |
-| densenet201        | 20.01      | 8.7       | 4.34     | 4.39     | --   |
-| resnext50_32x4d    | 25.03      | 8.51      | 4.26     | 4.3      | --   |
-| resnext101_32x8d   | 88.79      | 32.93     | 16.48    | 16.61    | --   |
-| mobilenet_v2       | 3.5        | 0.63      | 0.31     | 0.32     | --   |
-| shufflenet_v2_x0_5 | 1.37       | 0.09      | 0.04     | 0.05     | --   |
-| shufflenet_v2_x1_0 | 2.28       | 0.3       | 0.15     | 0.15     | --   |
-| shufflenet_v2_x1_5 | 3.5        | 0.6       | 0.3      | 0.31     | --   |
-| shufflenet_v2_x2_0 | 7.39       | 1.18      | 0.59     | 0.6      | --   |
-| mnasnet0_5         | 2.22       | 0.22      | 0.11     | 0.12     | --   |
-| mnasnet0_75        | 3.17       | 0.45      | 0.23     | 0.24     | --   |
-| mnasnet1_0         | 4.38       | 0.65      | 0.33     | 0.34     | --   |
-| mnasnet1_3         | 6.28       | 1.08      | 0.54     | 0.56     | --   |
-
-The above results were produced using the `scripts/benchmark.py` script.
-
-*Note: receptive field computation is currently only valid for highway nets.*
-
-
-
-## What else
-
-### Documentation
-
-The full package documentation is available [here](https://frgfm.github.io/torch-scan/) for detailed specifications.
-
-
-### Example script
-
-An example script is provided for you to benchmark torchvision models using the library:
-
-```shell
-python scripts/benchmark.py
-```
-
-
-## Credits
-
-This project is developed and maintained by the repo owner, but the implementation was inspired or helped by the following contributions:
-
-- [Pytorch summary](https://github.com/sksq96/pytorch-summary): existing PyTorch porting of `tf.keras.Model.summary`
-- [Torchstat](https://github.com/Swall0w/torchstat): another module inspection tool
-- [Flops counter Pytorch](https://github.com/sovrasov/flops-counter.pytorch): operation counter tool
-- [THOP](https://github.com/Lyken17/pytorch-OpCounter): PyTorch Op counter
-- Number of operations and memory estimation articles by [Matthijs Hollemans](https://machinethink.net/blog/how-fast-is-my-model/), and [Sicara](https://www.sicara.ai/blog/2019-28-10-deep-learning-memory-usage-and-pytorch-optimization-tricks)
-- [Pruning Convolutional Neural Networks for Resource Efficient Inference](https://arxiv.org/abs/1611.06440)
-
+Agents can also load the repository skill at [`.agents/skills/torchscan/SKILL.md`](.agents/skills/torchscan/SKILL.md).
 
 ## Citation
 
-If you wish to cite this project, feel free to use this [BibTeX](http://www.bibtex.org/) reference:
+Citation metadata is available in [`CITATION.cff`](CITATION.cff).
 
-```bibtex
-@misc{torchscan2020,
-    title={Torchscan: meaningful module insights},
-    author={François-Guillaume Fernandez},
-    year={2020},
-    month={March},
-    publisher = {GitHub},
-    howpublished = {\url{https://github.com/frgfm/torch-scan}}
-}
-```
+## Contributing and license
 
-
-## Contributing
-
-Any sort of contribution is greatly appreciated!
-
-You can find a short guide in [`CONTRIBUTING`](CONTRIBUTING.md) to help grow this project!
-
-
-
-## License
-
-Distributed under the Apache 2.0 License. See [`LICENSE`](LICENSE) for more information.
+Contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md). TorchScan is distributed under the
+[Apache License 2.0](LICENSE).

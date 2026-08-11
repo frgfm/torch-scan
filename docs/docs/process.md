@@ -1,13 +1,12 @@
 # `torchscan.process`
 
-The process subpackage contains tools for inspecting active Python processes.
-
-::: torchscan.process.get_process_gpu_ram
+The process subpackage exposes explicit workload memory measurement. Legacy `get_process_gpu_ram` was removed in v0.2
+because process snapshots and allocator deltas could not provide a truthful model measurement.
 
 ## Measure one workload's peak memory
 
-`measure_peak_memory` runs an owner-provided callable exactly once. The callable keeps responsibility for the model,
-tensors, optimizer, gradient mode, and device placement; TorchScan only measures the requested backend.
+`measure_peak_memory` runs an owner-provided callable exactly once. The callable owns the model, tensors, optimizer,
+gradient mode, device placement, warmup, and cache state.
 
 ::: torchscan.process.measure_peak_memory
 
@@ -17,10 +16,9 @@ tensors, optimizer, gradient mode, and device placement; TorchScan only measures
 import os
 
 import torch
-
 from torchscan.process import measure_peak_memory
 
-model = torch.nn.Sequential(torch.nn.Linear(64, 128), torch.nn.ReLU(), torch.nn.Linear(128, 16))
+model = torch.nn.Linear(64, 16)
 inputs = torch.randn(32, 64)
 
 
@@ -30,21 +28,20 @@ def run_inference() -> None:
 
 
 stats = measure_peak_memory(run_inference, device=inputs.device)
-owner_approved_budget_bytes = int(os.environ["MODEL_MEMORY_BUDGET_BYTES"])
-assert stats["peak_bytes"] <= owner_approved_budget_bytes
+owner_budget = int(os.environ["MODEL_MEMORY_BUDGET_BYTES"])
+if stats["peak_bytes"] > owner_budget:
+    raise RuntimeError("Owner-approved PyTorch memory budget exceeded")
 ```
 
 ### Training step
 
 ```python
 import torch
-
 from torchscan.process import measure_peak_memory
 
-device = torch.device("cpu")  # Use the device where your workload already lives.
-model = torch.nn.Linear(64, 16).to(device)
-inputs = torch.randn(32, 64, device=device)
-targets = torch.randn(32, 16, device=device)
+model = torch.nn.Linear(64, 16)
+inputs = torch.randn(32, 64)
+targets = torch.randn(32, 16)
 optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
 
 
@@ -55,25 +52,13 @@ def run_training_step() -> None:
     optimizer.step()
 
 
-stats = measure_peak_memory(run_training_step, device=device)
+stats = measure_peak_memory(run_training_step, device=inputs.device)
 ```
 
-### Metrics and limitations
+### Limitations
 
-- CPU reports `pytorch_tensor_bytes`, the sum of PyTorch profiler memory categories. It covers PyTorch-tracked CPU
-  tensor and operator allocations, not Python heap, process RSS, or arbitrary third-party native allocations.
-- CUDA and supported MPS versions report `pytorch_reserved_bytes`, the caching allocator's reserved memory. The result
-  also includes `allocated_peak_bytes`, the peak bytes occupied by live tensors.
-- On CPU, `baseline_bytes` is the first summed profiler timeline point. On CUDA and MPS, it is reserved allocator
-  memory read immediately before peak reset. `peak_bytes` is the backend-specific peak, and `delta_bytes` is always
-  their direct difference. A CPU workload with no PyTorch-tracked memory event raises `RuntimeError` because it has no
-  timeline point to report.
-- MPS requires a PyTorch version exposing public resettable peak statistics through `torch.accelerator.memory`; older
-  versions raise `NotImplementedError`.
-
-!!! warning
-
-    Accelerator reserved memory is not total device, driver, or process memory. Compare results only on matching
-    hardware and workload state, including input shape and dtype, model and gradient modes, optimizer state, and
-    allocator warmup. TorchScan does not warm up, repeat, move, or reset the workload. Its lock prevents overlapping
-    `measure_peak_memory` calls, but unrelated concurrent PyTorch allocations can still affect process-global metrics.
+- CPU `pytorch_tensor_bytes` covers PyTorch-tracked tensor and operator allocations, not Python heap or process RSS.
+- Accelerator `pytorch_reserved_bytes` uses PyTorch caching-allocator state and is not total device or driver memory.
+- TorchScan does not warm up, repeat, move, reset, or roll back the workload.
+- Unrelated concurrent allocations can affect process-global metrics.
+- A mock or skipped accelerator test is not hardware evidence.

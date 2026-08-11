@@ -5,23 +5,20 @@ TorchScan has a published stable release and an unreleased development version:
 | Track | Version | Python | PyTorch |
 | --- | --- | --- | --- |
 | Stable | 0.1.2 | ≥3.6,<4 | ≥1.5,<2 |
-| Development (`main`) | 0.2.0.dev0 | ≥3.11,<4 | ≥2,<3 |
+| Development (`main`) | 0.2.0.dev0 | ≥3.11,<4 | ≥2.1,<3 |
 
-The API reference on this site follows the development version. Use the stable release unless you specifically need to test current development.
+The API reference on this site follows the development version. Version 0.2 is a deliberate breaking release; use the
+[migration guide](migration-v02.md) when moving from 0.1.
 
 ## Stable release
 
-Install from [PyPI](https://pypi.org/project/torchscan/) with pip:
+Install the current PyPI release:
 
 ```shell
 pip install torchscan
 ```
 
-Or install from [Anaconda.org](https://anaconda.org/frgfm/torchscan):
-
-```shell
-conda install -c frgfm torchscan
-```
+The 0.1.2 package does not contain the v0.2 report contract documented on this site.
 
 ## Development version
 
@@ -33,4 +30,11 @@ cd torch-scan
 uv venv --python 3.11
 source .venv/bin/activate
 uv pip install -e .
+```
+
+Install documentation or test dependencies only when needed:
+
+```shell
+uv pip install -e ".[docs]"
+uv pip install -e ".[test]"
 ```

@@ -61,6 +61,7 @@ class AnalysisReport(TypedDict):
     context: dict[str, Any]
     inputs: dict[str, Any]
     layers: list[LayerReport]
+    operator_flops: Any
     totals: dict[str, MetricResult]
     diagnostics: list[Diagnostic]
 
@@ -79,10 +80,13 @@ def metric_result(
         if value is None:
             raise ValueError("A complete metric requires a value.")
         known_value = value
+    elif status == "partial":
+        if known_value is None:
+            raise ValueError("A partial metric requires a known_value lower bound.")
+        value = None
     else:
         value = None
-        if status == "unavailable":
-            known_value = None
+        known_value = None
     return {
         "status": status,
         "value": value,

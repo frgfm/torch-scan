@@ -19,7 +19,7 @@ def test_measure_flops_matmul_and_module_hierarchy():
         "status": "complete",
         "value": 80,
         "known_value": 80,
-        "unit": "FLOP",
+        "unit": "FLOPs",
         "scope": "workload",
         "method": "torch.utils.flop_counter.FlopCounterMode",
     }
@@ -42,6 +42,23 @@ def test_measure_flops_custom_mapping():
     assert report["total"]["value"] == 5
     assert report["by_operator"] == {"aten.sin": 5}
     assert report["diagnostics"] == []
+
+
+def test_measure_flops_custom_zero_is_complete():
+    inputs = torch.ones(5)
+
+    def zero_flops(input_shape, *, out_shape):
+        del input_shape, out_shape
+        return 0
+
+    mapping = {torch.ops.aten.sin: zero_flops}
+
+    report = measure_flops(lambda: torch.sin(inputs), custom_mapping=mapping)
+
+    assert report["total"]["status"] == "complete"
+    assert report["total"]["value"] == 0
+    assert report["by_operator"] == {"aten.sin": 0}
+    assert mapping.keys() == {torch.ops.aten.sin}
 
 
 def test_measure_flops_reports_uncounted_operator_as_partial():

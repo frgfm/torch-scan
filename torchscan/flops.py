@@ -3,7 +3,6 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-import warnings
 from collections import Counter
 from collections.abc import Callable, Mapping
 from typing import Any, TypedDict
@@ -97,18 +96,6 @@ class _OperatorRecorder(TorchDispatchMode):
         return func(*args, **(kwargs or {}))
 
 
-def _native_mapping(counter: FlopCounterMode) -> Mapping[Any, Callable[..., Any]]:
-    mapping = getattr(counter, "flop_registry", None)
-    if mapping is None:
-        mapping = getattr(counter, "flop_mapping", None)
-    if not isinstance(mapping, Mapping):
-        raise NotImplementedError(
-            f"{_METHOD} in PyTorch {torch.__version__} does not expose its operator mapping; "
-            "TorchScan cannot identify uncounted operators truthfully."
-        )
-    return mapping
-
-
 def measure_flops(
     workload: Callable[[], Any],
     *,
@@ -129,18 +116,18 @@ def measure_flops(
         NotImplementedError: If the installed PyTorch counter cannot expose the mapping needed to find missing formulas.
         Exception: Any exception raised by ``workload`` is propagated unchanged.
     """
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="mods argument is not needed anymore, you can stop passing it")
-        counter = FlopCounterMode(mods=modules, display=False, custom_mapping=dict(custom_mapping or {}))
-
-    supported = {_operator_key(operator) for operator in _native_mapping(counter)}
+    mapping = dict(custom_mapping or {})
+    counter = FlopCounterMode(display=False, custom_mapping=mapping)
+    if modules is not None and not hasattr(counter, "mod_tracker"):
+        counter = FlopCounterMode(mods=modules, display=False, custom_mapping=mapping)
     recorder = _OperatorRecorder()
-    with recorder, counter:
+    with counter, recorder:
         workload()
 
     raw_counts = counter.get_flop_counts()
     global_counts = raw_counts.get("Global", {})
     by_operator = dict(sorted((_operator_key(operator), int(count)) for operator, count in global_counts.items()))
+    counted_operators = set(by_operator)
     by_module = dict(
         sorted((name, int(sum(counts.values()))) for name, counts in raw_counts.items() if name != "Global")
     )
@@ -148,12 +135,12 @@ def measure_flops(
     ignored_operators: dict[str, IgnoredOperator] = {
         operator: {"calls": calls, "reason": _IGNORED_OPERATOR_REASONS[operator]}
         for operator, calls in sorted(recorder.counts.items())
-        if operator not in supported and operator in _IGNORED_OPERATOR_REASONS
+        if operator not in counted_operators and operator in _IGNORED_OPERATOR_REASONS
     }
     uncounted = {
         operator: calls
         for operator, calls in sorted(recorder.counts.items())
-        if operator not in supported and operator not in _IGNORED_OPERATOR_REASONS
+        if operator not in counted_operators and operator not in _IGNORED_OPERATOR_REASONS
     }
     diagnostics: list[Diagnostic] = [
         {
@@ -170,7 +157,7 @@ def measure_flops(
         status="partial" if diagnostics else "complete",
         value=None if diagnostics else known_total,
         known_value=known_total if diagnostics else None,
-        unit="FLOP",
+        unit="FLOPs",
         scope="workload",
         method=_METHOD,
     )

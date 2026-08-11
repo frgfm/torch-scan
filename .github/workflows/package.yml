@@ -13,7 +13,6 @@ env:
 
 jobs:
   install:
-    if: github.event_name != 'release'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,7 +34,6 @@ jobs:
         run: python -c "import torchscan; print(torchscan.__version__)"
 
   quality:
-    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -49,12 +47,13 @@ jobs:
       - name: Install dependencies
         run: make install-quality
       - name: Run quality checks
+        env:
+          SKIP: no-commit-to-branch
         run: |
           make quality
           make precommit
 
   tests:
-    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -80,7 +79,6 @@ jobs:
           fail_ci_if_error: true
 
   headers:
-    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -96,29 +94,7 @@ jobs:
           ignore-files: __init__.py
 
   build:
-    if: github.event_name != 'release'
     needs: [install, quality, tests, headers]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
-      - name: Build package
-        run: make build
-      - name: Upload distributions
-        uses: actions/upload-artifact@v7
-        with:
-          name: distributions
-          path: dist/
-
-  publish:
-    if: github.event_name == 'release' && !github.event.release.prerelease
-    permissions:
-      contents: read
-      id-token: write
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -129,17 +105,84 @@ jobs:
           python-version: "3.11"
           architecture: x64
       - uses: astral-sh/setup-uv@v9.0.0
-      - name: Resolve release version
+      - name: Resolve package version
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            echo "BUILD_VERSION=$VERSION" >> "$GITHUB_ENV"
+          else
+            VERSION="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "BUILD_VERSION=$VERSION" >> "$GITHUB_ENV"
-      - name: Build and publish
-        run: |
-          make set-version
-          make build
-          make publish
+      - name: Set release version
+        if: github.event_name == 'release'
+        run: make set-version
+      - name: Build package
+        run: make build
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+
+  verify-artifacts:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - artifact: wheel
+            path: dist/*.whl
+          - artifact: sdist
+            path: dist/*.tar.gz
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+      - name: Install ${{ matrix.artifact }}
+        run: uv pip install ${{ matrix.path }}
+      - name: Smoke-test public API
+        run: >-
+          python -c "from importlib.metadata import metadata, version;
+          import torch, torchscan;
+          assert version('torchscan') == '${{ needs.build.outputs.version }}';
+          assert metadata('torchscan')['Name'] == 'torchscan';
+          report = torchscan.crawl_module(torch.nn.Linear(4, 2), input_shape=(4,));
+          assert report;
+          assert callable(torchscan.summary);
+          assert callable(torchscan.process.measure_peak_memory)"
+
+  publish:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    needs: [build, verify-artifacts]
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+      - name: Publish verified distributions
+        run: uv publish --trusted-publishing always dist/*
 
   verify-publish:
     needs: publish
@@ -163,4 +206,10 @@ jobs:
         run: uv pip install "torchscan==${{ needs.publish.outputs.version }}"
       - name: Verify released package
         working-directory: ${{ runner.temp }}
-        run: python -c "import torchscan; assert torchscan.__version__ == '${{ needs.publish.outputs.version }}'"
+        run: >-
+          python -c "from importlib.metadata import metadata, version;
+          import torch, torchscan;
+          assert torchscan.__version__ == '${{ needs.publish.outputs.version }}';
+          assert version('torchscan') == '${{ needs.publish.outputs.version }}';
+          assert metadata('torchscan')['Name'] == 'torchscan';
+          assert torchscan.crawl_module(torch.nn.Linear(4, 2), input_shape=(4,))"

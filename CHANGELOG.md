@@ -30,7 +30,7 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - `get_process_gpu_ram`, report `overheads`, and automatic accelerator cache clearing.
 - The unversioned legacy crawler report.
 
-See the [v0.2 migration guide](migration-v02.md) for code changes and trust semantics.
+See the [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html).
 
 ## v0.1.2 (2022-08-03)
 

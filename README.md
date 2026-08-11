@@ -30,7 +30,7 @@ import json
 import torch.nn as nn
 from torchscan import crawl_module, summary
 
-model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU())
+model = nn.Conv2d(3, 8, 3)
 
 # Print the human-readable table and receive the same structured report.
 report = summary(model, (3, 32, 32))
@@ -45,14 +45,14 @@ containers—pass complete `args` and `kwargs` instead:
 
 ```python
 report = crawl_module(
-    model,
-    args=(pixel_values,),
-    kwargs={"attention_mask": attention_mask, "return_dict": True},
+    transformer_model,
+    args=(input_ids,),
+    kwargs={"attention_mask": attention_mask},
 )
 ```
 
-TorchScan temporarily evaluates the model under inference mode and restores every module's original training state.
-It records input metadata, never tensor values.
+TorchScan temporarily evaluates the model with gradients disabled and restores every module's original training
+state. It records input metadata, never tensor values.
 
 ## Workload measurements
 
@@ -86,7 +86,7 @@ the model owner supplies those policies.
 - `partial`: `known_value` is a lower bound and diagnostics identify missing work.
 - `unavailable`: TorchScan cannot produce the metric for this execution.
 
-Use `strict=True` when incomplete module analysis must stop automation. See the
+Use `strict=True` when any incomplete analysis must stop automation. See the
 [report schema](https://frgfm.github.io/torch-scan/report-schema.html) and
 [methodology](https://frgfm.github.io/torch-scan/methodology.html) before comparing results.
 

@@ -117,6 +117,12 @@ def measure_flops(
         Exception: Any exception raised by ``workload`` is propagated unchanged.
     """
     mapping = dict(custom_mapping or {})
+    overloads = [operator for operator in mapping if getattr(operator, "_overloadpacket", operator) is not operator]
+    if overloads:
+        raise TypeError(
+            "custom_mapping keys must be operator packets such as torch.ops.aten.sin, "
+            "not overloads such as torch.ops.aten.sin.default."
+        )
     counter = FlopCounterMode(display=False, custom_mapping=mapping)
     if modules is not None and not hasattr(counter, "mod_tracker"):
         counter = FlopCounterMode(mods=modules, display=False, custom_mapping=mapping)

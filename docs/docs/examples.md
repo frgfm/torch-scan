@@ -77,7 +77,9 @@ report = measure_flops(
 ```
 
 Mappings are scoped to the call and do not mutate PyTorch or TorchScan's global formula registries. Check the exact
-shape-formula signature for the installed PyTorch release when targeting an operator with additional arguments.
+shape-formula signature for the installed PyTorch release when targeting an operator with additional arguments. Use
+the operator packet (`torch.ops.aten.sin`), not a specific overload (`torch.ops.aten.sin.default`); TorchScan rejects
+overload keys instead of silently ignoring them.
 
 ## Compare two reports
 

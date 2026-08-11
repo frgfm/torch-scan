@@ -6,6 +6,7 @@
 import json
 import tempfile
 import threading
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -30,7 +31,13 @@ def _measure_cpu(workload: Callable[[], object]) -> dict[str, str | int]:
         ) as profiler:
             workload()
 
-        profiler.export_memory_timeline(str(timeline_path), device="cpu")
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="`export_memory_timeline` is deprecated.*",
+                category=FutureWarning,
+            )
+            profiler.export_memory_timeline(str(timeline_path), device="cpu")
         with timeline_path.open(encoding="utf-8") as timeline_file:
             _, category_points = json.load(timeline_file)
 

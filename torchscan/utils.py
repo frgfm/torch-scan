@@ -3,19 +3,15 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
+from copy import deepcopy
 from itertools import starmap
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
+
+from .report import AnalysisReport, LayerReport, MetricResult
 
 
 def format_name(name: str, depth: int = 0) -> str:
-    """Format a string for nested data printing
-
-    Args:
-        name: input string
-        depth: depth of the nested information
-    Returns:
-        formatted string
-    """
+    """Format a layer name for nested summary output."""
     if depth == 0:
         return name
     if depth == 1:
@@ -24,20 +20,9 @@ def format_name(name: str, depth: int = 0) -> str:
 
 
 def wrap_string(s: str, max_len: int, delimiter: str = ".", wrap: str = "[...]", mode: str = "end") -> str:
-    """Wrap a string into a given length
-
-    Args:
-        s: input string
-        max_len: maximum string length
-        delimiter: character used for delimiting information categories
-        wrap: wrapping sequence used
-        mode: wrapping mode
-    Returns:
-        wrapped string
-    """
+    """Wrap a string into a fixed display width."""
     if len(s) <= max_len or mode is None:
         return s
-
     if mode == "end":
         return s[: max_len - len(wrap)] + wrap
     if mode == "mid":
@@ -47,14 +32,8 @@ def wrap_string(s: str, max_len: int, delimiter: str = ".", wrap: str = "[...]",
     raise ValueError("received an unexpected value of argument `mode`")
 
 
-def unit_scale(val: float) -> Tuple[float, str]:
-    """Rescale value using scale units
-
-    Args:
-        val: input value
-    Returns:
-        tuple of rescaled value and unit
-    """
+def unit_scale(val: float) -> tuple[float, str]:
+    """Rescale a value using SI display units."""
     if val // 1e12 > 0:
         return val / 1e12, "T"
     if val // 1e9 > 0:
@@ -66,69 +45,87 @@ def unit_scale(val: float) -> Tuple[float, str]:
     return val, ""
 
 
-def format_s(f_string: str, min_w: Optional[int] = None, max_w: Optional[int] = None) -> str:
-    """Format number strings"""
+def format_s(f_string: str, min_w: int | None = None, max_w: int | None = None) -> str:
+    """Pad and truncate a display string."""
     if isinstance(min_w, int):
         f_string = f"{f_string:<{min_w}}"
     if isinstance(max_w, int):
         f_string = f"{f_string:.{max_w}}"
-
     return f_string
 
 
+def _shape_text(metadata: dict[str, Any]) -> str:
+    kind = metadata.get("kind")
+    if kind == "tensor":
+        return str(tuple(metadata["shape"]))
+    if kind in {"tuple", "list"}:
+        opener, closer = ("(", ")") if kind == "tuple" else ("[", "]")
+        return f"{opener}{', '.join(_shape_text(item) for item in metadata['items'])}{closer}"
+    if kind == "mapping":
+        return "{" + ", ".join(_shape_text(item["value"]) for item in metadata["items"]) + "}"
+    return str(kind)
+
+
+def _metric_value(result: MetricResult | None) -> int | float | None:
+    if result is None:
+        return None
+    return result["value"] if result["status"] == "complete" else result["known_value"]
+
+
 def format_line_str(
-    layer: Dict[str, Any],
-    col_w: Optional[Sequence[Optional[int]]] = None,
+    layer: LayerReport,
+    col_w: list[int | None] | None = None,
     wrap_mode: str = "mid",
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
-) -> List[str]:
-    """Wrap all information into multiple lines"""
+) -> list[str]:
+    """Format one report layer into summary columns."""
     if col_w is None:
         col_w = [None] * 8
-
     max_len = col_w[0] + 3 if isinstance(col_w[0], int) else 100
-    num_params = layer["grad_params"] + layer["nograd_params"]
-    output_shape = layer["output_shape"]
-    output_shape_str = str(output_shape)
-    if not isinstance(output_shape, tuple) or not all(isinstance(dim, int) for dim in output_shape):
-        output_shape_str = wrap_string(output_shape_str, col_w[2] if isinstance(col_w[2], int) else 100, mode="end")
+    trainable = int(layer["parameters"]["trainable"])
+    frozen = int(layer["parameters"]["frozen"])
+    buffers = int(layer["buffers"]["elements"])
+    output_shape = _shape_text(layer["output"])
     line_str = [
         format_s(wrap_string(format_name(layer["name"], layer["depth"]), max_len, mode=wrap_mode), col_w[0], col_w[0]),
         format_s(layer["type"], col_w[1], col_w[1]),
-        format_s(output_shape_str, col_w[2], col_w[2]),
-        format_s(f"{num_params + layer['num_buffers']:,}", col_w[3], col_w[3]),
-        format_s("-" if num_params == 0 else str(layer["grad_params"] > 0), col_w[4], col_w[4]),
+        format_s(
+            wrap_string(output_shape, col_w[2] if isinstance(col_w[2], int) else 100, mode="end"), col_w[2], col_w[2]
+        ),
+        format_s(f"{trainable + frozen + buffers:,}", col_w[3], col_w[3]),
+        format_s("-" if trainable + frozen == 0 else str(trainable > 0), col_w[4], col_w[4]),
     ]
-
     if receptive_field:
-        line_str.append(format_s(f"{layer['rf']:.0f}", col_w[5], col_w[5]))
+        receptive = _metric_value(layer["metrics"].get("receptive_field"))
+        line_str.append(format_s("?" if receptive is None else f"{receptive:.0f}", col_w[5], col_w[5]))
         if effective_rf_stats:
+            stride = _metric_value(layer["metrics"].get("effective_stride"))
+            padding = _metric_value(layer["metrics"].get("effective_padding"))
             line_str.extend((
-                format_s(f"{layer['s']:.0f}", col_w[6], col_w[6]),
-                format_s(f"{layer['p']:.0f}", col_w[7], col_w[7]),
+                format_s("?" if stride is None else f"{stride:.0f}", col_w[6], col_w[6]),
+                format_s("?" if padding is None else f"{padding:.0f}", col_w[7], col_w[7]),
             ))
-
     return line_str
 
 
-def format_info(
-    module_info: Dict[str, Any], wrap_mode: str = "mid", receptive_field: bool = False, effective_rf_stats: bool = False
-) -> str:
-    """Print module summary for an expected input tensor shape
+def _format_total(name: str, result: MetricResult) -> str:
+    value = result["value"] if result["status"] == "complete" else result["known_value"]
+    if value is None:
+        return f"{name}: unavailable"
+    scaled, prefix = unit_scale(float(value))
+    qualifier = "" if result["status"] == "complete" else "known "
+    return f"{name}: {qualifier}{scaled:.2f} {prefix}{result['unit']}"
 
-    Args:
-        module_info: dictionary output of `crawl_module`
-        wrap_mode: wrapping mode
-        receptive_field: whether to display receptive field
-        effective_rf_stats: if `receptive_field` is True, displays effective stride and padding
-    Returns:
-        formatted information
-    """
-    # Set margin between cols
+
+def format_info(
+    module_info: AnalysisReport,
+    wrap_mode: str = "mid",
+    receptive_field: bool = False,
+    effective_rf_stats: bool = False,
+) -> str:
+    """Format an analysis report as a human-readable summary."""
     margin = 4
-    # Dynamic col width
-    # Init with headers
     headers = [
         "Layer",
         "Type",
@@ -140,133 +137,63 @@ def format_info(
         "Effective padding",
     ]
     max_w = [27, 20, 25, 15, 9, 15, 16, 17]
-    col_w = [len(s) for s in headers]
+    col_w = [len(header) for header in headers]
     for layer in module_info["layers"]:
         col_w = [
-            max(v, len(s))
-            for v, s in zip(
+            max(width, len(value))
+            for width, value in zip(
                 col_w,
-                format_line_str(layer, col_w=None, wrap_mode=wrap_mode, receptive_field=True, effective_rf_stats=True),
-                strict=False,
+                format_line_str(layer, receptive_field=True, effective_rf_stats=True),
+                strict=True,
             )
         ]
-
-    # Truncate columns that are too long
-    col_w = list(starmap(min, zip(col_w, max_w, strict=False)))
-
+    col_w = list(starmap(min, zip(col_w, max_w, strict=True)))
     if not receptive_field:
-        col_w = col_w[:5]
-        headers = headers[:5]
+        col_w, headers = col_w[:5], headers[:5]
     elif not effective_rf_stats:
-        col_w = col_w[:6]
-        headers = headers[:6]
+        col_w, headers = col_w[:6], headers[:6]
 
-    # Define separating lines
     line_length = sum(col_w) + (len(col_w) - 1) * margin
     thin_line = "_" * line_length
     thick_line = "=" * line_length
     dot_line = "-" * line_length
-
     margin_str = " " * margin
-
-    # Header
-    info_str = [
+    lines = [
         thin_line,
-        margin_str.join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, col_w, strict=False)]),
+        margin_str.join(f"{header:<{width}}" for header, width in zip(headers, col_w, strict=True)),
         thick_line,
     ]
-
-    # Layers
-    for layer in module_info["layers"]:
-        line_str = format_line_str(layer, col_w, wrap_mode, receptive_field, effective_rf_stats)
-        info_str.append((" " * margin).join(line_str))
-
-    # Parameter information
-    num_params = module_info["overall"]["grad_params"] + module_info["overall"]["nograd_params"]
-    info_str.extend((
+    lines.extend(
+        margin_str.join(format_line_str(layer, col_w, wrap_mode, receptive_field, effective_rf_stats))
+        for layer in module_info["layers"]
+    )
+    totals = module_info["totals"]
+    lines.extend((
         thick_line,
-        f"Trainable params: {module_info['overall']['grad_params']:,}",
-        f"Non-trainable params: {module_info['overall']['nograd_params']:,}",
-        f"Total params: {num_params:,}",
+        f"Trainable params: {int(totals['trainable_parameters']['value'] or 0):,}",
+        f"Non-trainable params: {int(totals['frozen_parameters']['value'] or 0):,}",
+        f"Total params: {int(totals['parameters']['value'] or 0):,}",
+        dot_line,
+        f"Model size (params + buffers): {(float(totals['parameter_bytes']['value'] or 0) + float(totals['buffer_bytes']['value'] or 0)) / 1024**2:.2f} Mb",
+        dot_line,
+        _format_total("Module-formula forward FLOPs", totals["module_flops"]),
+        _format_total("Multiply-Accumulations", totals["macs"]),
+        _format_total("Direct memory accesses", totals["dmas"]),
     ))
-
-    # Static RAM usage
-    info_str.append(dot_line)
-
-    # Convert to Megabytes
-    param_size = (module_info["overall"]["param_size"] + module_info["overall"]["buffer_size"]) / 1024**2
-    overhead = module_info["overheads"]["framework"]["fwd"] + module_info["overheads"]["cuda"]["fwd"]
-
-    info_str.extend((
-        f"Model size (params + buffers): {param_size:.2f} Mb",
-        f"Framework & CUDA overhead: {overhead:.2f} Mb",
-        f"Total RAM usage: {param_size + overhead:.2f} Mb",
-    ))
-
-    # FLOPS information
-    info_str.append(dot_line)
-
-    flops, flops_units = unit_scale(sum(layer["flops"] for layer in module_info["layers"]))
-    macs, macs_units = unit_scale(sum(layer["macs"] for layer in module_info["layers"]))
-    dmas, dmas_units = unit_scale(sum(layer["dmas"] for layer in module_info["layers"]))
-
-    info_str.extend((
-        f"Floating Point Operations on forward: {flops:.2f} {flops_units}FLOPs",
-        f"Multiply-Accumulations on forward: {macs:.2f} {macs_units}MACs",
-        f"Direct memory accesses on forward: {dmas:.2f} {dmas_units}DMAs",
-        thin_line,
-    ))
-
-    return "\n".join(info_str)
+    if "operator_flops" in totals:
+        lines.append(_format_total("Operator forward FLOPs", totals["operator_flops"]))
+    if module_info["diagnostics"]:
+        lines.append(f"Diagnostics: {len(module_info['diagnostics'])} (inspect report['diagnostics'])")
+    lines.append(thin_line)
+    return "\n".join(lines)
 
 
-def aggregate_info(info: Dict[str, Any], max_depth: int) -> Dict[str, Any]:
-    """Aggregate module information to a maximum depth
-
-    Args:
-        info: dictionary output of `crawl_module`
-        max_depth: depth at which parent node aggregates children information
-    Returns:
-        edited dictionary information
-    """
-    if not any(layer["depth"] == max_depth for layer in info["layers"]):
+def aggregate_info(info: AnalysisReport, max_depth: int) -> AnalysisReport:
+    """Return a report view limited to a maximum module depth."""
+    if max_depth < 0:
+        raise ValueError("max_depth must be non-negative.")
+    if info["layers"] and not any(layer["depth"] == max_depth for layer in info["layers"]):
         raise ValueError("The `max_depth` argument cannot be higher than module depth.")
-
-    for fw_idx, layer in enumerate(info["layers"]):
-        # Need to aggregate information
-        if not layer["is_leaf"] and layer["depth"] == max_depth:
-            grad_p, nograd_p, p_size, num_buffers, b_size = 0, 0, 0, 0, 0
-            flops, macs, dmas = 0, 0, 0
-            for layer_ in info["layers"][fw_idx + 1 :]:
-                # Children have superior depth and were hooked after parent
-                if layer_["depth"] <= max_depth:
-                    break
-                # Aggregate all information (flops, macc, ram)
-                flops += layer_["flops"]
-                macs += layer_["macs"]
-                dmas += layer_["dmas"]
-                grad_p += layer_["grad_params"]
-                nograd_p += layer_["nograd_params"]
-                p_size += layer_["param_size"]
-                num_buffers += layer_["num_buffers"]
-                b_size += layer_["buffer_size"]
-                # Take last child effective RF
-                rf, s, p = layer_["rf"], layer_["s"], layer_["p"]
-
-            # Update info
-            info["layers"][fw_idx]["flops"] = flops
-            info["layers"][fw_idx]["macs"] = macs
-            info["layers"][fw_idx]["dmas"] = dmas
-            info["layers"][fw_idx]["rf"] = rf
-            info["layers"][fw_idx]["s"] = s
-            info["layers"][fw_idx]["p"] = p
-            info["layers"][fw_idx]["grad_params"] = grad_p
-            info["layers"][fw_idx]["nograd_params"] = nograd_p
-            info["layers"][fw_idx]["param_size"] = p_size
-            info["layers"][fw_idx]["num_buffers"] = num_buffers
-            info["layers"][fw_idx]["buffer_size"] = b_size
-
-    # Filter out further depth information
-    info["layers"] = [layer for layer in info["layers"] if layer["depth"] <= max_depth]
-
-    return info
+    aggregated = deepcopy(info)
+    aggregated["layers"] = [layer for layer in aggregated["layers"] if layer["depth"] <= max_depth]
+    return aggregated

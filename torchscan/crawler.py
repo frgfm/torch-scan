@@ -144,7 +144,13 @@ def _measure_module_metric(
             path=path,
             message=str(unsupported.message),
         )
-        return metric_result(status="unavailable", unit=unit, scope="module_call", method="torchscan_module_formula")
+        return metric_result(
+            status="partial",
+            known_value=value,
+            unit=unit,
+            scope="module_call",
+            method="torchscan_module_formula",
+        )
     if caught:
         _diagnostic(
             diagnostics,
@@ -247,7 +253,7 @@ def _prepare_inputs(
     else:
         dtypes = list(dtype)
         if len(dtypes) != len(shapes):
-            raise ValueError("dtype must provide exactly one value per input shape.")
+            raise ValueError("dtype length must match the number of input shapes.")
         if any(not isinstance(item, torch.dtype) for item in dtypes):
             raise TypeError("Every dtype value must be a torch.dtype.")
 
@@ -343,7 +349,15 @@ def crawl_module(
                     "bytes": buffer_bytes,
                     "shared": buffer_shared,
                 },
-                "metrics": {},
+                "metrics": {
+                    "calls": metric_result(
+                        status="complete",
+                        value=1,
+                        unit="calls",
+                        scope="module_call",
+                        method="pytorch_hook",
+                    )
+                },
             })
             pending.setdefault(id(hooked), []).append(len(layers) - 1)
 

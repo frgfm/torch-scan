@@ -3,8 +3,11 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-import os
-from collections.abc import Callable, Iterable
+import inspect
+import platform
+import warnings
+from collections.abc import Callable, Iterable, Mapping
+from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 import torch
@@ -12,53 +15,257 @@ from torch import nn
 from torch.nn import Module
 
 from .modules import module_dmas, module_flops, module_macs, module_rf
-from .process import get_process_gpu_ram
+from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
 from .utils import aggregate_info, format_info
 
 __all__ = ["crawl_module", "summary"]
 
 
-def _normalize_output(out: Any) -> tuple[Any, torch.Tensor]:
-    """Return recursive shape metadata and the first tensor in a hooked output."""
-    primary: torch.Tensor | None = None
+def _package_version() -> str:
+    try:
+        return version("torchscan")
+    except PackageNotFoundError:
+        return "unknown"
 
-    def _shape(value: Any, path: str) -> Any:
-        nonlocal primary
-        if isinstance(value, torch.Tensor):
-            if primary is None:
-                primary = value
-            return (-1, *value.shape[1:])
-        if value is None:
-            return None
-        if isinstance(value, tuple):
-            return tuple(_shape(item, f"{path}[{idx}]") for idx, item in enumerate(value))
-        if isinstance(value, list):
-            return [_shape(item, f"{path}[{idx}]") for idx, item in enumerate(value)]
-        if isinstance(value, dict):
-            return {key: _shape(item, f"{path}[{key!r}]") for key, item in value.items()}
-        raise TypeError(
-            f"Unsupported output at {path}: {type(value).__name__} is not a tensor, tuple, list, dict, or None"
+
+def _describe(value: Any) -> dict[str, Any]:
+    """Describe a Python value without retaining its contents."""
+    if isinstance(value, torch.Tensor):
+        return {
+            "kind": "tensor",
+            "shape": list(value.shape),
+            "dtype": str(value.dtype),
+            "device": str(value.device),
+            "requires_grad": value.requires_grad,
+        }
+    if value is None:
+        return {"kind": "none"}
+    if isinstance(value, tuple):
+        return {"kind": "tuple", "items": [_describe(item) for item in value]}
+    if isinstance(value, list):
+        return {"kind": "list", "items": [_describe(item) for item in value]}
+    if isinstance(value, Mapping):
+        return {
+            "kind": "mapping",
+            "type": type(value).__name__,
+            "items": [{"key_type": type(key).__name__, "value": _describe(item)} for key, item in value.items()],
+        }
+    if isinstance(value, (bool, int, float, complex, str, bytes)):
+        return {"kind": "scalar", "type": type(value).__name__}
+    return {"kind": "object", "type": type(value).__qualname__}
+
+
+def _describe_call(args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "args": [_describe(arg) for arg in args],
+        "kwargs": {name: _describe(value) for name, value in kwargs.items()},
+    }
+
+
+def _first_tensor(value: Any) -> torch.Tensor | None:
+    if isinstance(value, torch.Tensor):
+        return value
+    if isinstance(value, Mapping):
+        for item in value.values():
+            if (tensor := _first_tensor(item)) is not None:
+                return tensor
+    elif isinstance(value, (tuple, list)):
+        for item in value:
+            if (tensor := _first_tensor(item)) is not None:
+                return tensor
+    return None
+
+
+def _ordered_inputs(module: Module, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> tuple[Any, ...]:
+    """Return forward arguments in signature order for the legacy formula functions."""
+    try:
+        signature = inspect.signature(module.forward)
+        bound = signature.bind_partial(*args, **kwargs)
+        bound.apply_defaults()
+    except (TypeError, ValueError):
+        return (*args, *kwargs.values())
+
+    ordered: list[Any] = []
+    for name, parameter in signature.parameters.items():
+        if name not in bound.arguments:
+            continue
+        value = bound.arguments[name]
+        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+            ordered.extend(value)
+        else:
+            ordered.append(value)
+    return tuple(ordered)
+
+
+def _diagnostic(
+    diagnostics: list[Diagnostic],
+    *,
+    code: str,
+    metric: str,
+    path: str,
+    message: str,
+) -> None:
+    diagnostics.append({
+        "code": code,
+        "severity": "warning",
+        "metric": metric,
+        "path": path,
+        "message": message,
+    })
+
+
+def _measure_module_metric(
+    metric: str,
+    unit: str,
+    path: str,
+    diagnostics: list[Diagnostic],
+    measure: Callable[[], int | float],
+) -> MetricResult:
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            value = measure()
+    except Exception as error:  # ruff: ignore[blind-except] BLE001  # Formula failures are report diagnostics.
+        _diagnostic(
+            diagnostics,
+            code="module_metric_error",
+            metric=metric,
+            path=path,
+            message=f"{type(error).__name__}: {error}",
         )
+        return metric_result(status="unavailable", unit=unit, scope="module_call", method="torchscan_module_formula")
 
-    output_shape = _shape(out, "output")
-    if primary is None:
-        raise TypeError("Unsupported output at output: no tensor found")
-    return output_shape, primary
+    unsupported = next((warning for warning in caught if "Module type not supported" in str(warning.message)), None)
+    if unsupported is not None:
+        _diagnostic(
+            diagnostics,
+            code="unsupported_module_metric",
+            metric=metric,
+            path=path,
+            message=str(unsupported.message),
+        )
+        return metric_result(status="unavailable", unit=unit, scope="module_call", method="torchscan_module_formula")
+    if caught:
+        _diagnostic(
+            diagnostics,
+            code="module_metric_warning",
+            metric=metric,
+            path=path,
+            message="; ".join(str(warning.message) for warning in caught),
+        )
+        return metric_result(
+            status="partial",
+            known_value=value,
+            unit=unit,
+            scope="module_call",
+            method="torchscan_module_formula",
+        )
+    return metric_result(
+        status="complete",
+        value=value,
+        unit=unit,
+        scope="module_call",
+        method="torchscan_module_formula",
+    )
+
+
+def _aggregate_metric(layers: list[LayerReport], name: str, unit: str) -> MetricResult:
+    results = [layer["metrics"][name] for layer in layers if name in layer["metrics"]]
+    if not results:
+        return metric_result(status="unavailable", unit=unit, scope="forward", method="torchscan_module_formula")
+
+    known_values = [result["known_value"] for result in results if result["known_value"] is not None]
+    known_total = sum(known_values)
+    if all(result["status"] == "complete" for result in results):
+        return metric_result(
+            status="complete",
+            value=known_total,
+            unit=unit,
+            scope="forward",
+            method="torchscan_module_formula",
+        )
+    if known_values:
+        return metric_result(
+            status="partial",
+            known_value=known_total,
+            unit=unit,
+            scope="forward",
+            method="torchscan_module_formula",
+        )
+    return metric_result(status="unavailable", unit=unit, scope="forward", method="torchscan_module_formula")
+
+
+def _model_defaults(module: Module) -> tuple[torch.device, torch.dtype]:
+    tensor = next(module.parameters(), None)
+    if tensor is None:
+        tensor = next(module.buffers(), None)
+    if tensor is None:
+        return torch.device("cpu"), torch.float32
+    return tensor.device, tensor.dtype
+
+
+def _prepare_inputs(
+    module: Module,
+    input_shape: list[tuple[int, ...]] | tuple[int, ...] | None,
+    dtype: torch.dtype | Iterable[torch.dtype] | None,
+    args: tuple[Any, ...] | None,
+    kwargs: Mapping[str, Any] | None,
+    device: str | torch.device | None,
+) -> tuple[tuple[Any, ...], dict[str, Any], dict[str, Any]]:
+    provided = args is not None or kwargs is not None
+    generated = input_shape is not None
+    if provided == generated:
+        raise ValueError("Exactly one of input_shape or args/kwargs must be provided.")
+
+    if provided:
+        if dtype is not None or device is not None:
+            raise ValueError("dtype and device apply only to generated input_shape tensors.")
+        if args is not None and not isinstance(args, tuple):
+            raise TypeError(f"args must be a tuple, got {type(args).__name__}.")
+        if kwargs is not None and not isinstance(kwargs, Mapping):
+            raise TypeError(f"kwargs must be a mapping, got {type(kwargs).__name__}.")
+        call_args = () if args is None else args
+        call_kwargs = {} if kwargs is None else dict(kwargs)
+        if any(not isinstance(name, str) for name in call_kwargs):
+            raise TypeError("kwargs keys must be strings.")
+        return call_args, call_kwargs, {"source": "provided", **_describe_call(call_args, call_kwargs)}
+
+    if input_shape is None:
+        raise ValueError("input_shape is required when args and kwargs are omitted.")
+    shapes = input_shape if isinstance(input_shape, list) else [input_shape]
+    if not shapes or any(not isinstance(shape, tuple) for shape in shapes):
+        raise TypeError("input_shape must be a tuple or a non-empty list of tuples.")
+    if any(any(not isinstance(dimension, int) for dimension in shape) for shape in shapes):
+        raise TypeError("Every input_shape dimension must be an integer.")
+
+    default_device, default_dtype = _model_defaults(module)
+    target_device = default_device if device is None else torch.device(device)
+    if dtype is None:
+        dtypes = [default_dtype] * len(shapes)
+    elif isinstance(dtype, torch.dtype):
+        dtypes = [dtype] * len(shapes)
+    else:
+        dtypes = list(dtype)
+        if len(dtypes) != len(shapes):
+            raise ValueError("dtype must provide exactly one value per input shape.")
+        if any(not isinstance(item, torch.dtype) for item in dtypes):
+            raise TypeError("Every dtype value must be a torch.dtype.")
+
+    call_args = tuple(
+        torch.rand(1, *shape, device=target_device).to(dtype=current_dtype)
+        for shape, current_dtype in zip(shapes, dtypes, strict=True)
+    )
+    call_kwargs: dict[str, Any] = {}
+    return call_args, call_kwargs, {"source": "generated", **_describe_call(call_args, call_kwargs)}
 
 
 def apply(module: Module, fn: Callable[[Module, str], None], name: str | None = None) -> None:
-    """Modified version of `torch.nn.Module.apply` method
-
-    Args:
-        module: target module
-        fn: function to apply to each module
-        name: name of the current module
-    """
+    """Apply a function to a module tree while providing stable dotted paths."""
     if name is None:
         name = module.__class__.__name__.lower()
     fn(module, name)
-    for n, m in module.named_children():
-        apply(m, fn, f"{name}.{n}")
+    for child_name, child in module.named_children():
+        apply(child, fn, f"{name}.{child_name}")
 
 
 def crawl_module(
@@ -66,304 +273,245 @@ def crawl_module(
     input_shape: list[tuple[int, ...]] | tuple[int, ...] | None = None,
     dtype: torch.dtype | Iterable[torch.dtype] | None = None,
     *,
-    input_data: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...] | None = None,
-) -> dict[str, Any]:
-    """Collect module information using a forward pass.
-
-    Examples:
-        >>> import torch.nn as nn
-        >>> from torchscan import crawl_module
-        >>> mod = nn.Conv2d(3, 8, 3)
-        >>> module_info = crawl_module(mod, (3, 224, 224))
-
-    Args:
-        module: Module to inspect. It must contain at least one parameter.
-        input_shape: Input shape without a batch dimension, or one shape per positional tensor input.
-        dtype: One data type for every input, or one data type per input. Defaults to the first parameter's data type.
-        input_data: One tensor or a non-empty list or tuple of positional tensor inputs, including all dimensions.
-
-    Returns:
-        A dictionary containing per-layer information in `layers`, parameter, buffer, FLOP, MAC, and DMA totals in
-        `overall`, and process and framework memory estimates in `overheads`.
-
-    Raises:
-        StopIteration: If the module has no parameters.
-        TypeError: If `input_data` is invalid or a hooked output has an unsupported leaf or contains no tensor.
-        ValueError: If exactly one input source is not provided, `input_data` is empty, or `dtype` is used with it.
-
-    Notes:
-        `input_shape` creates a random batch of one on the first parameter's device. `input_data` is forwarded unchanged.
-        Both paths run without gradients in the module's current training mode. Functional operations are not observed
-        by module hooks. See the model-support and metrics guides for the complete limitations.
-    """
-    # Get device and data types from model
-    p = next(module.parameters())
-
-    cuda_overhead, framework_overhead = 0.0, 0.0
-    if torch.cuda.is_available():
-        # Process RAM - allocator RAM
-        cuda_overhead = get_process_gpu_ram(os.getpid()) - (torch.cuda.memory_reserved() / 1024**2)
-        # Allocator RAM - Used RAM
-        framework_overhead = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024**2
-
-    # Input
-    if (input_shape is None) == (input_data is None):
-        raise ValueError("Exactly one of input_shape and input_data must be provided.")
-    if input_data is not None:
-        if dtype is not None:
-            raise ValueError("dtype cannot be used with input_data.")
-        if isinstance(input_data, torch.Tensor):
-            input_ts = [input_data]
-        elif isinstance(input_data, (list, tuple)):
-            if not input_data:
-                raise ValueError("input_data must not be empty.")
-            for idx, input_t in enumerate(input_data):
-                if not isinstance(input_t, torch.Tensor):
-                    raise TypeError(f"input_data[{idx}] must be a torch.Tensor, got {type(input_t).__name__}.")
-            input_ts = list(input_data)
-        else:
-            raise TypeError(
-                "input_data must be a torch.Tensor or a non-empty list/tuple of torch.Tensor objects, "
-                f"got {type(input_data).__name__}."
-            )
-    elif input_shape is not None:
-        if not isinstance(input_shape, list):
-            input_shape = [input_shape]
-        if dtype is None:
-            dtype = p.dtype
-        if isinstance(dtype, torch.dtype):
-            dtype = [dtype] * len(input_shape)
-        input_ts = [
-            torch.rand(1, *in_shape).to(dtype=dtype_, device=p.device)
-            for in_shape, dtype_ in zip(input_shape, dtype, strict=False)
-        ]
-
-    pre_fw_handles, post_fw_handles = [], []
-    pre_hook_tracker: dict[int, Any] = {}
-    post_hook_tracker: dict[int, Any] = {}
+    args: tuple[Any, ...] | None = None,
+    kwargs: Mapping[str, Any] | None = None,
+    device: str | torch.device | None = None,
+    strict: bool = False,
+) -> AnalysisReport:
+    """Collect a truthful, machine-readable report from one inference forward pass."""
+    call_args, call_kwargs, input_metadata = _prepare_inputs(module, input_shape, dtype, args, kwargs, device)
+    diagnostics: list[Diagnostic] = []
+    layers: list[LayerReport] = []
+    handles: list[torch.utils.hooks.RemovableHandle] = []
+    pending: dict[int, list[int]] = {}
+    call_counts: dict[int, int] = {}
+    seen_tensor_ids: set[int] = set()
+    training_flags = [(child, child.training) for child in module.modules()]
     root_module = module
 
-    if not isinstance(module, nn.Transformer) and any(
-        isinstance(
-            child,
-            (
-                nn.Transformer,
-                nn.TransformerEncoder,
-                nn.TransformerDecoder,
-                nn.TransformerEncoderLayer,
-                nn.TransformerDecoderLayer,
-            ),
-        )
-        for child in module.modules()
-    ):
-        raise NotImplementedError("Only a native nn.Transformer passed directly to summary() is supported.")
-
-    def _is_metric_leaf(current: Module) -> bool:
-        # MHA owns its functional out_proj; only a root Transformer owns its composite FLOPs.
+    def is_metric_leaf(current: Module) -> bool:
         return (
             not any(current.children())
             or isinstance(current, nn.MultiheadAttention)
             or (current is root_module and isinstance(root_module, nn.Transformer))
         )
 
-    # Hook definition
-    def _hook_info(module: Module, name: str) -> None:
-        def _pre_hook(module: Module, inp: tuple[torch.Tensor, ...]) -> None:
-            """Pre-forward hook"""
-            # Check that another hook has not been triggered at this forward stage
-            if not pre_hook_tracker[id(module)]["is_used"] and (
-                pre_hook_tracker[id(module)]["target"] == pre_hook_tracker[id(module)]["current"]
-            ):
-                # Add information
-                # Params
-                grad_params, nograd_params, param_size = 0, 0, 0
-                num_buffers, buffer_size = 0, 0
-                is_shared = False
-                if _is_metric_leaf(module):
-                    # Parameters
-                    for p in module.parameters():
-                        if id(p) not in param_ids:
-                            numel = p.numel()
-                            if p.requires_grad:
-                                grad_params += numel
-                            else:
-                                nograd_params += numel
-                            param_size += numel * p.element_size()
-                            param_ids.add(id(p))
-                        else:
-                            is_shared = True
-                    # Buffers
-                    for b in module.buffers():
-                        if id(b) not in param_ids:
-                            numel = b.numel()
-                            num_buffers += numel
-                            buffer_size += numel * b.element_size()
-                            param_ids.add(id(b))
-                        else:
-                            is_shared = True
-
-                if call_idxs.get(id(module)) is None:
-                    call_idxs[id(module)] = [len(info)]
+    def register(current: Module, path: str) -> None:
+        def pre_hook(hooked: Module, hook_args: tuple[Any, ...], hook_kwargs: dict[str, Any]) -> None:
+            call_index = call_counts.get(id(hooked), 0)
+            call_counts[id(hooked)] = call_index + 1
+            recurse = isinstance(hooked, nn.MultiheadAttention) or (
+                hooked is root_module and isinstance(root_module, nn.Transformer)
+            )
+            trainable = frozen = parameter_bytes = buffer_elements = buffer_bytes = 0
+            parameter_shared = buffer_shared = False
+            for parameter in hooked.parameters(recurse=recurse):
+                if id(parameter) in seen_tensor_ids:
+                    parameter_shared = True
+                    continue
+                seen_tensor_ids.add(id(parameter))
+                if parameter.requires_grad:
+                    trainable += parameter.numel()
                 else:
-                    call_idxs[id(module)].append(len(info))
+                    frozen += parameter.numel()
+                parameter_bytes += parameter.numel() * parameter.element_size()
+            for buffer in hooked.buffers(recurse=recurse):
+                if id(buffer) in seen_tensor_ids:
+                    buffer_shared = True
+                    continue
+                seen_tensor_ids.add(id(buffer))
+                buffer_elements += buffer.numel()
+                buffer_bytes += buffer.numel() * buffer.element_size()
 
-                info.append({
-                    "name": name.rpartition(".")[-1],
-                    "depth": len(name.split(".")) - 1,
-                    "type": module.__class__.__name__,
-                    "input_shape": (-1, *inp[0][0].shape[1:]),
-                    "output_shape": None,
-                    "grad_params": grad_params,
-                    "nograd_params": nograd_params,
-                    "param_size": param_size,
-                    "num_buffers": num_buffers,
-                    "buffer_size": buffer_size,
-                    "flops": 0,
-                    "macs": 0,
-                    "dmas": 0,
-                    "rf": 1,
-                    "s": 1,
-                    "p": 0,
-                    "is_shared": is_shared,
-                    "is_leaf": _is_metric_leaf(module),
-                })
-                # Mark the next hook for execution
-                pre_hook_tracker[id(module)]["target"] += 1
-                # Current pass already used one of the hooks
-                pre_hook_tracker[id(module)]["is_used"] = True
-            pre_hook_tracker[id(module)]["current"] += 1
-            # All the hooks have been checked, reset the temporary values
-            if pre_hook_tracker[id(module)]["current"] == len(module._forward_pre_hooks):
-                pre_hook_tracker[id(module)]["current"] = 0
-                pre_hook_tracker[id(module)]["is_used"] = False
+            layer_path = path
+            layers.append({
+                "path": layer_path,
+                "call_index": call_index,
+                "name": layer_path.rpartition(".")[-1] or hooked.__class__.__name__.lower(),
+                "depth": 0 if not layer_path else layer_path.count(".") + 1,
+                "type": hooked.__class__.__name__,
+                "input": _describe_call(hook_args, hook_kwargs),
+                "output": {"kind": "pending"},
+                "parameters": {
+                    "trainable": trainable,
+                    "frozen": frozen,
+                    "bytes": parameter_bytes,
+                    "shared": parameter_shared,
+                },
+                "buffers": {
+                    "elements": buffer_elements,
+                    "bytes": buffer_bytes,
+                    "shared": buffer_shared,
+                },
+                "metrics": {},
+            })
+            pending.setdefault(id(hooked), []).append(len(layers) - 1)
 
-        def _fwd_hook(module: Module, inputs: tuple[torch.Tensor, ...], out: Any) -> None:
-            """Post-forward hook"""
-            # Check that another hook has not been triggered at this forward stage
-            if not post_hook_tracker[id(module)]["is_used"] and (
-                post_hook_tracker[id(module)]["target"] == post_hook_tracker[id(module)]["current"]
-            ):
-                # Write information
-                # Retrieve forward index
-                if len(call_idxs[id(module)]) == 1:
-                    fw_idx = call_idxs[id(module)][0]
+        def post_hook(
+            hooked: Module,
+            hook_args: tuple[Any, ...],
+            hook_kwargs: dict[str, Any],
+            output: Any,
+        ) -> None:
+            layer_index = pending[id(hooked)].pop()
+            layer = layers[layer_index]
+            layer["output"] = _describe(output)
+            if not is_metric_leaf(hooked):
+                return
+
+            ordered_inputs = _ordered_inputs(hooked, hook_args, hook_kwargs)
+            input_tensor = _first_tensor(ordered_inputs)
+            output_tensor = _first_tensor(output)
+            if input_tensor is None or output_tensor is None:
+                for metric, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
+                    layer["metrics"][metric] = metric_result(
+                        status="unavailable",
+                        unit=unit,
+                        scope="module_call",
+                        method="torchscan_module_formula",
+                    )
+                    _diagnostic(
+                        diagnostics,
+                        code="missing_metric_tensor",
+                        metric=metric,
+                        path=layer["path"],
+                        message="The module call did not expose both an input and output tensor.",
+                    )
+                return
+
+            flops_output = output if isinstance(hooked, nn.MultiheadAttention) else output_tensor
+            layer["metrics"]["module_flops"] = _measure_module_metric(
+                "module_flops",
+                "FLOPs",
+                layer["path"],
+                diagnostics,
+                lambda: module_flops(hooked, ordered_inputs, flops_output),
+            )
+            layer["metrics"]["macs"] = _measure_module_metric(
+                "macs",
+                "MACs",
+                layer["path"],
+                diagnostics,
+                lambda: module_macs(hooked, input_tensor, output_tensor),
+            )
+            layer["metrics"]["dmas"] = _measure_module_metric(
+                "dmas",
+                "DMAs",
+                layer["path"],
+                diagnostics,
+                lambda: module_dmas(hooked, input_tensor, output_tensor),
+            )
+            try:
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    receptive_field, stride, padding = module_rf(hooked, input_tensor, output_tensor)
+            except Exception as error:  # ruff: ignore[blind-except] BLE001  # Optional report metric.
+                caught = []
+                receptive_values: tuple[float, float, float] | None = None
+                _diagnostic(
+                    diagnostics,
+                    code="module_metric_error",
+                    metric="receptive_field",
+                    path=layer["path"],
+                    message=f"{type(error).__name__}: {error}",
+                )
+            else:
+                receptive_values = (receptive_field, stride, padding)
+                if caught:
+                    _diagnostic(
+                        diagnostics,
+                        code="unsupported_module_metric",
+                        metric="receptive_field",
+                        path=layer["path"],
+                        message="; ".join(str(warning.message) for warning in caught),
+                    )
+            for index, name in enumerate(("receptive_field", "effective_stride", "effective_padding")):
+                if receptive_values is None or caught:
+                    layer["metrics"][name] = metric_result(
+                        status="unavailable",
+                        unit="elements",
+                        scope="module_call",
+                        method="torchscan_module_formula",
+                    )
                 else:
-                    # The first dictionary with output_shape=None is the correct one
-                    for idx in call_idxs[id(module)]:
-                        if info[idx]["output_shape"] is None:
-                            fw_idx = idx
-                            break
+                    layer["metrics"][name] = metric_result(
+                        status="complete",
+                        value=receptive_values[index],
+                        unit="elements",
+                        scope="module_call",
+                        method="torchscan_module_formula",
+                    )
 
-                output_shape, primary_out = _normalize_output(out)
+        handles.append(current.register_forward_pre_hook(pre_hook, with_kwargs=True))
+        handles.append(current.register_forward_hook(post_hook, with_kwargs=True))
 
-                if not _is_metric_leaf(module):
-                    tot_flops, tot_macs, tot_dmas = 0, 0, 0
-                    current_rf, current_stride, current_padding = 1.0, 1.0, 0.0
-                else:
-                    # Compute stats for standalone layers
-                    flops_out = out if isinstance(module, nn.MultiheadAttention) else primary_out
-                    tot_flops = module_flops(module, inputs, flops_out)
-                    tot_macs = module_macs(module, inputs[0], primary_out)
-                    tot_dmas = module_dmas(module, inputs[0], primary_out)
-                    current_rf, current_stride, current_padding = module_rf(module, inputs[0], primary_out)
+    targets = [("", module)] if isinstance(module, nn.Transformer) else list(module.named_modules())
+    for module_path, current in targets:
+        register(current, module_path)
 
-                # Update layer information
-                info[fw_idx]["output_shape"] = output_shape
-                # Add them, since some modules can be used several times
-                info[fw_idx]["flops"] = tot_flops
-                info[fw_idx]["macs"] = tot_macs
-                info[fw_idx]["dmas"] = tot_dmas
-                # Compute receptive field
-                info[fw_idx]["rf"] = current_rf
-                info[fw_idx]["s"] = current_stride
-                info[fw_idx]["p"] = current_padding
-
-                # Mark the next hook for execution
-                post_hook_tracker[id(module)]["target"] += 1
-                # Current pass already used one of the hooks
-                post_hook_tracker[id(module)]["is_used"] = True
-            post_hook_tracker[id(module)]["current"] += 1
-            # All the hooks have been checked, reset the temporary values
-            if post_hook_tracker[id(module)]["current"] == len(module._forward_pre_hooks):
-                post_hook_tracker[id(module)]["current"] = 0
-                post_hook_tracker[id(module)]["is_used"] = False
-
-        pre_fw_handles.append(module.register_forward_pre_hook(_pre_hook))
-        post_fw_handles.append(module.register_forward_hook(_fwd_hook))
-        # Handle modules that are used multiple times (with several hooks)
-        pre_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}
-        post_hook_tracker[id(module)] = {"current": 0, "target": 0, "is_used": False}
-
-    # Hook model
-    info: list[dict[str, Any]] = []
-    param_ids: set[int] = set()
-    call_idxs: dict[int, list[int]] = {}
-    if isinstance(module, nn.Transformer):
-        # Descendant hooks would double-count the root's analytic composite total.
-        _hook_info(module, module.__class__.__name__.lower())
-    else:
-        apply(module, _hook_info)
-
-    # Forward
     try:
-        with torch.no_grad():
-            module(*input_ts)
+        module.eval()
+        with torch.inference_mode():
+            module(*call_args, **call_kwargs)
     finally:
-        # Removes all hooks using their handles
-        for handle in (*pre_fw_handles, *post_fw_handles):
+        for handle in handles:
             handle.remove()
+        for child, training in training_flags:
+            child.training = training
 
-    reserved_ram, diff_ram = 0.0, 0.0
-    if torch.cuda.is_available():
-        reserved_ram = torch.cuda.memory_reserved() / 1024**2
-        diff_ram = (torch.cuda.memory_reserved() - torch.cuda.memory_allocated()) / 1024**2
-        torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+    parameters = list(module.parameters())
+    buffers = list(module.buffers())
+    trainable = sum(parameter.numel() for parameter in parameters if parameter.requires_grad)
+    frozen = sum(parameter.numel() for parameter in parameters if not parameter.requires_grad)
+    parameter_bytes = sum(parameter.numel() * parameter.element_size() for parameter in parameters)
+    buffer_elements = sum(buffer.numel() for buffer in buffers)
+    buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in buffers)
+    model_tensors = [*parameters, *buffers]
 
-    grad_params, nograd_params, param_size = 0, 0, 0
-    num_buffers, buffer_size = 0, 0
-    for p in module.parameters():
-        numel = p.numel()
-        if p.requires_grad:
-            grad_params += numel
-        else:
-            nograd_params += numel
-        param_size += numel * p.element_size()
-    for b in module.buffers():
-        numel = b.numel()
-        num_buffers += numel
-        buffer_size += numel * b.element_size()
-
-    # Update cumulative receptive field
-    rf, s, p_ = 1, 1, 0
-    for fw_idx, layer in enumerate(info):
-        rf += s * (layer["rf"] - 1)
-        p_ += s * layer["p"]
-        s *= layer["s"]
-        info[fw_idx]["rf"] = rf
-        info[fw_idx]["s"] = s
-        info[fw_idx]["p"] = p_
-
-    return {
-        "overheads": {
-            "cuda": {
-                "pre": cuda_overhead,
-                "fwd": get_process_gpu_ram(os.getpid()) - reserved_ram,
-            },
-            "framework": {"pre": framework_overhead, "fwd": diff_ram},
+    report: AnalysisReport = {
+        "schema_version": 1,
+        "context": {
+            "torchscan_version": _package_version(),
+            "torch_version": torch.__version__,
+            "python_version": platform.python_version(),
+            "model_type": f"{module.__class__.__module__}.{module.__class__.__qualname__}",
+            "execution_mode": "inference",
+            "training_before": training_flags[0][1],
+            "devices": sorted({str(tensor.device) for tensor in model_tensors}),
+            "dtypes": sorted({str(tensor.dtype) for tensor in model_tensors}),
         },
-        "layers": info,
-        "overall": {
-            "grad_params": grad_params,
-            "nograd_params": nograd_params,
-            "param_size": param_size,
-            "num_buffers": num_buffers,
-            "buffer_size": buffer_size,
-            "flops": sum(layer["flops"] for layer in info),
-            "macs": sum(layer["macs"] for layer in info),
-            "dmas": sum(layer["dmas"] for layer in info),
+        "inputs": input_metadata,
+        "layers": layers,
+        "totals": {
+            "parameters": metric_result(
+                status="complete", value=trainable + frozen, unit="elements", scope="model", method="pytorch"
+            ),
+            "trainable_parameters": metric_result(
+                status="complete", value=trainable, unit="elements", scope="model", method="pytorch"
+            ),
+            "frozen_parameters": metric_result(
+                status="complete", value=frozen, unit="elements", scope="model", method="pytorch"
+            ),
+            "parameter_bytes": metric_result(
+                status="complete", value=parameter_bytes, unit="bytes", scope="model", method="pytorch"
+            ),
+            "buffer_elements": metric_result(
+                status="complete", value=buffer_elements, unit="elements", scope="model", method="pytorch"
+            ),
+            "buffer_bytes": metric_result(
+                status="complete", value=buffer_bytes, unit="bytes", scope="model", method="pytorch"
+            ),
+            "module_flops": _aggregate_metric(layers, "module_flops", "FLOPs"),
+            "macs": _aggregate_metric(layers, "macs", "MACs"),
+            "dmas": _aggregate_metric(layers, "dmas", "DMAs"),
         },
+        "diagnostics": diagnostics,
     }
+    if strict and (
+        report["diagnostics"] or any(result["status"] != "complete" for result in report["totals"].values())
+    ):
+        raise IncompleteAnalysisError(report)
+    return report
 
 
 def summary(
@@ -374,37 +522,22 @@ def summary(
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
     *,
-    input_data: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor, ...] | None = None,
-) -> None:
-    """Print a module summary for expected shapes or caller-provided tensors.
-
-    Examples:
-        >>> import torch.nn as nn
-        >>> from torchscan import summary
-        >>> mod = nn.Conv2d(3, 8, 3)
-        >>> summary(mod, (3, 224, 224), receptive_field=True)
-
-    Args:
-        module: Module to inspect. It must contain at least one parameter.
-        input_shape: Input shape without a batch dimension, or one shape per positional tensor input.
-        wrap_mode: Wrap long layer names at the middle (`"mid"`) or end (`"end"`).
-        max_depth: Maximum depth of layer information.
-        receptive_field: Whether to estimate receptive fields.
-        effective_rf_stats: If `receptive_field` is true, also display effective stride and padding.
-        input_data: One tensor or a non-empty list or tuple of positional tensor inputs, including all dimensions.
-
-    Raises:
-        StopIteration: If the module has no parameters.
-        TypeError: If `input_data` is invalid or a hooked output has an unsupported leaf or contains no tensor.
-        ValueError: If the inputs, `wrap_mode`, or `max_depth` are invalid.
-
-    Notes:
-        This function has the same forward-pass and module-hook limitations as `crawl_module`.
-    """
-    # Get the summary dict
-    module_info = crawl_module(module, input_shape, input_data=input_data)
-    # Aggregate until max_depth
-    if isinstance(max_depth, int):
-        module_info = aggregate_info(module_info, max_depth)
-    # Format it and print it
-    print(format_info(module_info, wrap_mode, receptive_field, effective_rf_stats))  # ruff: ignore[print] T201
+    dtype: torch.dtype | Iterable[torch.dtype] | None = None,
+    args: tuple[Any, ...] | None = None,
+    kwargs: Mapping[str, Any] | None = None,
+    device: str | torch.device | None = None,
+    strict: bool = False,
+) -> AnalysisReport:
+    """Print and return a truthful module analysis report."""
+    report = crawl_module(
+        module,
+        input_shape,
+        dtype,
+        args=args,
+        kwargs=kwargs,
+        device=device,
+        strict=strict,
+    )
+    display_report = aggregate_info(report, max_depth) if isinstance(max_depth, int) else report
+    print(format_info(display_report, wrap_mode, receptive_field, effective_rf_stats))  # ruff: ignore[print] T201
+    return report

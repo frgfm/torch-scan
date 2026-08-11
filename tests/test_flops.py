@@ -61,6 +61,20 @@ def test_measure_flops_custom_zero_is_complete():
     assert mapping.keys() == {torch.ops.aten.sin}
 
 
+def test_custom_formula_tensor_ops_are_not_recorded_as_workload_ops():
+    inputs = torch.ones(5)
+
+    def sin_flops(input_shape, *, out_shape):
+        assert input_shape == out_shape
+        torch.cos(torch.ones(1))
+        return prod(out_shape)
+
+    report = measure_flops(lambda: torch.sin(inputs), custom_mapping={torch.ops.aten.sin: sin_flops})
+
+    assert report["by_operator"] == {"aten.sin": 5}
+    assert all(diagnostic.get("operator") != "aten.cos" for diagnostic in report["diagnostics"])
+
+
 def test_measure_flops_reports_uncounted_operator_as_partial():
     left = torch.ones(2, 3)
     right = torch.ones(3, 4)

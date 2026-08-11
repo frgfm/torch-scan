@@ -83,6 +83,27 @@ def test_crawl_module_aggregates_compute_metrics():
         )
 
 
+def test_crawl_module_collects_operator_flops_from_the_same_forward():
+    report = crawler.crawl_module(nn.Linear(4, 2), (4,))
+
+    assert report["totals"]["operator_flops"] == report["operator_flops"]["total"]
+    assert report["operator_flops"]["by_operator"] == {"aten.addmm": 16}
+
+
+def test_module_formula_tensor_ops_do_not_pollute_operator_report(monkeypatch):
+    original = crawler.module_flops
+
+    def formula(*args, **kwargs):
+        torch.sin(torch.ones(1))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(crawler, "module_flops", formula)
+    report = crawler.crawl_module(nn.Linear(4, 2), (4,))
+
+    assert "aten.sin" not in report["operator_flops"]["by_operator"]
+    assert all(diagnostic.get("operator") != "aten.sin" for diagnostic in report["diagnostics"])
+
+
 def test_crawl_module_preserves_nested_output_metadata_without_values():
     class NestedOutputs(nn.Module):
         def __init__(self):

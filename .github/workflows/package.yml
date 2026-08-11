@@ -78,6 +78,59 @@ jobs:
           flags: unittests
           fail_ci_if_error: true
 
+  compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: minimum
+            python: "3.11"
+            torch: torch==2.1.0
+          - name: latest
+            python: "3.14"
+            torch: torch>=2.1.0,<3.0.0
+    name: compatibility (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - name: Install compatibility environment
+        run: uv pip install -e ".[test]" "${{ matrix.torch }}"
+      - name: Run v0.2 contract tests
+        run: >-
+          pytest
+          tests/test_compare.py
+          tests/test_crawler.py
+          tests/test_flops.py
+          tests/test_inputs.py
+          tests/test_report.py
+
+  model-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          architecture: x64
+      - uses: astral-sh/setup-uv@v9.0.0
+        with:
+          activate-environment: true
+      - name: Install model test dependencies
+        run: uv pip install -e ".[test,model-test]"
+      - name: Run no-download model smokes
+        run: pytest tests/test_model_zoo.py
+
   headers:
     runs-on: ubuntu-latest
     steps:
@@ -94,7 +147,7 @@ jobs:
           ignore-files: __init__.py
 
   build:
-    needs: [install, quality, tests, headers]
+    needs: [install, quality, tests, compatibility, model-smoke, headers]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -160,6 +213,8 @@ jobs:
           report = torchscan.crawl_module(torch.nn.Linear(4, 2), input_shape=(4,));
           assert report;
           assert callable(torchscan.summary);
+          assert callable(torchscan.measure_flops);
+          assert callable(torchscan.compare_reports);
           assert callable(torchscan.process.measure_peak_memory)"
 
   publish:

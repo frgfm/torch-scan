@@ -14,6 +14,7 @@ import torch
 from torch import nn
 from torch.nn import Module
 
+from .flops import FlopReport, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
 from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
 from .utils import aggregate_info, format_info
@@ -292,6 +293,7 @@ def crawl_module(
     pending: dict[int, list[int]] = {}
     call_counts: dict[int, int] = {}
     seen_tensor_ids: set[int] = set()
+    captured_calls: list[tuple[int, Module, tuple[Any, ...], Any, torch.Tensor | None, torch.Tensor | None]] = []
     training_flags = [(child, child.training) for child in module.modules()]
     root_module = module
 
@@ -374,99 +376,120 @@ def crawl_module(
                 return
 
             ordered_inputs = _ordered_inputs(hooked, hook_args, hook_kwargs)
-            input_tensor = _first_tensor(ordered_inputs)
-            output_tensor = _first_tensor(output)
-            if input_tensor is None or output_tensor is None:
-                for metric, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
-                    layer["metrics"][metric] = metric_result(
-                        status="unavailable",
-                        unit=unit,
-                        scope="module_call",
-                        method="torchscan_module_formula",
-                    )
-                    _diagnostic(
-                        diagnostics,
-                        code="missing_metric_tensor",
-                        metric=metric,
-                        path=layer["path"],
-                        message="The module call did not expose both an input and output tensor.",
-                    )
-                return
-
-            flops_output = output if isinstance(hooked, nn.MultiheadAttention) else output_tensor
-            layer["metrics"]["module_flops"] = _measure_module_metric(
-                "module_flops",
-                "FLOPs",
-                layer["path"],
-                diagnostics,
-                lambda: module_flops(hooked, ordered_inputs, flops_output),
-            )
-            layer["metrics"]["macs"] = _measure_module_metric(
-                "macs",
-                "MACs",
-                layer["path"],
-                diagnostics,
-                lambda: module_macs(hooked, input_tensor, output_tensor),
-            )
-            layer["metrics"]["dmas"] = _measure_module_metric(
-                "dmas",
-                "DMAs",
-                layer["path"],
-                diagnostics,
-                lambda: module_dmas(hooked, input_tensor, output_tensor),
-            )
-            try:
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    receptive_field, stride, padding = module_rf(hooked, input_tensor, output_tensor)
-            except Exception as error:  # ruff: ignore[blind-except] BLE001  # Optional report metric.
-                caught = []
-                receptive_values: tuple[float, float, float] | None = None
-                _diagnostic(
-                    diagnostics,
-                    code="module_metric_error",
-                    metric="receptive_field",
-                    path=layer["path"],
-                    message=f"{type(error).__name__}: {error}",
-                )
-            else:
-                receptive_values = (receptive_field, stride, padding)
-                if caught:
-                    _diagnostic(
-                        diagnostics,
-                        code="unsupported_module_metric",
-                        metric="receptive_field",
-                        path=layer["path"],
-                        message="; ".join(str(warning.message) for warning in caught),
-                    )
-            for index, name in enumerate(("receptive_field", "effective_stride", "effective_padding")):
-                if receptive_values is None or caught:
-                    layer["metrics"][name] = metric_result(
-                        status="unavailable",
-                        unit="elements",
-                        scope="module_call",
-                        method="torchscan_module_formula",
-                    )
-                else:
-                    layer["metrics"][name] = metric_result(
-                        status="complete",
-                        value=receptive_values[index],
-                        unit="elements",
-                        scope="module_call",
-                        method="torchscan_module_formula",
-                    )
+            captured_calls.append((
+                layer_index,
+                hooked,
+                ordered_inputs,
+                output,
+                _first_tensor(ordered_inputs),
+                _first_tensor(output),
+            ))
 
         handles.append(current.register_forward_pre_hook(pre_hook, with_kwargs=True))
         handles.append(current.register_forward_hook(post_hook, with_kwargs=True))
+
+    def populate_metrics(
+        layer_index: int,
+        hooked: Module,
+        ordered_inputs: tuple[Any, ...],
+        output: Any,
+        input_tensor: torch.Tensor | None,
+        output_tensor: torch.Tensor | None,
+    ) -> None:
+        layer = layers[layer_index]
+        if input_tensor is None or output_tensor is None:
+            for metric, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
+                layer["metrics"][metric] = metric_result(
+                    status="unavailable",
+                    unit=unit,
+                    scope="module_call",
+                    method="torchscan_module_formula",
+                )
+                _diagnostic(
+                    diagnostics,
+                    code="missing_metric_tensor",
+                    metric=metric,
+                    path=layer["path"],
+                    message="The module call did not expose both an input and output tensor.",
+                )
+            return
+
+        flops_output = output if isinstance(hooked, nn.MultiheadAttention) else output_tensor
+        layer["metrics"]["module_flops"] = _measure_module_metric(
+            "module_flops",
+            "FLOPs",
+            layer["path"],
+            diagnostics,
+            lambda: module_flops(hooked, ordered_inputs, flops_output),
+        )
+        layer["metrics"]["macs"] = _measure_module_metric(
+            "macs",
+            "MACs",
+            layer["path"],
+            diagnostics,
+            lambda: module_macs(hooked, input_tensor, output_tensor),
+        )
+        layer["metrics"]["dmas"] = _measure_module_metric(
+            "dmas",
+            "DMAs",
+            layer["path"],
+            diagnostics,
+            lambda: module_dmas(hooked, input_tensor, output_tensor),
+        )
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                receptive_field, stride, padding = module_rf(hooked, input_tensor, output_tensor)
+        except Exception as error:  # ruff: ignore[blind-except] BLE001  # Optional report metric.
+            caught = []
+            receptive_values: tuple[float, float, float] | None = None
+            _diagnostic(
+                diagnostics,
+                code="module_metric_error",
+                metric="receptive_field",
+                path=layer["path"],
+                message=f"{type(error).__name__}: {error}",
+            )
+        else:
+            receptive_values = (receptive_field, stride, padding)
+            if caught:
+                _diagnostic(
+                    diagnostics,
+                    code="unsupported_module_metric",
+                    metric="receptive_field",
+                    path=layer["path"],
+                    message="; ".join(str(warning.message) for warning in caught),
+                )
+        for index, name in enumerate(("receptive_field", "effective_stride", "effective_padding")):
+            if receptive_values is None or caught:
+                layer["metrics"][name] = metric_result(
+                    status="unavailable",
+                    unit="elements",
+                    scope="module_call",
+                    method="torchscan_module_formula",
+                )
+            else:
+                layer["metrics"][name] = metric_result(
+                    status="complete",
+                    value=receptive_values[index],
+                    unit="elements",
+                    scope="module_call",
+                    method="torchscan_module_formula",
+                )
 
     targets = [("", module)] if isinstance(module, nn.Transformer) else list(module.named_modules())
     for module_path, current in targets:
         register(current, module_path)
 
+    flop_report: FlopReport
     try:
         module.eval()
-        with torch.inference_mode():
-            module(*call_args, **call_kwargs)
+        with torch.no_grad():
+            # PyTorch 2.1's explicit module tracker replaces caller tensors in hooks.
+            # Omitting it preserves exact args; newer releases still attribute modules automatically.
+            flop_report = measure_flops(lambda: module(*call_args, **call_kwargs))
+            for captured_call in captured_calls:
+                populate_metrics(*captured_call)
     finally:
         for handle in handles:
             handle.remove()
@@ -481,6 +504,7 @@ def crawl_module(
     buffer_elements = sum(buffer.numel() for buffer in buffers)
     buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in buffers)
     model_tensors = [*parameters, *buffers]
+    diagnostics.extend(flop_report["diagnostics"])
 
     report: AnalysisReport = {
         "schema_version": 1,
@@ -489,13 +513,14 @@ def crawl_module(
             "torch_version": torch.__version__,
             "python_version": platform.python_version(),
             "model_type": f"{module.__class__.__module__}.{module.__class__.__qualname__}",
-            "execution_mode": "inference",
+            "execution_mode": "evaluation_no_grad",
             "training_before": training_flags[0][1],
             "devices": sorted({str(tensor.device) for tensor in model_tensors}),
             "dtypes": sorted({str(tensor.dtype) for tensor in model_tensors}),
         },
         "inputs": input_metadata,
         "layers": layers,
+        "operator_flops": flop_report,
         "totals": {
             "parameters": metric_result(
                 status="complete", value=trainable + frozen, unit="elements", scope="model", method="pytorch"
@@ -516,6 +541,7 @@ def crawl_module(
                 status="complete", value=buffer_bytes, unit="bytes", scope="model", method="pytorch"
             ),
             "module_flops": _aggregate_metric(layers, "module_flops", "FLOPs"),
+            "operator_flops": flop_report["total"],
             "macs": _aggregate_metric(layers, "macs", "MACs"),
             "dmas": _aggregate_metric(layers, "dmas", "DMAs"),
         },

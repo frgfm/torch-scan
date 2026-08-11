@@ -77,7 +77,7 @@ Shared parameters are not duplicated in model totals merely because a module is 
 | `schema_version` | `1` for the v0.2 wire shape. |
 | `context` | `torch_version` and the counting `method`. |
 | `total` | Complete or partial FLOP `MetricResult`. |
-| `by_module` | Known FLOPs keyed by module path. |
+| `by_module` | Best-effort known FLOPs keyed by PyTorch's upstream module labels when available. |
 | `by_operator` | Known FLOPs keyed by normalized operator packet such as `aten.mm`. |
 | `ignored_operators` | Explicit zero-FLOP metadata, movement, or allocation operators with call count and reason. |
 | `diagnostics` | `uncounted_operator` diagnostics and other method limitations. |
@@ -88,6 +88,11 @@ for `total` to be complete.
 `crawl_module` stores the complete report under `operator_flops` and the same `total` result under
 `totals.operator_flops`. Module hooks and the native operator counter observe the same forward call; module formulas
 run after the counter exits so their own bookkeeping is not counted.
+
+`Global`/`total` is authoritative. `crawl_module` does not request PyTorch 2.1's explicit module tracker because that
+tracker replaces tensors passed through its hooks; preserving the caller's exact `args` and `kwargs` takes priority.
+Consequently, `by_module` can be empty on older supported PyTorch versions. Standalone `measure_flops(modules=...)`
+requests native hierarchical attribution explicitly.
 
 ## `ReportDiff`
 

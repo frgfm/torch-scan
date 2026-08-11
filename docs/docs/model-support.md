@@ -52,7 +52,7 @@ TorchScan:
 
 1. Records every module's training flag.
 2. Switches modules to evaluation mode.
-3. Runs one forward pass under `torch.inference_mode()`.
+3. Runs one forward pass under `torch.no_grad()`.
 4. Removes hooks and restores every original training flag, including after an exception.
 
 The model owns every other side effect. TorchScan does not move the model, seed random generators, warm up kernels,

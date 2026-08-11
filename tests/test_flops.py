@@ -44,6 +44,19 @@ def test_measure_flops_custom_mapping():
     assert report["diagnostics"] == []
 
 
+def test_measure_flops_rejects_overload_custom_mapping_keys():
+    calls = 0
+
+    def workload():
+        nonlocal calls
+        calls += 1
+
+    with pytest.raises(TypeError, match="operator packets"):
+        measure_flops(workload, custom_mapping={torch.ops.aten.sin.default: lambda *_args, **_kwargs: 1})
+
+    assert calls == 0
+
+
 def test_measure_flops_custom_zero_is_complete():
     inputs = torch.ones(5)
 

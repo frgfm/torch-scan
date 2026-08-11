@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -34,12 +35,15 @@ def test_measure_peak_memory_cpu_inference():
         with torch.inference_mode():
             model(inputs)
 
-    stats = process.measure_peak_memory(workload, device=torch.device("cpu:0"))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        stats = process.measure_peak_memory(workload, device=torch.device("cpu:0"))
 
     _assert_memory_stats(stats, device="cpu", metric="pytorch_tensor_bytes")
     assert stats["delta_bytes"] > 0
     assert calls == 1
     assert json.loads(json.dumps(stats)) == stats
+    assert not any("export_memory_timeline" in str(item.message) for item in caught)
 
 
 def test_measure_peak_memory_cpu_training():

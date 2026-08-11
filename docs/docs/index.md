@@ -30,7 +30,7 @@ strict_report = crawl_module(model, (3, 32, 32), strict=True)
 ```
 
 `input_shape` excludes the batch dimension. TorchScan creates a synthetic batch of one, temporarily switches all
-modules to evaluation mode, runs under inference mode, and restores each module's original training state.
+modules to evaluation mode, runs with gradients disabled, and restores each module's original training state.
 
 ## Use real calls when shape is not enough
 

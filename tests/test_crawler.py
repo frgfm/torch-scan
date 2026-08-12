@@ -15,20 +15,6 @@ def _layer(report, path):
     return next(layer for layer in report["layers"] if layer["path"] == path)
 
 
-def test_apply():
-    multi_convs = nn.Sequential(nn.Conv2d(16, 32, 3), nn.Conv2d(32, 64, 3))
-    mod = nn.Sequential(nn.Conv2d(3, 16, 3), multi_convs)
-
-    def tag_name(module, name):
-        module.__depth__ = len(name.split(".")) - 1
-        module.__name__ = name.rpartition(".")[-1]
-
-    crawler.apply(mod, tag_name)
-
-    assert mod[1][1].__depth__ == 2
-    assert mod[1][1].__name__ == "1"
-
-
 def test_crawl_module_report_and_summary(capsys):
     mod = nn.Conv2d(3, 8, 3)
 

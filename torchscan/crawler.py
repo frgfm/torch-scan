@@ -266,15 +266,6 @@ def _prepare_inputs(
     return call_args, call_kwargs, {"source": "generated", **_describe_call(call_args, call_kwargs)}
 
 
-def apply(module: Module, fn: Callable[[Module, str], None], name: str | None = None) -> None:
-    """Apply a function to a module tree while providing stable dotted paths."""
-    if name is None:
-        name = module.__class__.__name__.lower()
-    fn(module, name)
-    for child_name, child in module.named_children():
-        apply(child, fn, f"{name}.{child_name}")
-
-
 def crawl_module(
     module: Module,
     input_shape: list[tuple[int, ...]] | tuple[int, ...] | None = None,
@@ -295,13 +286,12 @@ def crawl_module(
     seen_tensor_ids: set[int] = set()
     captured_calls: list[tuple[int, Module, tuple[Any, ...], Any, torch.Tensor | None, torch.Tensor | None]] = []
     training_flags = [(child, child.training) for child in module.modules()]
-    root_module = module
 
     def is_metric_leaf(current: Module) -> bool:
         return (
             not any(current.children())
             or isinstance(current, nn.MultiheadAttention)
-            or (current is root_module and isinstance(root_module, nn.Transformer))
+            or (current is module and isinstance(module, nn.Transformer))
         )
 
     def register(current: Module, path: str) -> None:
@@ -309,7 +299,7 @@ def crawl_module(
             call_index = call_counts.get(id(hooked), 0)
             call_counts[id(hooked)] = call_index + 1
             recurse = isinstance(hooked, nn.MultiheadAttention) or (
-                hooked is root_module and isinstance(root_module, nn.Transformer)
+                hooked is module and isinstance(module, nn.Transformer)
             )
             trainable = frozen = parameter_bytes = buffer_elements = buffer_bytes = 0
             parameter_shared = buffer_shared = False
@@ -331,12 +321,11 @@ def crawl_module(
                 buffer_elements += buffer.numel()
                 buffer_bytes += buffer.numel() * buffer.element_size()
 
-            layer_path = path
             layers.append({
-                "path": layer_path,
+                "path": path,
                 "call_index": call_index,
-                "name": layer_path.rpartition(".")[-1] or hooked.__class__.__name__.lower(),
-                "depth": 0 if not layer_path else layer_path.count(".") + 1,
+                "name": path.rpartition(".")[-1] or hooked.__class__.__name__.lower(),
+                "depth": 0 if not path else path.count(".") + 1,
                 "type": hooked.__class__.__name__,
                 "input": _describe_call(hook_args, hook_kwargs),
                 "output": {"kind": "pending"},

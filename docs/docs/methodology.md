@@ -11,7 +11,7 @@ Neither mechanism is a hardware benchmark or a complete graph export.
 ## Module analysis
 
 `crawl_module` and `summary` make one forward call. Generated inputs add a batch dimension of one; caller-provided
-`args` and `kwargs` are forwarded unchanged. Analysis runs in evaluation and inference modes, then restores each
+`args` and `kwargs` are forwarded unchanged. Analysis runs in evaluation mode with gradients disabled, then restores each
 module's previous training flag.
 
 Layer identity is the full module path plus a call index. This distinguishes repeated calls through a shared module

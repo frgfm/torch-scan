@@ -3,7 +3,10 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict
+
+if TYPE_CHECKING:
+    from .flops import FlopReport
 
 __all__ = [
     "AnalysisReport",
@@ -61,7 +64,7 @@ class AnalysisReport(TypedDict):
     context: dict[str, Any]
     inputs: dict[str, Any]
     layers: list[LayerReport]
-    operator_flops: Any
+    operator_flops: "FlopReport"
     totals: dict[str, MetricResult]
     diagnostics: list[Diagnostic]
 

@@ -7,6 +7,8 @@ from torchscan.compare import compare_reports
 
 
 def _metric(status="complete", value=0, known_value=None, **metadata):
+    if status == "complete" and known_value is None:
+        known_value = value
     return {"status": status, "value": value, "known_value": known_value, **metadata}
 
 
@@ -118,6 +120,23 @@ def test_compare_reports_rejects_schema_mismatch_and_malformed_essentials():
     duplicate = _report(layers=[_layer("block", 0), _layer("block", 0)])
     with pytest.raises(ValueError, match="duplicate layer call"):
         compare_reports(duplicate, _report())
+
+    with pytest.raises(ValueError, match="unsupported schema version"):
+        compare_reports(_report(version=99), _report(version=99))
+
+
+@pytest.mark.parametrize(
+    "metric",
+    [
+        {"status": "complete", "value": 1, "known_value": None},
+        {"status": "partial", "value": 1, "known_value": 1},
+        {"status": "partial", "value": None, "known_value": None},
+        {"status": "unavailable", "value": 1, "known_value": None},
+    ],
+)
+def test_compare_reports_rejects_invalid_metric_invariants(metric):
+    with pytest.raises(ValueError):
+        compare_reports(_report(totals={"flops": metric}), _report())
 
 
 def test_compare_reports_is_json_serializable_and_does_not_mutate_inputs():

@@ -69,6 +69,9 @@ def _normalize_number(value: object, location: str) -> Number | None:
 
 def _normalize_metric(value: object, location: str) -> _MetricResult:
     metric = _expect_mapping(value, location)
+    for field in ("status", "value", "known_value"):
+        if field not in metric:
+            raise ValueError(f"{location} must contain '{field}'")
     status = metric.get("status")
     if status not in ("complete", "partial", "unavailable"):
         raise ValueError(f"{location}['status'] must be 'complete', 'partial', or 'unavailable'")
@@ -78,8 +81,16 @@ def _normalize_metric(value: object, location: str) -> _MetricResult:
         "value": _normalize_number(metric.get("value"), f"{location}['value']"),
         "known_value": _normalize_number(metric.get("known_value"), f"{location}['known_value']"),
     }
-    if status == "complete" and normalized["value"] is None:
-        raise ValueError(f"{location}['value'] must be a number when status is 'complete'")
+    if status == "complete":
+        if normalized["value"] is None:
+            raise ValueError(f"{location}['value'] must be a number when status is 'complete'")
+        if normalized["known_value"] != normalized["value"]:
+            raise ValueError(f"{location}['known_value'] must equal 'value' when status is 'complete'")
+    elif status == "partial":
+        if normalized["value"] is not None or normalized["known_value"] is None:
+            raise ValueError(f"{location} must have only a known_value when status is 'partial'")
+    elif normalized["value"] is not None or normalized["known_value"] is not None:
+        raise ValueError(f"{location} numeric values must be None when status is 'unavailable'")
 
     for field in ("unit", "scope", "method"):
         if field not in metric:
@@ -189,6 +200,8 @@ def compare_reports(before: object, after: object) -> ReportDiff:
     after_version, after_totals, after_layers = _normalize_report(after, "after")
     if before_version != after_version:
         raise ValueError(f"schema versions differ: {before_version} != {after_version}")
+    if before_version != 1:
+        raise ValueError(f"unsupported schema version: {before_version}")
 
     before_keys = before_layers.keys()
     after_keys = after_layers.keys()

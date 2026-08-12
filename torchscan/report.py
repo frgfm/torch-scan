@@ -87,9 +87,11 @@ def metric_result(
         if known_value is None:
             raise ValueError("A partial metric requires a known_value lower bound.")
         value = None
-    else:
+    elif status == "unavailable":
         value = None
         known_value = None
+    else:
+        raise ValueError("status must be 'complete', 'partial', or 'unavailable'.")
     return {
         "status": status,
         "value": value,

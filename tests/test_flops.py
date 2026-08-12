@@ -44,6 +44,31 @@ def test_measure_flops_custom_mapping():
     assert report["diagnostics"] == []
 
 
+def test_measure_flops_uses_explicit_modules_on_legacy_counter(monkeypatch):
+    calls = []
+
+    class LegacyCounter:
+        def __init__(self, mods=None, **_kwargs):
+            calls.append(mods)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get_flop_counts(self):
+            return {}
+
+    monkeypatch.setattr("torchscan.flops.FlopCounterMode", LegacyCounter)
+    module = nn.Identity()
+
+    report = measure_flops(lambda: None, modules=module)
+
+    assert calls == [None, module]
+    assert report["total"]["value"] == 0
+
+
 def test_measure_flops_rejects_overload_custom_mapping_keys():
     calls = 0
 

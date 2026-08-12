@@ -9,7 +9,7 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - Versioned `AnalysisReport`, `MetricResult`, and `Diagnostic` contracts with complete, partial, and unavailable states.
 - Stable full module paths and per-path call indexes.
 - Complete `args` and `kwargs` forwarding, including nested containers and non-tensor leaves.
-- `strict=True` and `IncompleteAnalysisError` for automation that rejects incomplete module metrics.
+- `strict=True` and `IncompleteAnalysisError` for automation that rejects incomplete metrics.
 - PyTorch-native operator FLOPs through `measure_flops`, with per-call custom formulas and uncounted-op diagnostics.
 - Pure `compare_reports` before/after comparison.
 - Explicit workload peak-memory measurement through `measure_peak_memory` (#149).
@@ -19,7 +19,7 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 ### Changed
 
 - Require Python 3.11+ and PyTorch 2.1+.
-- Run model crawling under evaluation and inference modes, then restore every original module training flag.
+- Run model crawling under evaluation mode with gradients disabled, then restore every original module training flag.
 - Make crawler bookkeeping linear in layer-call count (#147).
 - Separate module-formula metrics from operator-dispatch FLOPs.
 - Modernize packaging, CI, and MkDocs Material documentation.

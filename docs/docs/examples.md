@@ -118,9 +118,7 @@ stats = measure_peak_memory(workload, device=inputs.device)
 budget_bytes = int(os.environ["MODEL_MEMORY_BUDGET_BYTES"])
 
 if stats["peak_bytes"] > budget_bytes:
-    raise RuntimeError(
-        f"PyTorch peak {stats['peak_bytes']} bytes exceeds owner budget {budget_bytes} bytes"
-    )
+    raise RuntimeError(f"PyTorch peak {stats['peak_bytes']} bytes exceeds owner budget {budget_bytes} bytes")
 ```
 
 TorchScan does not select the threshold or claim target-device readiness from a CPU run.

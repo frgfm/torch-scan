@@ -8,7 +8,7 @@ import platform
 import warnings
 from collections.abc import Callable, Iterable, Mapping
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import nn
@@ -244,9 +244,8 @@ def _prepare_inputs(
             raise TypeError("kwargs keys must be strings.")
         return call_args, call_kwargs, {"source": "provided", **_describe_call(call_args, call_kwargs)}
 
-    if input_shape is None:
-        raise ValueError("input_shape is required when args and kwargs are omitted.")
-    shapes = input_shape if isinstance(input_shape, list) else [input_shape]
+    shape_source = cast(list[tuple[int, ...]] | tuple[int, ...], input_shape)
+    shapes = shape_source if isinstance(shape_source, list) else [shape_source]
     if not shapes or any(not isinstance(shape, tuple) for shape in shapes):
         raise TypeError("input_shape must be a tuple or a non-empty list of tuples.")
     if any(any(not isinstance(dimension, int) for dimension in shape) for shape in shapes):

@@ -1,5 +1,6 @@
 import inspect
 import json
+from typing import Any, cast
 
 import pytest
 import torch
@@ -91,6 +92,25 @@ def test_generated_input_shape_and_dtype_lengths_must_match():
 
     with pytest.raises(ValueError, match=r"length|same number"):
         crawl_module(Pair(), [(4,), (4,)], [torch.float32])
+
+
+def test_invalid_real_and_generated_input_types_are_rejected():
+    model = nn.Identity()
+
+    with pytest.raises(ValueError, match="generated"):
+        crawl_module(model, args=(torch.ones(1),), device="cpu")
+    with pytest.raises(TypeError, match="args"):
+        crawl_module(model, args=cast("Any", [torch.ones(1)]))
+    with pytest.raises(TypeError, match="kwargs"):
+        crawl_module(model, kwargs=cast("Any", []))
+    with pytest.raises(TypeError, match="keys"):
+        crawl_module(model, kwargs=cast("Any", {1: torch.ones(1)}))
+    with pytest.raises(TypeError, match="input_shape"):
+        crawl_module(model, cast("Any", []))
+    with pytest.raises(TypeError, match="dimension"):
+        crawl_module(model, cast("Any", ("invalid",)))
+    with pytest.raises(TypeError, match="dtype"):
+        crawl_module(model, [(1,), (1,)], cast("Any", [torch.float32, "invalid"]))
 
 
 def test_generated_input_infers_parameter_device_and_dtype():

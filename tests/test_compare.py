@@ -148,6 +148,26 @@ def test_compare_reports_rejects_incompatible_metric_metadata(field):
         compare_reports(before, after)
 
 
+@pytest.mark.parametrize(
+    "report",
+    [
+        _report(totals={"flops": {"status": "complete", "value": 1}}),
+        _report(totals={"flops": {"status": "bogus", "value": 1, "known_value": 1}}),
+        _report(totals={"flops": {"status": "complete", "value": None, "known_value": None}}),
+        _report(totals={"flops": {"status": "complete", "value": True, "known_value": True}}),
+        _report(totals={"flops": _metric(unit=1)}),
+        _report(totals={1: _metric()}),
+        {"schema_version": 1, "totals": {}, "layers": {}},
+        _report(layers=[{"path": 1, "call_index": 0, "metrics": {}}]),
+        _report(layers=[{"path": "layer", "call_index": True, "metrics": {}}]),
+        {"schema_version": True, "totals": {}, "layers": []},
+    ],
+)
+def test_compare_reports_rejects_malformed_report_fields(report):
+    with pytest.raises((TypeError, ValueError)):
+        compare_reports(report, _report())
+
+
 def test_compare_reports_is_json_serializable_and_does_not_mutate_inputs():
     before = _report(
         totals={"flops": _metric(value=10, method="module")},

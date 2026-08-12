@@ -49,7 +49,14 @@ def _describe(value: Any) -> dict[str, Any]:
         return {
             "kind": "mapping",
             "type": type(value).__name__,
-            "items": [{"key_type": type(key).__name__, "value": _describe(item)} for key, item in value.items()],
+            "items": [
+                {
+                    **({"key": key} if isinstance(key, int) or (isinstance(key, str) and key.isidentifier()) else {}),
+                    "key_type": type(key).__name__,
+                    "value": _describe(item),
+                }
+                for key, item in value.items()
+            ],
         }
     if isinstance(value, (bool, int, float, complex, str, bytes)):
         return {"kind": "scalar", "type": type(value).__name__}
@@ -276,7 +283,11 @@ def crawl_module(
     device: str | torch.device | None = None,
     strict: bool = False,
 ) -> AnalysisReport:
-    """Collect a truthful, machine-readable report from one inference forward pass."""
+    """Collect a truthful, machine-readable report from one inference forward pass.
+
+    Calls sharing a module instance must be serialized because analysis temporarily
+    changes its training state and installs forward hooks.
+    """
     call_args, call_kwargs, input_metadata = _prepare_inputs(module, input_shape, dtype, args, kwargs, device)
     diagnostics: list[Diagnostic] = []
     layers: list[LayerReport] = []

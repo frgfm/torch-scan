@@ -93,6 +93,8 @@ run after the counter exits so their own bookkeeping is not counted.
 tracker replaces tensors passed through its hooks; preserving the caller's exact `args` and `kwargs` takes priority.
 Consequently, `by_module` can be empty on older supported PyTorch versions. Standalone `measure_flops(modules=...)`
 requests native hierarchical attribution explicitly.
+Upstream `by_module` labels are not stable layer identities, parent entries include their children, and rows must not be
+joined to `layers` or summed. Use the global `total` for comparison.
 
 ## `ReportDiff`
 

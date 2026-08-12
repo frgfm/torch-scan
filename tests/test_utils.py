@@ -48,8 +48,10 @@ def test_format_info_handles_nested_outputs_and_unavailable_totals():
     report["totals"]["module_flops"] = metric_result(status="unavailable", unit="FLOPs", scope="forward", method="test")
 
     formatted = utils.format_info(report, receptive_field=True, effective_rf_stats=True)
+    receptive_only = utils.format_info(report, receptive_field=True)
 
     assert "{((1,), [none])}" in formatted
+    assert "Receptive field" in receptive_only
     assert "Module-formula forward FLOPs: unavailable" in formatted
     with pytest.raises(ValueError, match="non-negative"):
         utils.aggregate_info(report, -1)

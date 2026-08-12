@@ -1,4 +1,5 @@
 import json
+import warnings
 
 import pytest
 import torch
@@ -32,6 +33,59 @@ def test_crawl_module_report_and_summary(capsys):
     returned = crawler.summary(mod, (3, 32, 32))
     assert returned == report
     assert "conv2d    Conv2d    (1, 8, 30, 30)    224" in capsys.readouterr().out
+
+
+def test_internal_metadata_and_formula_boundaries(monkeypatch):
+    class Inputs(nn.Module):
+        def forward(self, first, _second):
+            return first
+
+    class Variadic(nn.Module):
+        def forward(self, *inputs):
+            return inputs[0]
+
+    assert crawler._ordered_inputs(Inputs(), (1,), {}) == (1,)
+    assert crawler._ordered_inputs(Variadic(), (1, 2), {}) == (1, 2)
+    monkeypatch.setattr(crawler.inspect, "signature", lambda _: (_ for _ in ()).throw(ValueError))
+    assert crawler._ordered_inputs(nn.Identity(), (1,), {"extra": 2}) == (1, 2)
+
+    diagnostics = []
+
+    def warned_formula():
+        warnings.warn("formula warning", UserWarning, stacklevel=1)
+        return 3
+
+    result = crawler._measure_module_metric("flops", "FLOPs", "", diagnostics, warned_formula)
+    assert result["status"] == "partial"
+    assert diagnostics[0]["code"] == "module_metric_warning"
+    assert crawler._aggregate_metric([], "flops", "FLOPs")["status"] == "unavailable"
+
+
+def test_package_fallback_and_object_metadata(monkeypatch):
+    def missing_package(_):
+        raise crawler.PackageNotFoundError
+
+    monkeypatch.setattr(crawler, "version", missing_package)
+    assert crawler._package_version() == "unknown"
+
+    class IgnoreObject(nn.Module):
+        def forward(self, _value):
+            return torch.ones(1)
+
+    report = crawler.crawl_module(IgnoreObject(), args=(object(),))
+    assert report["inputs"]["args"][0]["kind"] == "object"
+
+
+def test_receptive_field_failure_is_diagnostic(monkeypatch):
+    def fail_receptive_field(*_args):
+        raise RuntimeError("receptive field failed")
+
+    monkeypatch.setattr(crawler, "module_rf", fail_receptive_field)
+    report = crawler.crawl_module(nn.Identity(), args=(torch.ones(1),))
+
+    assert any(
+        item["metric"] == "receptive_field" and item["code"] == "module_metric_error" for item in report["diagnostics"]
+    )
 
 
 def test_crawl_module_shared_parameters_and_buffers():

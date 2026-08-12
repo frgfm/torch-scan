@@ -1,10 +1,12 @@
 import json
+from typing import Any, cast
 
 import pytest
 import torch
 from torch import nn
 
 from torchscan import IncompleteAnalysisError, crawl_module, summary
+from torchscan.report import metric_result
 
 STATUSES = {"complete", "partial", "unavailable"}
 
@@ -107,3 +109,8 @@ def test_strict_mode_rejects_incomplete_analysis():
 
     with pytest.raises(IncompleteAnalysisError):
         crawl_module(UnsupportedIdentity(), args=(torch.randn(2, 4),), strict=True)
+
+
+def test_metric_result_rejects_invalid_status():
+    with pytest.raises(ValueError, match="status must be"):
+        metric_result(status=cast("Any", "bogus"), unit="FLOPs", scope="forward", method="test")

@@ -14,6 +14,10 @@ Neither mechanism is a hardware benchmark or a complete graph export.
 `args` and `kwargs` are forwarded unchanged. Analysis runs in evaluation mode with gradients disabled, then restores each
 module's previous training flag.
 
+Use `args` and `kwargs` when the model does not accept a leading batch dimension, including `batch_first=False`
+sequence modules. Calls sharing the same module instance must be serialized because crawling temporarily changes its
+training state and installs hooks.
+
 Layer identity is the full module path plus a call index. This distinguishes repeated calls through a shared module
 without inventing duplicate parameters.
 

@@ -139,6 +139,15 @@ def test_compare_reports_rejects_invalid_metric_invariants(metric):
         compare_reports(_report(totals={"flops": metric}), _report())
 
 
+@pytest.mark.parametrize("field", ["unit", "scope", "method"])
+def test_compare_reports_rejects_incompatible_metric_metadata(field):
+    before = _report(totals={"flops": _metric(**{field: "before"})})
+    after = _report(totals={"flops": _metric(**{field: "after"})})
+
+    with pytest.raises(ValueError, match=f"incompatible {field}"):
+        compare_reports(before, after)
+
+
 def test_compare_reports_is_json_serializable_and_does_not_mutate_inputs():
     before = _report(
         totals={"flops": _metric(value=10, method="module")},

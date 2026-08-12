@@ -176,6 +176,10 @@ def _diff_metrics(
         after_metric = after.get(name)
         if changed_only and before_metric == after_metric:
             continue
+        if before_metric is not None and after_metric is not None:
+            for field in ("unit", "scope", "method"):
+                if before_metric.get(field) != after_metric.get(field):
+                    raise ValueError(f"metric {name!r} has incompatible {field}")
         differences[name] = _diff_metric(before_metric, after_metric)
     return differences
 

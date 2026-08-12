@@ -1,4 +1,5 @@
 import inspect
+import json
 
 import pytest
 import torch
@@ -23,7 +24,7 @@ def test_real_args_and_kwargs_are_forwarded_unchanged():
     payload = {"nested": [input_t, None, {"enabled": True}]}
     scale = 2.0
 
-    crawl_module(
+    report = crawl_module(
         model,
         args=(input_t, scale, None),
         kwargs={"payload": payload, "attention_mask": mask},
@@ -35,6 +36,18 @@ def test_real_args_and_kwargs_are_forwarded_unchanged():
     assert model.received[2] is None
     assert model.received[3] is payload
     assert model.received[4] is mask
+    payload_metadata = report["inputs"]["kwargs"]["payload"]
+    assert payload_metadata["items"][0]["key"] == "nested"
+
+
+def test_mapping_metadata_does_not_retain_path_keys():
+    class Echo(nn.Module):
+        def forward(self, payload):
+            return payload
+
+    report = crawl_module(Echo(), args=({"/private/model.pt": torch.ones(1)},))
+
+    assert "/private/model.pt" not in json.dumps(report)
 
 
 def test_kwargs_only_is_a_real_input_source():

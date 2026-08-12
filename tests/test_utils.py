@@ -1,6 +1,9 @@
 import pytest
+import torch
+from torch import nn
 
-from torchscan import utils
+from torchscan import crawl_module, utils
+from torchscan.report import metric_result
 
 
 def test_format_name():
@@ -34,3 +37,19 @@ def test_wrap_string():
 )
 def test_unit_scale(input_val, num_val, unit):
     assert utils.unit_scale(input_val) == (num_val, unit)
+
+
+def test_format_info_handles_nested_outputs_and_unavailable_totals():
+    class NestedOutput(nn.Module):
+        def forward(self, input_t):
+            return {"features": (input_t, [None])}
+
+    report = crawl_module(NestedOutput(), args=(torch.ones(1),))
+    report["totals"]["module_flops"] = metric_result(status="unavailable", unit="FLOPs", scope="forward", method="test")
+
+    formatted = utils.format_info(report, receptive_field=True, effective_rf_stats=True)
+
+    assert "{((1,), [none])}" in formatted
+    assert "Module-formula forward FLOPs: unavailable" in formatted
+    with pytest.raises(ValueError, match="non-negative"):
+        utils.aggregate_info(report, -1)

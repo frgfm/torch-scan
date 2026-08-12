@@ -114,3 +114,10 @@ def test_strict_mode_rejects_incomplete_analysis():
 def test_metric_result_rejects_invalid_status():
     with pytest.raises(ValueError, match="status must be"):
         metric_result(status=cast("Any", "bogus"), unit="FLOPs", scope="forward", method="test")
+
+
+def test_metric_result_requires_complete_or_partial_value():
+    with pytest.raises(ValueError, match="complete metric requires"):
+        metric_result(status="complete", unit="FLOPs", scope="forward", method="test")
+    with pytest.raises(ValueError, match="partial metric requires"):
+        metric_result(status="partial", unit="FLOPs", scope="forward", method="test")

@@ -35,7 +35,7 @@ def test_crawl_module_report_and_summary(capsys):
     assert "conv2d    Conv2d    (1, 8, 30, 30)    224" in capsys.readouterr().out
 
 
-def test_internal_metadata_and_formula_boundaries(monkeypatch):
+def test_internal_metadata_and_formula_boundaries():
     class Inputs(nn.Module):
         def forward(self, first, _second):
             return first
@@ -44,10 +44,11 @@ def test_internal_metadata_and_formula_boundaries(monkeypatch):
         def forward(self, *inputs):
             return inputs[0]
 
-    assert crawler._ordered_inputs(Inputs(), (1,), {}) == (1,)
-    assert crawler._ordered_inputs(Variadic(), (1, 2), {}) == (1, 2)
-    monkeypatch.setattr(crawler.inspect, "signature", lambda _: (_ for _ in ()).throw(ValueError))
-    assert crawler._ordered_inputs(nn.Identity(), (1,), {"extra": 2}) == (1, 2)
+    inputs_signature = crawler.inspect.signature(Inputs().forward)
+    assert crawler._ordered_inputs(inputs_signature, (1,), {}) == (1,)
+    assert crawler._ordered_inputs(inputs_signature, (), {"unexpected": 2}) == (2,)
+    assert crawler._ordered_inputs(crawler.inspect.signature(Variadic().forward), (1, 2), {}) == (1, 2)
+    assert crawler._ordered_inputs(None, (1,), {"extra": 2}) == (1, 2)
 
     diagnostics = []
 
@@ -59,6 +60,106 @@ def test_internal_metadata_and_formula_boundaries(monkeypatch):
     assert result["status"] == "partial"
     assert diagnostics[0]["code"] == "module_metric_warning"
     assert crawler._aggregate_metric([], "flops", "FLOPs")["status"] == "unavailable"
+
+
+@pytest.mark.parametrize("error_type", [TypeError, ValueError])
+def test_uninspectable_metric_leaf_uses_fallback_and_cleans_up(monkeypatch, error_type):
+    model = nn.Identity().train()
+    original_signature = crawler.inspect.signature
+    hook_counts = (len(model._forward_pre_hooks), len(model._forward_hooks))
+
+    def unavailable_signature(callable_):
+        if getattr(callable_, "__self__", None) is model:
+            raise error_type
+        return original_signature(callable_)
+
+    monkeypatch.setattr(crawler.inspect, "signature", unavailable_signature)
+
+    report = crawler.crawl_module(model, args=(torch.ones(1),))
+
+    assert report["layers"][0]["path"] == ""
+    assert model.training
+    assert (len(model._forward_pre_hooks), len(model._forward_hooks)) == hook_counts
+
+
+def test_reused_metric_leaf_signature_is_inspected_once_per_crawl(monkeypatch):
+    class ReusedLinear(nn.Linear):
+        def _forward(self, input_t, scale, extras, bias, offset):
+            output = super().forward(input_t) * scale + bias
+            for extra in extras:
+                output = output + extra
+            return output + offset
+
+        def training_forward(self, input_t, scale=7, *extras, bias=1, offset=0):
+            return self._forward(input_t, scale, extras, bias, offset)
+
+        def evaluation_forward(self, input_t, scale=2, *extras, bias=1, offset=0):
+            return self._forward(input_t, scale, extras, bias, offset)
+
+        forward = training_forward
+
+        def train(self, mode=True):
+            super().train(mode)
+            self.forward = self.training_forward if mode else self.evaluation_forward
+            return self
+
+    class ReusedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shared = ReusedLinear(4, 3)
+            self.forward_calls = 0
+
+        def forward(self, input_t):
+            self.forward_calls += 1
+            intermediate = self.shared(input_t, bias=3)
+            return self.shared(input_t, 4, intermediate, bias=5, offset=6)
+
+    model = ReusedModel().train()
+    input_t = torch.randn(2, 4)
+    modules = list(model.modules())
+    training_flags = [module.training for module in modules]
+    hook_counts = [(len(module._forward_pre_hooks), len(module._forward_hooks)) for module in modules]
+    original_signature = crawler.inspect.signature
+    signature_calls = 0
+    ordered_inputs = []
+    original_module_flops = crawler.module_flops
+
+    def counting_signature(callable_):
+        nonlocal signature_calls
+        if getattr(callable_, "__self__", None) is model.shared:
+            signature_calls += 1
+        return original_signature(callable_)
+
+    def recording_module_flops(module, inputs, output):
+        if module is model.shared:
+            ordered_inputs.append(inputs)
+        return original_module_flops(module, inputs, output)
+
+    monkeypatch.setattr(crawler.inspect, "signature", counting_signature)
+    monkeypatch.setattr(crawler, "module_flops", recording_module_flops)
+
+    first = crawler.crawl_module(model, args=(input_t,))
+    second = crawler.crawl_module(model, args=(input_t,))
+
+    assert first == second
+    assert signature_calls == 2
+    assert model.forward_calls == 2
+    assert [(layer["path"], layer["call_index"]) for layer in first["layers"]] == [
+        ("", 0),
+        ("shared", 0),
+        ("shared", 1),
+    ]
+    assert len(ordered_inputs) == 4
+    for defaulted in ordered_inputs[::2]:
+        assert defaulted[0] is input_t
+        assert defaulted[1:] == (2, 3, 0)
+    for variadic in ordered_inputs[1::2]:
+        assert variadic[0] is input_t
+        assert variadic[1] == 4
+        assert variadic[2].shape == (2, 3)
+        assert variadic[3:] == (5, 6)
+    assert [module.training for module in modules] == training_flags
+    assert [(len(module._forward_pre_hooks), len(module._forward_hooks)) for module in modules] == hook_counts
 
 
 def test_package_fallback_and_object_metadata(monkeypatch):

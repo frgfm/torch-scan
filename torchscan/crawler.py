@@ -7,6 +7,7 @@ import inspect
 import platform
 import warnings
 from collections.abc import Callable, Iterable, Mapping
+from contextlib import suppress
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, cast
 
@@ -84,10 +85,15 @@ def _first_tensor(value: Any) -> torch.Tensor | None:
     return None
 
 
-def _ordered_inputs(module: Module, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> tuple[Any, ...]:
+def _ordered_inputs(
+    signature: inspect.Signature | None,
+    args: tuple[Any, ...],
+    kwargs: Mapping[str, Any],
+) -> tuple[Any, ...]:
     """Return forward arguments in signature order for the legacy formula functions."""
+    if signature is None:
+        return (*args, *kwargs.values())
     try:
-        signature = inspect.signature(module.forward)
         bound = signature.bind_partial(*args, **kwargs)
         bound.apply_defaults()
     except (TypeError, ValueError):
@@ -305,6 +311,12 @@ def crawl_module(
         )
 
     def register(current: Module, path: str) -> None:
+        forward_signature: inspect.Signature | None = None
+        metric_leaf = is_metric_leaf(current)
+        if metric_leaf:
+            with suppress(TypeError, ValueError):
+                forward_signature = inspect.signature(current.forward)
+
         def pre_hook(hooked: Module, hook_args: tuple[Any, ...], hook_kwargs: dict[str, Any]) -> None:
             call_index = call_counts.get(id(hooked), 0)
             call_counts[id(hooked)] = call_index + 1
@@ -371,10 +383,10 @@ def crawl_module(
             layer_index = pending[id(hooked)].pop()
             layer = layers[layer_index]
             layer["output"] = _describe(output)
-            if not is_metric_leaf(hooked):
+            if not metric_leaf:
                 return
 
-            ordered_inputs = _ordered_inputs(hooked, hook_args, hook_kwargs)
+            ordered_inputs = _ordered_inputs(forward_signature, hook_args, hook_kwargs)
             captured_calls.append((
                 layer_index,
                 hooked,
@@ -477,12 +489,11 @@ def crawl_module(
                 )
 
     targets = [("", module)] if isinstance(module, nn.Transformer) else list(module.named_modules())
-    for module_path, current in targets:
-        register(current, module_path)
-
     flop_report: FlopReport
     try:
         module.eval()
+        for module_path, current in targets:
+            register(current, module_path)
         with torch.no_grad():
             # PyTorch 2.1's explicit module tracker replaces caller tensors in hooks.
             # Omitting it preserves exact args; newer releases still attribute modules automatically.

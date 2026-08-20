@@ -5,16 +5,27 @@ on:
   pull_request:
     branches: main
 
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   UV_TORCH_BACKEND: cpu
 
 jobs:
   docs:
+    permissions:
+      contents: read
+      pages: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
@@ -38,17 +49,23 @@ jobs:
           test -e docs/site/utils.html
           test -e docs/site/changelog.html
           test -e docs/site/latest/changelog.html
-      - name: Install SSH Client 🔑
+      - name: Upload GitHub Pages artifact
         if: github.event_name == 'push'
-        uses: webfactory/ssh-agent@v0.10.0
+        uses: actions/upload-pages-artifact@v5
         with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
-      - name: Deploy to Github Pages
-        if: github.event_name == 'push'
-        uses: JamesIves/github-pages-deploy-action@v4.8.0
-        with:
-          BRANCH: gh-pages
-          FOLDER: docs/site
-          COMMIT_MESSAGE: "[skip ci] Documentation updates"
-          CLEAN: true
-          SSH: true
+          path: docs/site
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: docs
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

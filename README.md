@@ -25,8 +25,6 @@ unsupported operation cannot masquerade as zero.
 ## Quickstart
 
 ```python
-import json
-
 import torch.nn as nn
 from torchscan import crawl_module, summary
 
@@ -34,21 +32,69 @@ model = nn.Conv2d(3, 8, 3)
 
 # Print the human-readable table and receive the same structured report.
 report = summary(model, (3, 32, 32))
-json.dumps(report)
 
 # Or collect the report without printing the table.
 report = crawl_module(model, (3, 32, 32), strict=True)
+```
+
+`summary` keeps the familiar terminal UX while returning the structured report:
+
+```text
+__________________________________________________________
+Layer     Type      Output Shape      Param #    Trainable
+==========================================================
+conv2d    Conv2d    (1, 8, 30, 30)    224        True
+==========================================================
+Trainable params: 224
+Non-trainable params: 0
+Total params: 224
+----------------------------------------------------------
+Model size (params + buffers): 0.00 Mb
+----------------------------------------------------------
+Module-formula forward FLOPs: 388.80 kFLOPs
+Multiply-Accumulations: 194.40 kMACs
+Direct memory accesses: 201.82 kDMAs
+Operator forward FLOPs: 388.80 kFLOPs
+__________________________________________________________
 ```
 
 `input_shape` excludes the batch dimension. For realistic calls—including masks, scalars, `None`, and nested
 containers—pass complete `args` and `kwargs` instead:
 
 ```python
+import json
+
+import torch
+from torch import nn
+from torchscan import crawl_module
+
+
+class MaskedModel(nn.Module):
+    def forward(self, input_ids, *, attention_mask):
+        return input_ids * attention_mask
+
+
+transformer_model = MaskedModel()
+input_ids = torch.ones(1, 4)
+attention_mask = torch.tensor([[True, True, False, False]])
 report = crawl_module(
     transformer_model,
     args=(input_ids,),
     kwargs={"attention_mask": attention_mask},
 )
+print(json.dumps(report["inputs"]["kwargs"]["attention_mask"], indent=2))
+```
+
+Only metadata is retained:
+
+```json
+{
+  "kind": "tensor",
+  "shape": [1, 4],
+  "dtype": "torch.bool",
+  "device": "cpu",
+  "requires_grad": false
+}
 ```
 
 TorchScan temporarily evaluates the model with gradients disabled and restores every module's original training
@@ -59,22 +105,57 @@ state. It records input metadata, never tensor values.
 Use zero-argument callables when the owner needs full control over execution:
 
 ```python
+import json
+
+import torch
 from torchscan import measure_flops
 from torchscan.process import measure_peak_memory
 
-flops = measure_flops(lambda: model(inputs))
-memory = measure_peak_memory(lambda: model(inputs), device=inputs.device)
+inputs = torch.ones(8)
+flops = measure_flops(lambda: torch.sin(inputs))
+print(json.dumps(flops["total"], indent=2))
+print("uncounted operator:", flops["diagnostics"][0]["operator"])
+
+memory = measure_peak_memory(lambda: torch.cos(inputs), device=inputs.device)
+print(memory["device"], memory["metric"])
 ```
 
 `measure_flops` uses PyTorch's operator dispatch. `measure_peak_memory` invokes the workload exactly once and reports
 backend-specific PyTorch memory—not process RSS or total device memory.
 
+Here, PyTorch has no built-in `aten.sin` formula, so TorchScan shows a lower bound instead of a false zero:
+
+```text
+{
+  "status": "partial",
+  "value": null,
+  "known_value": 0,
+  "unit": "FLOPs",
+  "scope": "workload",
+  "method": "torch.utils.flop_counter.FlopCounterMode"
+}
+uncounted operator: aten.sin
+cpu pytorch_tensor_bytes
+```
+
+Peak byte values are intentionally omitted because they depend on the workload, allocator, PyTorch version, and
+hardware; the returned mapping includes `baseline_bytes`, `peak_bytes`, and `delta_bytes`.
+
 ## Before/after comparison
 
 ```python
-from torchscan import compare_reports
+import torch.nn as nn
+from torchscan import compare_reports, crawl_module
 
+before = crawl_module(nn.Conv2d(3, 8, 3), (3, 32, 32))
+after = crawl_module(nn.Conv2d(3, 12, 3), (3, 32, 32))
 diff = compare_reports(before, after)
+parameters = diff["totals"]["parameters"]
+print(parameters["status"], parameters["delta"])
+```
+
+```text
+complete 112
 ```
 
 `compare_reports` propagates incomplete metrics. It does not store baselines or decide whether a model fits a budget;

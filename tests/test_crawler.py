@@ -32,7 +32,15 @@ def test_crawl_module_report_and_summary(capsys):
 
     returned = crawler.summary(mod, (3, 32, 32))
     assert returned == report
-    assert "conv2d    Conv2d    (1, 8, 30, 30)    224" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    for line in (
+        "Layer     Type      Output Shape      Param #    Trainable",
+        "conv2d    Conv2d    (1, 8, 30, 30)    224",
+        "Total params: 224",
+        "Module-formula forward FLOPs: 388.80 kFLOPs",
+        "Operator forward FLOPs: 388.80 kFLOPs",
+    ):
+        assert line in output
 
 
 def test_internal_metadata_and_formula_boundaries():

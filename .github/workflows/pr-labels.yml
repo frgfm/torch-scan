@@ -1,34 +1,52 @@
 name: pr-labels
 
 on:
-  pull_request:
+  pull_request_target:
     branches: main
-    types: closed
+    types: [closed]
 
 jobs:
   is-properly-labeled:
     if: github.event.pull_request.merged == true
     permissions:
-      contents: read
       issues: write
-      pull-requests: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-      - uses: astral-sh/setup-uv@v9.0.0
-      - name: Install requests
-        run: uv pip install --system requests
-      - name: Process commit and find merger responsible for labeling
-        id: commit
-        run: echo "merger=$(python .github/verify_labels.py ${{ github.event.pull_request.number }})" >> "$GITHUB_OUTPUT"
-      - name: Comment PR
+      - name: Check labels and comment
         uses: actions/github-script@v9
-        if: ${{ steps.commit.outputs.merger != '' }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { issue: { number: issue_number }, repo: { owner, repo }  } = context;
-            github.rest.issues.createComment({ issue_number, owner, repo, body: 'Hey ${{ steps.commit.outputs.merger }} 👋\nYou merged this PR, but it is not correctly labeled. The list of valid labels is available at https://github.com/frgfm/torch-scan/blob/main/.github/verify_labels.py' });
+            const primaryLabels = new Set([
+              "type: new feature",
+              "type: bug",
+              "type: enhancement",
+              "type: misc",
+            ]);
+            const secondaryLabels = new Set([
+              "topic: documentation",
+              "module: modules",
+              "module: process",
+              "module: crawler",
+              "module: utils",
+              "ext: docs",
+              "ext: scripts",
+              "ext: tests",
+              "topic: build",
+              "topic: ci",
+            ]);
+            const pullRequest = context.payload.pull_request;
+            const labelNames = pullRequest.labels.map(({ name }) => name);
+            const hasPrimary = labelNames.some((name) => primaryLabels.has(name));
+            const hasSecondary = labelNames.some((name) => secondaryLabels.has(name));
+
+            if (!pullRequest.merged || (hasPrimary && hasSecondary)) {
+              return;
+            }
+
+            const merger = pullRequest.merged_by?.login;
+            const intro = merger ? `Hey @${merger} 👋\nYou merged this PR, but it` : "This merged PR";
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: pullRequest.number,
+              body: `${intro} is not correctly labeled. The list of valid labels is available at https://github.com/frgfm/torch-scan/blob/main/.github/workflows/pr-labels.yml`,
+            });

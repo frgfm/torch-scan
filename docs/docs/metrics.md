@@ -76,5 +76,5 @@ For research or regression analysis, retain:
 - Every diagnostic and custom formula definition.
 - Hardware and workload preparation for memory or latency measurements.
 
-Use [Report comparison](examples.md#compare-two-reports) only when both reports use the same schema and compatible
+Use [Report comparison](report-schema.md#reportdiff) only when both reports use the same schema and compatible
 methods.

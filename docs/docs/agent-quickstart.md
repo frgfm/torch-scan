@@ -73,4 +73,4 @@ Record the hardware and workload state with accelerator results. Do not invent a
    and reviewable. `crawl_module` does not accept custom mappings.
 4. Keep the formula with the experiment or project that owns the assumption.
 
-See [Examples](examples.md#supply-a-custom-operator-formula) and [Methodology](methodology.md).
+See [Model and input support](model-support.md#custom-formulas) and [Methodology](methodology.md).

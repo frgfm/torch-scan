@@ -80,7 +80,6 @@ nav:
   - Getting started:
       - Installation: installing.md
       - Agent quickstart: agent-quickstart.md
-      - Examples: examples.md
       - Migrating to v0.2: migration-v02.md
   - Guides:
       - Model and input support: model-support.md

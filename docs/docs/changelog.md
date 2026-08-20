@@ -20,7 +20,7 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 
 - Require Python 3.11+ and PyTorch 2.1+.
 - Run model crawling under evaluation mode with gradients disabled, then restore every original module training flag.
-- Make crawler bookkeeping linear in layer-call count (#147).
+- Make crawler bookkeeping linear in layer-call count and cache forward signatures per module (#147, #152).
 - Separate module-formula metrics from operator-dispatch FLOPs.
 - Modernize packaging, CI, and MkDocs Material documentation.
 

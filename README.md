@@ -110,7 +110,6 @@ uv pip install -e .
 ## Documentation
 
 - [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html)
-- [Examples](https://frgfm.github.io/torch-scan/examples.html)
 - [Model and input support](https://frgfm.github.io/torch-scan/model-support.html)
 - [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html)
 - [API reference](https://frgfm.github.io/torch-scan/torchscan.html)

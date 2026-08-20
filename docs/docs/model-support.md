@@ -86,5 +86,14 @@ methods into one total.
 
 Supply custom operator formulas to standalone `measure_flops` calls through `custom_mapping`. This does not modify a
 global registry. `crawl_module` uses built-in formulas for its same-forward operator report and does not accept custom
-mappings. The formula uses PyTorch's shape-based `FlopCounterMode` contract; see [Examples](examples.md) and the
-installed PyTorch version's documentation when defining formulas.
+mappings. Formulas use PyTorch's shape-based `FlopCounterMode` contract:
+
+```python
+report = measure_flops(
+    lambda: torch.sin(inputs),
+    custom_mapping={torch.ops.aten.sin: lambda input_shape, *, out_shape: out_shape.numel()},
+)
+```
+
+Use operator packets such as `torch.ops.aten.sin`, not overloads such as `.default`, and check the installed PyTorch
+version's documentation when defining formulas.

@@ -126,5 +126,5 @@ and `after`. `delta` is numeric only when both inputs are complete. Partial, una
 
 ## Compatibility rule
 
-Reject an unknown `schema_version` rather than guessing its meaning. Use [`compare_reports`](examples.md#compare-two-reports)
+Reject an unknown `schema_version` rather than guessing its meaning. Use [`compare_reports`](#reportdiff)
 for same-schema reports and migrate stored reports explicitly when a future schema changes.

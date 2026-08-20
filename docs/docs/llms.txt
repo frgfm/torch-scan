@@ -9,7 +9,6 @@ using a number. TorchScan does not choose budgets or claim latency, process RSS,
 ## Documentation
 
 - [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html): Safe default workflow for coding agents.
-- [Examples](https://frgfm.github.io/torch-scan/examples.html): Keyword inputs, custom FLOP formulas, comparisons, and owner budgets.
 - [Report schema](https://frgfm.github.io/torch-scan/report-schema.html): AnalysisReport, MetricResult, Diagnostic, FlopReport, and ReportDiff contracts.
 - [Methodology](https://frgfm.github.io/torch-scan/methodology.html): Module hooks, operator dispatch, uncertainty, memory, and reproducibility.
 - [Model and input support](https://frgfm.github.io/torch-scan/model-support.html): Generated inputs, args/kwargs, execution state, and coverage.

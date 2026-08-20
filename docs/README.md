@@ -27,6 +27,3 @@ make build-docs
 ```
 
 The generated site is written to `docs/site/`. Pull requests build the site automatically, and pushes to `main` deploy it to GitHub Pages.
-
-Keep `llms.txt` and `docs/docs/llms.txt` identical: the first is discoverable in the repository and the second is
-copied to the published site's root.

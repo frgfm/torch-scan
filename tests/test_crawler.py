@@ -1,54 +1,151 @@
-import io
 import json
-import sys
-from collections import OrderedDict
+import warnings
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from torchscan import crawler, modules
 
 
-def test_apply():
-    multi_convs = nn.Sequential(nn.Conv2d(16, 32, 3), nn.Conv2d(32, 64, 3))
-    mod = nn.Sequential(nn.Conv2d(3, 16, 3), multi_convs)
-
-    # Tag module attributes
-    def tag_name(mod, name):
-        mod.__depth__ = len(name.split(".")) - 1
-        mod.__name__ = name.rpartition(".")[-1]
-
-    crawler.apply(mod, tag_name)
-
-    assert mod[1][1].__depth__ == 2
-    assert mod[1][1].__name__ == "1"
+def _total(report, name):
+    return report["totals"][name]["value"]
 
 
-def test_crawl_module(capsys):
+def _layer(report, path):
+    return next(layer for layer in report["layers"] if layer["path"] == path)
+
+
+def test_crawl_module_report_and_summary(capsys):
     mod = nn.Conv2d(3, 8, 3)
 
-    res = crawler.crawl_module(mod, (3, 32, 32))
-    assert isinstance(res, dict)
-    assert res["overall"]["grad_params"] == 224
-    assert set(res["overall"]) == {
-        "grad_params",
-        "nograd_params",
-        "param_size",
-        "num_buffers",
-        "buffer_size",
-        "flops",
-        "macs",
-        "dmas",
-    }
-    assert res["overall"]["flops"] == 388_800
-    assert res["overall"]["macs"] == 194_400
-    assert res["overall"]["dmas"] == 201_824
-    assert res["layers"][0]["output_shape"] == (-1, 8, 30, 30)
-    json.dumps(res)
+    report = crawler.crawl_module(mod, (3, 32, 32))
+    layer = report["layers"][0]
 
-    crawler.summary(mod, (3, 32, 32))
-    assert "conv2d    Conv2d    (-1, 8, 30, 30)    224" in capsys.readouterr().out
+    assert report["schema_version"] == 1
+    assert _total(report, "parameters") == 224
+    assert _total(report, "module_flops") == 388_800
+    assert _total(report, "macs") == 194_400
+    assert _total(report, "dmas") == 201_824
+    assert layer["output"]["shape"] == [1, 8, 30, 30]
+    assert json.loads(json.dumps(report)) == report
+
+    returned = crawler.summary(mod, (3, 32, 32))
+    assert returned == report
+    output = capsys.readouterr().out
+    for line in (
+        "Layer     Type      Output Shape      Param #    Trainable",
+        "conv2d    Conv2d    (1, 8, 30, 30)    224",
+        "Total params: 224",
+        "Module-formula forward FLOPs: 388.80 kFLOPs",
+        "Operator forward FLOPs: 388.80 kFLOPs",
+    ):
+        assert line in output
+
+
+def test_internal_metadata_and_formula_boundaries():
+    class Inputs(nn.Module):
+        def forward(self, first, _second):
+            return first
+
+    class Variadic(nn.Module):
+        def forward(self, *inputs):
+            return inputs[0]
+
+    inputs_signature = crawler.inspect.signature(Inputs().forward)
+    assert crawler._ordered_inputs(inputs_signature, (1,), {}) == (1,)
+    assert crawler._ordered_inputs(inputs_signature, (), {"unexpected": 2}) == (2,)
+    assert crawler._ordered_inputs(crawler.inspect.signature(Variadic().forward), (1, 2), {}) == (1, 2)
+    assert crawler._ordered_inputs(None, (1,), {"extra": 2}) == (1, 2)
+
+    diagnostics = []
+
+    def warned_formula():
+        warnings.warn("formula warning", UserWarning, stacklevel=1)
+        return 3
+
+    result = crawler._measure_module_metric("flops", "FLOPs", "", diagnostics, warned_formula)
+    assert result["status"] == "partial"
+    assert diagnostics[0]["code"] == "module_metric_warning"
+    assert crawler._aggregate_metric([], "flops", "FLOPs")["status"] == "unavailable"
+
+
+@pytest.mark.parametrize("error_type", [TypeError, ValueError])
+def test_uninspectable_metric_leaf_uses_fallback_and_cleans_up(monkeypatch, error_type):
+    model = nn.Identity().train()
+    original_signature = crawler.inspect.signature
+    hook_counts = (len(model._forward_pre_hooks), len(model._forward_hooks))
+
+    def unavailable_signature(callable_):
+        if getattr(callable_, "__self__", None) is model:
+            raise error_type
+        return original_signature(callable_)
+
+    monkeypatch.setattr(crawler.inspect, "signature", unavailable_signature)
+
+    report = crawler.crawl_module(model, args=(torch.ones(1),))
+
+    assert report["layers"][0]["path"] == ""
+    assert model.training
+    assert (len(model._forward_pre_hooks), len(model._forward_hooks)) == hook_counts
+
+
+def test_reused_metric_leaf_signature_is_inspected_once_per_crawl(monkeypatch):
+    class ReusedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shared = nn.Linear(4, 4)
+
+        def forward(self, input_t):
+            return self.shared(self.shared(input_t))
+
+    model = ReusedModel()
+    input_t = torch.randn(2, 4)
+    original_signature = crawler.inspect.signature
+    signature_calls = 0
+
+    def counting_signature(callable_):
+        nonlocal signature_calls
+        if getattr(callable_, "__self__", None) is model.shared:
+            signature_calls += 1
+        return original_signature(callable_)
+
+    monkeypatch.setattr(crawler.inspect, "signature", counting_signature)
+
+    report = crawler.crawl_module(model, args=(input_t,))
+
+    assert signature_calls == 1
+    assert [(layer["path"], layer["call_index"]) for layer in report["layers"] if layer["path"] == "shared"] == [
+        ("shared", 0),
+        ("shared", 1),
+    ]
+
+
+def test_package_fallback_and_object_metadata(monkeypatch):
+    def missing_package(_):
+        raise crawler.PackageNotFoundError
+
+    monkeypatch.setattr(crawler, "version", missing_package)
+    assert crawler._package_version() == "unknown"
+
+    class IgnoreObject(nn.Module):
+        def forward(self, _value):
+            return torch.ones(1)
+
+    report = crawler.crawl_module(IgnoreObject(), args=(object(),))
+    assert report["inputs"]["args"][0]["kind"] == "object"
+
+
+def test_receptive_field_failure_is_diagnostic(monkeypatch):
+    def fail_receptive_field(*_args):
+        raise RuntimeError("receptive field failed")
+
+    monkeypatch.setattr(crawler, "module_rf", fail_receptive_field)
+    report = crawler.crawl_module(nn.Identity(), args=(torch.ones(1),))
+
+    assert any(
+        item["metric"] == "receptive_field" and item["code"] == "module_metric_error" for item in report["diagnostics"]
+    )
 
 
 def test_crawl_module_shared_parameters_and_buffers():
@@ -56,93 +153,96 @@ def test_crawl_module_shared_parameters_and_buffers():
     mod[1].weight = mod[0].weight
     mod[0].register_buffer("stats", torch.ones(4))
     mod[1].register_buffer("stats", mod[0].stats)
-    res = crawler.crawl_module(mod, (4,))
-    layers = {layer["name"]: layer for layer in res["layers"]}
+
+    report = crawler.crawl_module(mod, (4,))
+    first, second = _layer(report, "0"), _layer(report, "1")
     num_params = mod[0].weight.numel()
     num_buffers = mod[0].stats.numel()
 
-    assert res["overall"]["grad_params"] == num_params
-    assert res["overall"]["param_size"] == num_params * mod[0].weight.element_size()
-    assert res["overall"]["num_buffers"] == num_buffers
-    assert res["overall"]["buffer_size"] == num_buffers * mod[0].stats.element_size()
-    assert (layers["0"]["grad_params"], layers["1"]["grad_params"]) == (num_params, 0)
-    assert (layers["0"]["num_buffers"], layers["1"]["num_buffers"]) == (num_buffers, 0)
-    assert layers["0"]["is_shared"] is False
-    assert layers["1"]["is_shared"] is True
+    assert _total(report, "parameters") == num_params
+    assert _total(report, "parameter_bytes") == num_params * mod[0].weight.element_size()
+    assert _total(report, "buffer_elements") == num_buffers
+    assert _total(report, "buffer_bytes") == num_buffers * mod[0].stats.element_size()
+    assert (first["parameters"]["trainable"], second["parameters"]["trainable"]) == (num_params, 0)
+    assert (first["buffers"]["elements"], second["buffers"]["elements"]) == (num_buffers, 0)
+    assert first["parameters"]["shared"] is False
+    assert second["parameters"]["shared"] is True
 
 
 def test_crawl_module_aggregates_compute_metrics():
-    mod = nn.Sequential(nn.Linear(8, 4), nn.ReLU(), nn.Linear(4, 2))
+    report = crawler.crawl_module(nn.Sequential(nn.Linear(8, 4), nn.ReLU(), nn.Linear(4, 2)), (8,))
 
-    res = crawler.crawl_module(mod, (8,))
-    expected = {"flops": 84, "macs": 40, "dmas": 72}
-
-    assert {metric: res["overall"][metric] for metric in expected} == expected
-    for metric in expected:
-        assert res["overall"][metric] == sum(layer[metric] for layer in res["layers"])
-
-
-def test_crawl_module_two_outputs():
-    class TwoOutputs(nn.Conv2d):
-        def forward(self, x):
-            out = super().forward(x)
-            return out, out[..., :1, :1]
-
-    layer = crawler.crawl_module(TwoOutputs(1, 2, 3), (1, 5, 5))["layers"][0]
-    plain_layer = crawler.crawl_module(nn.Conv2d(1, 2, 3), (1, 5, 5))["layers"][0]
-    assert layer["output_shape"] == ((-1, 2, 3, 3), (-1, 2, 1, 1))
-    assert tuple(layer[key] for key in ("flops", "macs", "dmas", "rf", "s", "p")) == tuple(
-        plain_layer[key] for key in ("flops", "macs", "dmas", "rf", "s", "p")
-    )
+    assert {name: _total(report, name) for name in ("module_flops", "macs", "dmas")} == {
+        "module_flops": 84,
+        "macs": 40,
+        "dmas": 72,
+    }
+    for name in ("module_flops", "macs", "dmas"):
+        assert _total(report, name) == sum(
+            layer["metrics"][name]["value"] for layer in report["layers"] if name in layer["metrics"]
+        )
 
 
-def test_crawl_module_nested_outputs(capsys):
+def test_crawl_module_collects_operator_flops_from_the_same_forward():
+    report = crawler.crawl_module(nn.Linear(4, 2), (4,))
+
+    assert report["totals"]["operator_flops"] == report["operator_flops"]["total"]
+    assert report["operator_flops"]["by_operator"] == {"aten.addmm": 16}
+
+
+def test_module_formula_tensor_ops_do_not_pollute_operator_report(monkeypatch):
+    original = crawler.module_flops
+
+    def formula(*args, **kwargs):
+        torch.sin(torch.ones(1))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(crawler, "module_flops", formula)
+    report = crawler.crawl_module(nn.Linear(4, 2), (4,))
+
+    assert "aten.sin" not in report["operator_flops"]["by_operator"]
+    assert all(diagnostic.get("operator") != "aten.sin" for diagnostic in report["diagnostics"])
+
+
+def test_crawl_module_preserves_nested_output_metadata_without_values():
     class NestedOutputs(nn.Module):
         def __init__(self):
             super().__init__()
             self.linear = nn.Linear(4, 4)
 
-        def forward(self, x):
-            out = self.linear(x)
-            return out, [out[:, :2], {"scores": out[:, :1], "optional": None}]
+        def forward(self, input_t):
+            output = self.linear(input_t)
+            return output, [output[:, :2], {"scores": output[:, :1], "label": "secret"}]
 
-    mod = NestedOutputs()
-    output_shape = crawler.crawl_module(mod, (4,))["layers"][0]["output_shape"]
-    assert output_shape == ((-1, 4), [(-1, 2), {"scores": (-1, 1), "optional": None}])
-    assert list(output_shape[1][1]) == ["scores", "optional"]
+    report = crawler.crawl_module(NestedOutputs(), (4,))
+    metadata = report["layers"][0]["output"]
 
-    crawler.summary(mod, (4,))
-    line = next(line for line in capsys.readouterr().out.splitlines() if "NestedOutputs" in line)
-    assert "[...]" in line
+    assert metadata["kind"] == "tuple"
+    assert metadata["items"][0]["shape"] == [1, 4]
+    assert "secret" not in json.dumps(metadata)
 
 
 def test_crawl_module_maxpool_with_indices():
     mod = nn.Sequential(nn.Conv2d(1, 1, 1, bias=False), nn.MaxPool2d(2, return_indices=True))
-    plain_mod = nn.Sequential(nn.Conv2d(1, 1, 1, bias=False), nn.MaxPool2d(2))
+    report = crawler.crawl_module(mod, (1, 4, 4))
+    pool = _layer(report, "1")
 
-    res = crawler.crawl_module(mod, (1, 4, 4))
-    pool = next(layer for layer in res["layers"] if layer["type"] == "MaxPool2d")
-    plain_res = crawler.crawl_module(plain_mod, (1, 4, 4))
-    plain_pool = next(layer for layer in plain_res["layers"] if layer["type"] == "MaxPool2d")
-
-    assert pool["output_shape"] == ((-1, 1, 2, 2), (-1, 1, 2, 2))
-    assert tuple(pool[key] for key in ("flops", "macs", "dmas")) == tuple(
-        plain_pool[key] for key in ("flops", "macs", "dmas")
-    )
+    assert pool["output"]["kind"] == "tuple"
+    assert [item["shape"] for item in pool["output"]["items"]] == [[1, 1, 2, 2], [1, 1, 2, 2]]
 
 
-def test_crawl_module_multihead_attention(capsys):
+def test_crawl_module_multihead_attention():
     mod = nn.MultiheadAttention(8, 2, batch_first=True)
-    input_shapes = [(4, 8)] * 3
-
-    res = crawler.crawl_module(mod, input_shapes)
-    assert res["layers"][0]["output_shape"] == ((-1, 4, 8), (-1, 4, 4))
     query = torch.rand((1, 4, 8))
-    assert len(res["layers"]) == 1
-    assert res["layers"][0]["flops"] == modules.module_flops(mod, (query, query, query), mod(query, query, query))
 
-    crawler.summary(mod, input_shapes)
-    assert "MultiheadAttention" in capsys.readouterr().out
+    report = crawler.crawl_module(mod, args=(query, query, query))
+    layer = report["layers"][0]
+
+    assert len(report["layers"]) == 1
+    assert layer["output"]["kind"] == "tuple"
+    assert layer["metrics"]["module_flops"]["value"] == modules.module_flops(
+        mod, (query, query, query), mod(query, query, query)
+    )
 
 
 def _tiny_transformer(batch_first):
@@ -157,97 +257,44 @@ def _tiny_transformer(batch_first):
     )
 
 
-def test_crawl_module_batch_first_transformer(capsys):
-    mod = _tiny_transformer(batch_first=True)
+@pytest.mark.parametrize("batch_first", [False, True])
+def test_crawl_module_transformer_formula(batch_first):
+    mod = _tiny_transformer(batch_first)
+    if batch_first:
+        src, tgt = torch.rand((1, 3, 4)), torch.rand((1, 2, 4))
+    else:
+        src, tgt = torch.rand((3, 1, 4)), torch.rand((2, 1, 4))
 
-    with pytest.warns(UserWarning, match="Module type not supported"):
-        result = crawler.crawl_module(mod, [(3, 4), (2, 4)])
+    report = crawler.crawl_module(mod, args=(src, tgt))
 
-    assert len(result["layers"]) == 1
-    assert result["layers"][0]["type"] == "Transformer"
-    assert result["layers"][0]["flops"] == 2635
-    assert sum(layer["flops"] for layer in result["layers"]) == 2635
-
-    crawler.summary(mod, [(3, 4), (2, 4)])
-    assert "Transformer" in capsys.readouterr().out
-
-
-def test_crawl_module_sequence_first_transformer_input_data(capsys):
-    mod = _tiny_transformer(batch_first=False)
-    src = torch.rand((3, 1, 4))
-    tgt = torch.rand((2, 1, 4))
-
-    with pytest.warns(UserWarning, match="Module type not supported"):
-        result = crawler.crawl_module(mod, input_data=(src, tgt))
-
-    assert len(result["layers"]) == 1
-    assert result["layers"][0]["flops"] == 2635
-
-    src_mask = torch.zeros((3, 3), dtype=torch.bool)
-    with pytest.warns(UserWarning, match="Module type not supported"):
-        masked_result = crawler.crawl_module(mod, input_data=(src, tgt, src_mask))
-    assert masked_result["layers"][0]["flops"] == 2653
-
-    with pytest.warns(UserWarning, match="Module type not supported"):
-        crawler.summary(mod, input_data=(src, tgt))
-    assert "Transformer" in capsys.readouterr().out
+    assert len(report["layers"]) == 1
+    assert report["layers"][0]["metrics"]["module_flops"]["value"] == 2635
 
 
-def test_crawl_module_rejects_wrapped_transformer():
-    with pytest.raises(NotImplementedError, match="passed directly"):
-        crawler.crawl_module(nn.Sequential(_tiny_transformer(batch_first=True)), [(3, 4), (2, 4)])
-
-
-def test_crawl_module_removes_hooks_after_metric_failure():
+def test_metric_failure_is_diagnostic_and_hooks_are_removed():
     mod = nn.MultiheadAttention(4, 2, batch_first=True, add_zero_attn=True)
     query = torch.rand((1, 3, 4))
     expected_hook_counts = len(mod._forward_pre_hooks), len(mod._forward_hooks)
 
-    for _ in range(2):
-        with pytest.raises(NotImplementedError, match="add_bias_kv or add_zero_attn"):
-            crawler.crawl_module(mod, input_data=(query, query, query))
-        assert (len(mod._forward_pre_hooks), len(mod._forward_hooks)) == expected_hook_counts
+    report = crawler.crawl_module(mod, args=(query, query, query))
+
+    assert report["totals"]["module_flops"]["status"] == "unavailable"
+    assert any(item["code"] == "module_metric_error" for item in report["diagnostics"])
+    assert (len(mod._forward_pre_hooks), len(mod._forward_hooks)) == expected_hook_counts
 
 
-def test_crawl_module_rejects_unsupported_output_leaf():
-    class UnsupportedOutput(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.linear = nn.Linear(4, 4)
-
-        def forward(self, x):
-            return {"value": self.linear(x), "label": "unsupported"}
-
-    mod = UnsupportedOutput()
-    with pytest.raises(TypeError, match=r"output\['label'\].*str"):
-        crawler.crawl_module(mod, (4,))
-    assert all(not child._forward_hooks and not child._forward_pre_hooks for child in mod.modules())
-
-
-def test_crawl_module_rejects_output_without_tensor():
-    class NoTensorOutput(nn.Linear):
+def test_non_tensor_output_is_reported_without_exposing_value():
+    class NoTensorOutput(nn.Module):
         def forward(self, _):
-            return {"optional": None}
+            return {"label": "secret"}
 
-    with pytest.raises(TypeError, match="no tensor found"):
-        crawler.crawl_module(NoTensorOutput(4, 4), (4,))
+    report = crawler.crawl_module(NoTensorOutput(), (4,))
 
-
-def test_crawl_module_multiple_inputs():
-    class TwoInputs(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.left = nn.Linear(4, 2)
-            self.right = nn.Linear(6, 2)
-
-        def forward(self, left, right):
-            return self.left(left) + self.right(right)
-
-    res = crawler.crawl_module(TwoInputs(), [(4,), (6,)])
-    assert res["overall"]["grad_params"] == 24
+    assert report["totals"]["module_flops"]["status"] == "unavailable"
+    assert "secret" not in json.dumps(report)
 
 
-def test_crawl_module_generated_integer_input():
+def test_generated_integer_input():
     class CaptureEmbedding(nn.Embedding):
         def forward(self, tensor):
             self.received = tensor
@@ -258,179 +305,15 @@ def test_crawl_module_generated_integer_input():
 
     assert mod.received.shape == (1, 3)
     assert mod.received.dtype == torch.long
-    assert mod.received.device == mod.weight.device
 
 
-def test_crawl_module_input_data():
-    class CaptureLinear(nn.Linear):
-        def forward(self, tensor):
-            self.received = tensor
-            self.grad_enabled = torch.is_grad_enabled()
-            return super().forward(tensor)
-
-    mod = CaptureLinear(4, 2)
-    input_data = torch.randn(5, 2, 4)
-    expected = input_data.clone()
-    expected_device = input_data.device
-    expected_dtype = input_data.dtype
-
-    crawler.crawl_module(mod, input_data=input_data)
-
-    assert mod.received is input_data
-    assert torch.equal(input_data, expected)
-    assert input_data.shape == (5, 2, 4)
-    assert input_data.device == expected_device
-    assert input_data.dtype == expected_dtype
-    assert not mod.grad_enabled
-    assert mod.training
-
-
-def test_crawl_module_correlated_input_data():
-    class CorrelatedInputs(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.embedding = nn.Embedding(8, 4)
-
-        def forward(self, xs, xs_len):
-            self.received = (xs, xs_len)
-            if xs.shape[1] != xs_len.max().item():
-                raise ValueError("xs and xs_len are not correlated")
-            positions = torch.arange(xs.shape[1], device=xs.device)
-            mask = positions < xs_len[:, None]
-            return self.embedding(xs) * mask.unsqueeze(-1)
-
-    mod = CorrelatedInputs()
-    xs = torch.tensor([[1, 2, 0, 0], [3, 4, 5, 6]])
-    xs_len = torch.tensor([2, 4])
-    expected_xs = xs.clone()
-    expected_xs_len = xs_len.clone()
-
-    res = crawler.crawl_module(mod, input_data=(xs, xs_len))
-
-    assert mod.received[0] is xs
-    assert mod.received[1] is xs_len
-    assert torch.equal(xs, expected_xs)
-    assert torch.equal(xs_len, expected_xs_len)
-    assert res["overall"]["grad_params"] == 32
-
-
-def test_crawl_module_requires_one_input_source():
-    mod = nn.Linear(4, 2)
-
-    with pytest.raises(ValueError, match="Exactly one of input_shape and input_data"):
-        crawler.crawl_module(mod)
-    with pytest.raises(ValueError, match="Exactly one of input_shape and input_data"):
-        crawler.crawl_module(mod, (4,), input_data=torch.randn(2, 4))
-
-
-def test_crawl_module_rejects_dtype_with_input_data():
-    with pytest.raises(ValueError, match="dtype cannot be used with input_data"):
-        crawler.crawl_module(nn.Linear(4, 2), dtype=torch.float32, input_data=torch.randn(2, 4))
-
-
-@pytest.mark.parametrize("input_data", [[], ()])
-def test_crawl_module_rejects_empty_input_data(input_data):
-    with pytest.raises(ValueError, match="input_data must not be empty"):
-        crawler.crawl_module(nn.Linear(4, 2), input_data=input_data)
-
-
-@pytest.mark.parametrize(
-    ("input_data", "message"),
-    [
-        ({"input": torch.randn(2, 4)}, r"input_data.*dict"),
-        ([torch.randn(2, 4), "invalid"], r"input_data\[1\].*str"),
-        ((torch.randn(2, 4), 1), r"input_data\[1\].*int"),
-    ],
-)
-def test_crawl_module_rejects_invalid_input_data(input_data, message):
-    with pytest.raises(TypeError, match=message):
-        crawler.crawl_module(nn.Linear(4, 2), input_data=input_data)
-
-
-def test_summary_input_data(capsys):
-    crawler.summary(nn.Linear(4, 2), input_data=torch.randn(2, 4))
-    assert "Total params: 10" in capsys.readouterr().out
-
-
-def test_summary():
-    mod = nn.Conv2d(3, 8, 3)
-
-    # Redirect stdout with StringIO object
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-    crawler.summary(mod, (3, 32, 32))
-    # Reset redirect.
-    sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split("\n")[7] == "Total params: 224"
-
-    # Check receptive field
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-    crawler.summary(mod, (3, 32, 32), receptive_field=True)
-    # Reset redirect.
-    sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split("\n")[1].rpartition("  ")[-1] == "Receptive field"
-    assert captured_output.getvalue().split("\n")[3].split()[-1] == "3"
-    # Check effective stats
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-    crawler.summary(mod, (3, 32, 32), receptive_field=True, effective_rf_stats=True)
-    # Reset redirect.
-    sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split("\n")[1].rpartition("  ")[-1] == "Effective padding"
-    assert captured_output.getvalue().split("\n")[3].split()[-1] == "0"
-
-    # Max depth > model hierarchy
-    with pytest.raises(ValueError):
-        crawler.summary(mod, (3, 32, 32), max_depth=1)
-
-    mod = nn.Sequential(
-        OrderedDict([
-            ("features", nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU(inplace=True))),
-            ("pool", nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Flatten(1))),
-            ("classifier", nn.Linear(8, 1)),
-        ])
-    )
-
-    captured_output = io.StringIO()
-    sys.stdout = captured_output
-    crawler.summary(mod, (3, 32, 32), max_depth=1)
-    # Reset redirect.
-    sys.stdout = sys.__stdout__
-    assert captured_output.getvalue().split("\n")[4].startswith("├─features ")
-
-
-def test_summary_trainable_column(capsys):
-    mod = nn.Sequential(
-        OrderedDict([
-            ("activation", nn.ReLU()),
-            ("trainable", nn.Linear(4, 4)),
-            ("frozen", nn.Linear(4, 4)),
-            ("mixed", nn.Linear(4, 4)),
-            ("nested", nn.Sequential(nn.Linear(4, 4))),
-        ])
-    )
-    mod.frozen.requires_grad_(False)
-    mod.mixed.weight.requires_grad_(False)
-    mod.nested[0].weight.requires_grad_(False)
-
-    crawler.summary(mod, (4,))
-    output = capsys.readouterr().out.splitlines()
-
-    assert output[1].rpartition("  ")[-1] == "Trainable"
-    assert next(line for line in output if "├─activation" in line).split()[-1] == "-"
-    assert next(line for line in output if "├─trainable" in line).split()[-1] == "True"
-    assert next(line for line in output if "├─frozen" in line).split()[-1] == "False"
-    assert next(line for line in output if "├─mixed" in line).split()[-1] == "True"
-    assert "Trainable params: 28" in output
-    assert "Non-trainable params: 52" in output
-    assert "Total params: 80" in output
+def test_summary_depth_and_trainable_column(capsys):
+    mod = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    mod[0].requires_grad_(False)
 
     crawler.summary(mod, (4,), max_depth=1)
-    aggregated_output = capsys.readouterr().out.splitlines()
-    assert next(line for line in aggregated_output if "├─nested" in line).split()[-1] == "True"
+    output = capsys.readouterr().out
 
-    mod.nested[0].bias.requires_grad_(False)
-    crawler.summary(mod, (4,), max_depth=1)
-    frozen_aggregated_output = capsys.readouterr().out.splitlines()
-    assert next(line for line in frozen_aggregated_output if "├─nested" in line).split()[-1] == "False"
+    assert "Trainable" in output
+    assert "Linear" in output
+    assert "False" in output

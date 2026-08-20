@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: If you use TorchScan in research, please cite the software using this metadata.
+title: TorchScan
+type: software
+authors:
+  - family-names: Fernandez
+    given-names: François-Guillaume
+    email: fg-feedback@protonmail.com
+repository-code: https://github.com/frgfm/torch-scan
+url: https://frgfm.github.io/torch-scan
+license: Apache-2.0
+preferred-citation:
+  type: software
+  authors:
+    - family-names: Fernandez
+      given-names: François-Guillaume
+  title: "TorchScan: meaningful PyTorch module insights"
+  year: 2020
+  repository-code: https://github.com/frgfm/torch-scan

@@ -3,9 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-"""
-Torchvision benchmark
-"""
+"""Torchvision benchmark."""
 
 import torch
 from torchvision import models
@@ -51,32 +49,30 @@ TORCHVISION_MODELS = [
 ]
 
 
+def _known(report, name):
+    metric = report["totals"][name]
+    return metric["value"] if metric["status"] == "complete" else metric["known_value"] or 0
+
+
 def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    headers = ["Model", "Params (M)", "FLOPs (G)", "MACs (G)", "DMAs (G)"]
+    widths = [20, 10, 10, 10, 10]
+    print(" | ".join(f"{header:<{width}}" for header, width in zip(headers, widths, strict=True)))
+    print("-" * (sum(widths) + 3 * (len(widths) - 1)))
 
-    margin = 4
-    headers = ["Model", "Params (M)", "FLOPs (G)", "MACs (G)", "DMAs (G)", "RF"]
-    max_w = [20, 10, 10, 10, 10, 10]
-
-    info_str = [(" " * margin).join([f"{col_name:<{col_w}}" for col_name, col_w in zip(headers, max_w, strict=False)])]
-    info_str.append("-" * len(info_str[0]))
-    print("\n".join(info_str))
     for name in TORCHVISION_MODELS:
-        model = models.__dict__[name]().eval().to(device)
-        dsize = (3, 224, 224)
-        if "inception" in name:
-            dsize = (3, 299, 299)
-        model_info = crawl_module(model, dsize)
-
-        tot_params = sum(layer["grad_params"] + layer["nograd_params"] for layer in model_info["layers"])
-        tot_flops = sum(layer["flops"] for layer in model_info["layers"])
-        tot_macs = sum(layer["macs"] for layer in model_info["layers"])
-        tot_dmas = sum(layer["dmas"] for layer in model_info["layers"])
-        rf = model_info["layers"][0]["rf"]
-        print(
-            f"{name:<{max_w[0]}} | {tot_params / 1e6:<{max_w[1]}.2f} | {tot_flops / 1e9:<{max_w[2]}.2f} | "
-            f"{tot_macs / 1e9:<{max_w[3]}.2f} | {tot_dmas / 1e9:<{max_w[4]}.2f} | {rf:<{max_w[5]}.0f}"
-        )
+        model = models.__dict__[name](weights=None).eval().to(device)
+        input_shape = (3, 299, 299) if "inception" in name else (3, 224, 224)
+        report = crawl_module(model, input_shape)
+        values = [
+            name,
+            f"{_known(report, 'parameters') / 1e6:.2f}",
+            f"{_known(report, 'module_flops') / 1e9:.2f}",
+            f"{_known(report, 'macs') / 1e9:.2f}",
+            f"{_known(report, 'dmas') / 1e9:.2f}",
+        ]
+        print(" | ".join(f"{value:<{width}}" for value, width in zip(values, widths, strict=True)))
 
 
 if __name__ == "__main__":

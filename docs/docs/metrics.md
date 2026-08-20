@@ -1,57 +1,80 @@
 # Understanding results
 
-TorchScan estimates model cost from a synthetic forward pass with a batch size of one. The numbers describe that pass; they are not hardware benchmarks.
+TorchScan measures one concrete execution. Results are useful only with the input metadata, execution context,
+method, status, and diagnostics that accompany them.
 
-## Parameters and model size
+## Metric result states
 
-Parameter and buffer counts come from the tensors registered on the model. Model size is their storage size, not the peak memory required to execute the model.
+Every measured metric uses the same trust contract:
 
-## FLOPs
+| Status | Meaning | Numeric field |
+| --- | --- | --- |
+| `complete` | The method covered the requested execution scope. | `value` |
+| `partial` | Some work was counted and some was not. | `known_value`, a lower bound |
+| `unavailable` | The method could not produce a result. | Neither field is authoritative |
 
-FLOPs are floating-point operations performed during the forward pass. They are not FLOP/s, which is a throughput measurement. TorchScan uses formulas for recognized module types, so totals can omit unsupported or functional operations.
+A complete value of zero is different from an incomplete result. TorchScan does not report a coverage percentage:
+one uncounted operator can dominate a workload, so the fraction of recognized operator kinds would be misleading.
 
-Native `torch.nn.Transformer` summaries use one composite FLOP total. This deliberately avoids adding the same attention and projection work again from child modules. Its MAC, DMA, receptive-field, and child-level FLOP values remain unsupported and emit warnings rather than extending partial child totals to the full Transformer.
+Use `strict=True` with `crawl_module` or `summary` when partial or unavailable module metrics must raise
+`IncompleteAnalysisError` instead of returning a report.
 
-The attention formula counts Q/K/V and output projections, scaling, both matrix multiplications, softmax, active training dropout, visible positional masks, and averaged attention weights when returned. A root Transformer's positional masks are forwarded to each affected layer formula. Forward-hook inputs do not include keyword arguments, so masks supplied as kwargs cannot be counted.
+## Parameters and model storage
 
-## MACs
+Parameter and buffer counts come from tensors registered on the model. Storage size is not peak memory: it excludes
+or separates activations, gradients, optimizer state, allocator behavior, Python objects, and third-party allocations.
 
-A MAC is a multiply-accumulate operation. For a Linear layer, TorchScan counts:
+## Module FLOPs, MACs, and DMAs
 
-```text
-input features × number of output elements
-```
+Module metrics use TorchScan formulas for recognized module families:
 
-Bias additions and activation functions affect FLOP counts separately; they do not turn each Linear output into one MAC.
+- FLOPs count formula-defined arithmetic for the forward pass.
+- MACs count multiply-accumulate work for supported modules.
+- DMAs estimate formula-defined tensor and parameter data movement.
 
-[![Three input features connected to two output elements, creating six weighted connections.](img/linear-counts.svg)](img/linear-counts.svg)
+These are theoretical counts, not FLOP/s, memory bandwidth, or latency. Diagnostics identify unsupported module work.
 
-For `Linear(3, 2)` on one input vector, TorchScan reports 6 MACs and 12 FLOPs when bias is enabled: 6 multiplications, 4 additions to form the two sums, and 2 bias additions.
+## Operator FLOPs
 
-## DMAs
+Operator FLOPs use PyTorch's `torch.utils.flop_counter.FlopCounterMode`. This observes dispatcher operations, including
+functional calls and operations inside custom modules, but can count only operators with registered or caller-provided
+formulas. Counts are grouped globally, by module, and by operator.
 
-DMAs are modeled direct memory accesses for recognized operations. They estimate data movement from tensor shapes and module parameters; they do not measure memory bandwidth, cache behavior, or latency.
-
-## GPU memory
-
-GPU memory values are process- and allocator-level snapshots around the synthetic forward pass. They do not isolate the model from framework initialization, caching, other processes, or all devices.
-
-Small models and multi-GPU environments can produce noisy or even negative overhead deltas. A negative value does not mean the model uses negative memory; treat it as an unreliable measurement and include the full environment when reporting it.
+Operator and module FLOPs can differ because their formulas, boundaries, and decomposition differ. Report both with
+their method labels; do not average, add, or substitute one silently for the other.
 
 ## Receptive field
 
-Receptive-field values are accumulated in module execution order. This works for sequential paths, including dilation, but does not model branch topology. Residual and other skip-connected architectures can therefore produce inaccurate values.
+Receptive-field values follow module execution order. Sequential convolutional paths can be described, including
+dilation, but hook order does not reconstruct arbitrary branch topology. Residual and other skip-connected models can
+therefore yield partial or unavailable results.
 
-[![A receptive field expanding from one by one to three by three and five by five across two convolution layers.](img/receptive-field.svg)](img/receptive-field.svg)
+## Peak memory
 
-## Troubleshooting
+`measure_peak_memory` measures one owner-provided workload:
 
-> **Unexpected zero totals:** Check for unsupported leaf modules, `torch.nn.functional` calls, tensor methods, or Python operators. These operations are not observed by module hooks.
+- CPU uses PyTorch profiler memory categories.
+- CUDA and supported MPS versions use public PyTorch allocator peak statistics.
 
-> **Negative RAM overhead:** Treat the value as measurement noise, especially for small models or multi-GPU processes. Parameter and buffer size remains separate from this estimate.
+It does not report process RSS, total device use, driver memory, or third-party allocations. Compare memory only with
+matching hardware, PyTorch version, model state, inputs, dtype, optimizer state, allocator warmup, and workload.
 
-> **`TypeError` involving an output path:** A hooked output contains an unsupported leaf or no tensor. Tuple, list, and dictionary outputs are supported when their leaves are tensors or `None`.
+## Latency and throughput
 
-> **Data-dependent inputs:** Inputs generated from `input_shape` are independent random tensors. Use `input_data` for correlated, masked, integer, or otherwise caller-defined tensors.
+TorchScan does not wrap latency measurement. Use PyTorch's
+[`torch.utils.benchmark.Timer`](https://docs.pytorch.org/docs/stable/benchmark_utils.html), which already handles warmup,
+replicates, and accelerator synchronization. Keep latency results separate from TorchScan's theoretical counts.
 
-See [Model and input support](model-support.md) for the complete compatibility contract and the [package reference](torchscan.md) for API details.
+## Reproducible reporting
+
+For research or regression analysis, retain:
+
+- The complete report, including `schema_version` and execution context.
+- Exact model revision and configuration.
+- Input shapes, dtypes, devices, and non-sensitive call structure.
+- TorchScan, PyTorch, and Python versions.
+- Every diagnostic and custom formula definition.
+- Hardware and workload preparation for memory or latency measurements.
+
+Use [Report comparison](report-schema.md#reportdiff) only when both reports use the same schema and compatible
+methods.

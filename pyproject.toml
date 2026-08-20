@@ -50,6 +50,11 @@ docs = [
     "mkdocs-material==9.7.7",
     "mkdocstrings[python]==1.0.6",
 ]
+model-test = [
+    "timm==1.0.28",
+    "torchvision==0.28.0",
+    "transformers==5.15.0",
+]
 
 [project.urls]
 documentation = "https://frgfm.github.io/torch-scan"

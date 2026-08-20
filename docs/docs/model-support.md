@@ -1,106 +1,99 @@
 # Model and input support
 
-TorchScan attaches forward hooks to `torch.nn.Module` objects and executes one forward pass. This makes module-based models easy to inspect, but it does not trace arbitrary tensor operations.
+`crawl_module` and `summary` attach hooks to `torch.nn.Module` objects and execute one forward pass. The same pass also
+uses PyTorch operator dispatch for operator FLOPs. Module metrics and operator FLOPs remain separate because they use
+different methods and coverage.
 
-## Inputs
+## Generated inputs
 
 For one tensor input, pass its shape without the batch dimension:
 
 ```python
-summary(model.eval(), (3, 224, 224))
+report = crawl_module(model, (3, 224, 224))
 ```
 
-For multiple independent positional tensor inputs, pass a list of shapes:
+For multiple positional tensors, pass a list of shapes:
 
 ```python
-import torch.nn as nn
-from torchscan import summary
-
-
-class TwoInputs(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.left = nn.Linear(4, 2)
-        self.right = nn.Linear(6, 2)
-
-    def forward(self, left, right):
-        return self.left(left) + self.right(right)
-
-
-summary(TwoInputs().eval(), [(4,), (6,)])
+report = crawl_module(model, [(4,), (6,)])
 ```
 
-The list maps to positional arguments in order. `crawl_module` also accepts one `dtype` for all generated inputs or an iterable with one dtype per input.
+One `dtype` applies to every generated input; an iterable supplies one dtype per shape. Lengths must match exactly.
+Use `device=` to select a generated-input device. Without explicit values, TorchScan infers dtype and device from the
+first parameter, then the first buffer, then defaults to CPU and `torch.float32`. Parameterless models are supported.
 
-For correlated, integer, masked, or otherwise data-dependent inputs, pass the tensors themselves:
+## Complete Python calls
+
+Use `args` and `kwargs` for masks, integer IDs, correlated inputs, scalars, `None`, and nested containers:
 
 ```python
 import torch
-import torch.nn as nn
-from torchscan import summary
 
+input_ids = torch.tensor([[1, 2, 0, 0]])
+attention_mask = input_ids.ne(0)
 
-class Encoder(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.embedding = nn.Embedding(8, 4)
-
-    def forward(self, xs, xs_len):
-        positions = torch.arange(xs.shape[1], device=xs.device)
-        mask = positions < xs_len[:, None]
-        return self.embedding(xs) * mask.unsqueeze(-1)
-
-
-xs = torch.tensor([[1, 2, 0, 0], [3, 4, 5, 6]])
-xs_len = torch.tensor([2, 4])
-summary(Encoder().eval(), input_data=(xs, xs_len))
+report = crawl_module(
+    model,
+    args=(input_ids,),
+    kwargs={"attention_mask": attention_mask, "return_dict": True},
+)
 ```
 
-A single tensor is one positional model argument. A non-empty list or tuple supplies positional arguments in order. Each tensor already includes every dimension, and TorchScan forwards it without cloning, casting, moving, detaching, or adding a batch dimension. Exactly one of `input_shape` and `input_data` is required; `dtype` is only valid with generated `input_shape` inputs. Keyword/dictionary inputs and non-tensor leaves are not supported.
+Values are forwarded without cloning, casting, moving, detaching, or adding a batch dimension. Recursive input
+metadata preserves container structure and records tensor shape, dtype, device, and gradient requirement, but never
+tensor values.
 
-## Outputs
+Generated `input_shape` and caller-provided `args`/`kwargs` are mutually exclusive. `dtype` and `device` only configure
+generated inputs. A kwargs-only call is valid.
 
-Hooked modules may return tensors nested in tuples, lists, or dictionaries. Output shapes preserve that structure, dictionary keys and insertion order, and `None` leaves. Unsupported leaves raise a `TypeError` that identifies their path.
+## Execution state
 
-Metric calculators still receive one numerical output: the first tensor found in deterministic depth-first container order. Secondary tensors remain in the displayed shape structure but are not folded into FLOP, MAC, DMA, or receptive-field totals. Long structures are abbreviated with `[...]` in the summary table; `crawl_module()` retains the complete value. An output containing no tensor raises a `TypeError`.
+TorchScan:
 
-This makes tuple-returning modules such as `torch.nn.MultiheadAttention` safe to inspect. Its FLOP calculator uses the complete output to distinguish averaged attention weights from `need_weights=False`.
+1. Records every module's training flag.
+2. Switches modules to evaluation mode.
+3. Runs one forward pass under `torch.no_grad()`.
+4. Removes hooks and restores every original training flag, including after an exception.
 
-## Synthetic execution
+The model owns every other side effect. TorchScan does not move the model, seed random generators, warm up kernels,
+clear accelerator caches, or suppress forward errors. Use `measure_flops` or `measure_peak_memory` for training and
+other owner-controlled workloads.
 
-- A batch dimension of one is added to every generated input shape.
-- Generated inputs use the first model parameter's device and, by default, its dtype.
-- Caller-provided tensors retain their complete shape, value, device, and dtype.
-- The forward pass runs under `torch.no_grad()` but preserves the model's current training mode.
-- Calling `eval()` first is recommended because training-mode modules can update buffers.
-- The model must contain at least one parameter.
-- Exceptions from the model's forward pass are propagated.
+## Outputs and repeated modules
 
-## Metric capability
+Hooked modules may return tensors nested in tuples, lists, or mappings. Output metadata preserves the recursive
+structure. Stable layer identities use the full module path plus a call index, so a shared module invoked more than
+once produces distinct layer-call records.
 
-“Supported” means the calculator recognizes the module family. Some supported operations legitimately contribute zero or leave the receptive field unchanged.
+## Two metric views
 
-| Module family | FLOPs | MACs | DMAs | Receptive field |
-| --- | :---: | :---: | :---: | :---: |
-| Identity and Flatten | ✓ | ✓ | ✓ | ✓ |
-| Linear | ✓ | ✓ | ✓ | ✓ |
-| ReLU, ELU, LeakyReLU, ReLU6, Tanh, Sigmoid | ✓ | ✓ | ✓ | ✓ |
-| Conv1d/2d/3d and transposed convolutions | ✓ | ✓ | ✓ | ✓ |
-| BatchNorm1d/2d/3d | ✓ | ✓ | ✓ | ✓ |
-| Max, average, and adaptive pooling | ✓ | ✓ | ✓ | ✓ |
-| Dropout | ✓ | ✓ | ✓ | ✓ |
-| `torch.nn.LayerNorm` | ✓ | — | — | — |
-| Batched `torch.nn.MultiheadAttention` | ✓* | — | — | — |
-| `torch.nn.Transformer` | ✓* | — | — | — |
+### Module estimates
 
-*`MultiheadAttention` supports 3D self- and cross-attention in both layouts, standard projection bias, and masks passed positionally. Keyword masks are invisible to hooks; unbatched inputs, `add_bias_kv`, and `add_zero_attn` are rejected.*
+Hooks provide layer structure, parameters, buffers, MACs, DMAs, receptive field, and formula-based module FLOPs for
+supported module families. An unsupported leaf makes affected metrics `partial` or `unavailable`; it never contributes
+a fabricated zero.
 
-*A native `torch.nn.Transformer` passed directly to `summary()` is counted as one composite FLOP operation. The verified path covers native encoder/decoder stacks with ReLU, batched sequence-first or batch-first tensors, and positional attention and key-padding masks; masks hidden in keyword arguments cannot be counted. Wrappers and standalone native Transformer components are rejected rather than partially counted. Child-level FLOP detail, custom stacks or activations, arbitrary Transformer families, Hugging Face internals, and `einops` operations remain unsupported.*
+### Operator FLOPs
 
-## Custom and functional operations
+PyTorch dispatch observes functional calls, tensor methods, Python operators backed by PyTorch operations, and
+operations inside custom modules. Registered formulas produce counts. Executed operators without formulas are listed
+in diagnostics and make the operator result partial.
 
-A custom composite module is inspected through its supported child modules. A custom leaf module is not understood automatically: it emits unsupported-module warnings and contributes zero or a neutral receptive-field value.
+Operator FLOPs do not make MAC, DMA, or receptive-field module formulas complete. TorchScan never merges the two FLOP
+methods into one total.
 
-Operations called through `torch.nn.functional`, tensor methods, or Python operators do not create module-hook events. They are therefore absent from the totals. For example, the addition in the multiple-input example runs normally but is not counted.
+## Custom formulas
 
-See [Understanding results](metrics.md) for the consequences when comparing estimates.
+Supply custom operator formulas to standalone `measure_flops` calls through `custom_mapping`. This does not modify a
+global registry. `crawl_module` uses built-in formulas for its same-forward operator report and does not accept custom
+mappings. Formulas use PyTorch's shape-based `FlopCounterMode` contract:
+
+```python
+report = measure_flops(
+    lambda: torch.sin(inputs),
+    custom_mapping={torch.ops.aten.sin: lambda input_shape, *, out_shape: out_shape.numel()},
+)
+```
+
+Use operator packets such as `torch.ops.aten.sin`, not overloads such as `.default`, and check the installed PyTorch
+version's documentation when defining formulas.

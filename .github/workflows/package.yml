@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install package
@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install dependencies
@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install dependencies
@@ -99,7 +99,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install compatibility environment
@@ -123,7 +123,7 @@ jobs:
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install model test dependencies
@@ -157,7 +157,7 @@ jobs:
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
       - name: Resolve package version
         id: version
         run: |
@@ -191,11 +191,14 @@ jobs:
           - artifact: sdist
             path: dist/*.tar.gz
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - uses: actions/download-artifact@v8
@@ -227,11 +230,14 @@ jobs:
     outputs:
       version: ${{ needs.build.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
       - uses: actions/download-artifact@v8
         with:
           name: distributions
@@ -253,7 +259,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install released package

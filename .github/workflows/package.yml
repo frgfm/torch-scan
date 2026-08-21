@@ -48,7 +48,7 @@ jobs:
         run: make install-quality
       - name: Run quality checks
         env:
-          SKIP: no-commit-to-branch
+          SKIP: no-commit-to-branch,ruff-check,ruff-format,ty
         run: |
           make quality
           make precommit

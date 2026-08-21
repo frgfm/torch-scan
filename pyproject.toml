@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build>=0.12.0,<0.13.0"]
+requires = ["uv_build>=0.12.5,<0.13.0"]
 build-backend = "uv_build"
 
 [project]
@@ -41,9 +41,9 @@ test = [
     "pytest-pretty==1.3.0",
 ]
 quality = [
-    "prek==0.4.11",
-    "ruff==0.16.0",
-    "ty==0.0.65",
+    "prek==0.4.14",
+    "ruff==0.16.3",
+    "ty==0.0.73",
 ]
 docs = [
     "mkdocs==1.6.1",
@@ -53,7 +53,7 @@ docs = [
 model-test = [
     "timm==1.0.28",
     "torchvision==0.28.0",
-    "transformers==5.15.0",
+    "transformers==5.15.1",
 ]
 
 [project.urls]
@@ -63,7 +63,7 @@ tracker = "https://github.com/frgfm/torch-scan/issues"
 changelog = "https://frgfm.github.io/torch-scan/changelog.html"
 
 [tool.uv]
-required-version = "==0.12.0"
+required-version = "==0.12.5"
 
 [tool.uv.build-backend]
 module-name = "torchscan"

@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.11"
           architecture: x64
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           activate-environment: true
       - name: Install dependencies

@@ -20,15 +20,22 @@ repos:
       - id: no-commit-to-branch
         args: ['--branch', 'main']
       - id: trailing-whitespace
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.0
-    hooks:
-      - id: ruff-check
-        args:
-          - --fix
-      - id: ruff-format
   - repo: local
     hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: make ruff-lint-fix
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi, jupyter]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: make ruff-format-fix
+        language: system
+        pass_filenames: false
+        types_or: [python, pyi, jupyter]
+        require_serial: true
       - id: ty
         name: ty check
         entry: make typing-check

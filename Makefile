@@ -22,7 +22,7 @@ ruff-lint-fix:
 ruff-format-fix:
 	ruff format .
 
-lint-format: ruff-format-fix ruff-lint-fix
+lint-format: ruff-lint-fix ruff-format-fix
 
 typing-check:
 	ty check

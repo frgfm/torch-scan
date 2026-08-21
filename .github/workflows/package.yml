@@ -208,6 +208,7 @@ jobs:
       - name: Install ${{ matrix.artifact }}
         run: uv pip install ${{ matrix.path }}
       - name: Smoke-test public API
+        working-directory: ${{ runner.temp }}
         run: >-
           python -c "from importlib.metadata import metadata, version;
           import torch, torchscan;

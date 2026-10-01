@@ -48,7 +48,7 @@ jobs:
         run: make install-quality
       - name: Run quality checks
         env:
-          SKIP: no-commit-to-branch,ruff-check,ruff-format,ty
+          SKIP: no-commit-to-branch,ruff-check,ruff-format,ty,lmh
         run: |
           make quality
           make precommit
@@ -132,19 +132,15 @@ jobs:
         run: pytest tests/test_model_zoo.py
 
   headers:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - name: Check headers
-        uses: frgfm/validate-python-headers@main
-        with:
-          license: Apache-2.0
-          owner: François-Guillaume Fernandez
-          starting-year: 2020
-          folders: torchscan,scripts,docs,.github
-          ignore-files: __init__.py
+        uses: frgfm/lint-my-headers@b2cbf9115943aa4b1407c3c944cc7c51250e7673 # v0.6.0
 
   build:
     needs: [install, quality, tests, compatibility, model-smoke, headers]

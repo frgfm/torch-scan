@@ -22,6 +22,12 @@ repos:
       - id: trailing-whitespace
   - repo: local
     hooks:
+      - id: lmh
+        name: Lint My Headers
+        entry: make headers-check
+        language: system
+        pass_filenames: false
+        types: [python]
       - id: ruff-check
         name: ruff check
         entry: make ruff-lint-fix

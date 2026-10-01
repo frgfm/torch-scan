@@ -41,6 +41,7 @@ test = [
     "pytest-pretty==1.3.0",
 ]
 quality = [
+    "lint-my-headers==0.6.0",
     "prek==0.4.14",
     "ruff==0.16.3",
     "ty==0.0.73",
@@ -74,6 +75,14 @@ testpaths = ["tests/"]
 
 [tool.coverage.run]
 source = ["torchscan"]
+
+[tool.lint-my-headers]
+owner = "François-Guillaume Fernandez"
+starting-year = 2020
+license = "Apache-2.0"
+paths = ["torchscan", "scripts", "docs", ".github"]
+ignore-files = ["__init__.py"]
+ignore-folders = ["tests"]
 
 [tool.ruff]
 line-length = 120

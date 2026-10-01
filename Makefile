@@ -1,4 +1,4 @@
-.PHONY: install install-quality install-test install-docs ruff-lint-fix ruff-format-fix lint-check lint-format typing-check precommit quality style test serve-docs build-docs set-version build publish
+.PHONY: install install-quality install-test install-docs ruff-lint-fix ruff-format-fix lint-check lint-format typing-check headers-check precommit quality style test serve-docs build-docs set-version build publish
 
 install:
 	uv pip install -e .
@@ -27,10 +27,13 @@ lint-format: ruff-lint-fix ruff-format-fix
 typing-check:
 	ty check
 
+headers-check:
+	lmh check
+
 precommit:
 	prek run --all-files
 
-quality: lint-check typing-check
+quality: lint-check typing-check headers-check
 
 style: lint-format
 

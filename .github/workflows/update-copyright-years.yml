@@ -22,14 +22,7 @@ jobs:
         run: bash scripts/update_copyright_years.sh
 
       - name: Check the headers
-        uses: frgfm/validate-python-headers@main
-        with:
-          license: Apache-2.0
-          owner: François-Guillaume Fernandez
-          starting-year: 2020
-          folders: .
-          ignore-files: __init__.py
-          ignore-folders: tests
+        uses: frgfm/lint-my-headers@b2cbf9115943aa4b1407c3c944cc7c51250e7673 # v0.6.0
 
       - name: Open pull request
         env:

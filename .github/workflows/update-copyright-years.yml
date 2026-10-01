@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: "1 0 1 1 *"
       timezone: "Europe/Paris"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,42 +14,55 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TZ: Europe/Paris
+      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/copyright-quality
+      UV_TORCH_BACKEND: cpu
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Update copyright years
-        run: bash scripts/update_copyright_years.sh
-
-      - name: Check the headers
-        uses: frgfm/lint-my-headers@b2cbf9115943aa4b1407c3c944cc7c51250e7673 # v0.6.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          folders: .
-          ignore-folders: tests
-
-      - name: Open pull request
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          python-version: "3.11"
+          activate-environment: true
+          venv-path: ${{ env.UV_PROJECT_ENVIRONMENT }}
+      - name: Install quality dependencies
+        run: make install-quality
+      - name: Open the annual pull request
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          git diff --quiet -- '*.py' && exit 0
 
-          year="$(date +%Y)"
-          branch="automation/copyright-${year}"
+          copyright_year="$(date +%Y)"
+          branch_name="automation/update-copyright-years-$copyright_year"
+          test "$branch_name" != "$BASE_BRANCH"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -u -- '*.py'
-          git commit -m "Update copyright years to ${year}"
-          git fetch origin "refs/heads/${branch}:refs/remotes/origin/${branch}" || true
-          git push --force-with-lease origin "HEAD:refs/heads/${branch}"
-
-          pr_url="$(gh pr list --head "${branch}" --state open --json url --jq '.[0].url')"
-          if [[ -z "${pr_url}" ]]; then
-            gh pr create \
-              --base main \
-              --head "${branch}" \
-              --title "Update copyright years to ${year}" \
-              --body "Automated annual update of Python copyright notices."
-          else
-            echo "Updated ${pr_url}"
+          pr_number="$(gh pr list --base "$BASE_BRANCH" --head "$branch_name" --state all --json number --jq '.[0].number // empty')"
+          if test -n "$pr_number"; then
+            echo "Annual pull request #$pr_number already exists."
+            exit 0
           fi
+
+          remote_sha="$(git ls-remote --heads origin "$branch_name" | cut -f1)"
+          if test -z "$remote_sha"; then
+            make headers-fix
+            if git diff --quiet -- ':(glob)**/*.py'; then
+              echo "Copyright years are already current."
+              exit 0
+            fi
+
+            git switch -c "$branch_name"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -- ':(glob)**/*.py'
+            git commit -m "chore: update copyright years for $copyright_year"
+            git push --set-upstream origin "$branch_name"
+          fi
+
+          gh pr create --base "$BASE_BRANCH" --head "$branch_name" \
+            --title "chore: update copyright years for $copyright_year" \
+            --body "Annual refresh of recognized Python copyright years using the declared header policy."

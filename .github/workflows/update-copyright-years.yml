@@ -23,6 +23,9 @@ jobs:
 
       - name: Check the headers
         uses: frgfm/lint-my-headers@b2cbf9115943aa4b1407c3c944cc7c51250e7673 # v0.6.0
+        with:
+          folders: .
+          ignore-folders: tests
 
       - name: Open pull request
         env:

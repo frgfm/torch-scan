@@ -82,7 +82,7 @@ starting-year = 2020
 license = "Apache-2.0"
 paths = ["torchscan", "scripts", "docs", ".github"]
 ignore-files = ["__init__.py"]
-ignore-folders = ["tests"]
+ignore-folders = [".github"]
 
 [tool.ruff]
 line-length = 120

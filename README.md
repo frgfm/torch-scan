@@ -100,6 +100,17 @@ Only metadata is retained:
 TorchScan temporarily evaluates the model with gradients disabled and restores every module's original training
 state. It records input metadata, never tensor values.
 
+For shapes and parameter counts, skip compute analysis with one option:
+
+```python
+report = summary(model, (3, 32, 32), mode="structure")
+```
+
+Structure mode collects the same hierarchy, calls, input/output metadata, parameters, and buffers without FLOP
+dispatch or module formulas. Unrequested compute totals have `status="unavailable"` and `method="not_requested"`.
+`strict=True` checks the requested metrics. Full analysis remains the default. Both modes release intermediate
+activations as execution progresses.
+
 ## Workload measurements
 
 Use zero-argument callables when the owner needs full control over execution:

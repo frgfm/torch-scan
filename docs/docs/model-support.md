@@ -21,6 +21,8 @@ report = crawl_module(model, [(4,), (6,)])
 One `dtype` applies to every generated input; an iterable supplies one dtype per shape. Lengths must match exactly.
 Use `device=` to select a generated-input device. Without explicit values, TorchScan infers dtype and device from the
 first parameter, then the first buffer, then defaults to CPU and `torch.float32`. Parameterless models are supported.
+Generated integer inputs are zero and boolean inputs are true, allocated without a random FP32 temporary. These
+inputs do not advance the random generator; provide `args`/`kwargs` for representative IDs and masks.
 
 ## Complete Python calls
 

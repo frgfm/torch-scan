@@ -20,6 +20,12 @@ The model report contains:
 `context` contains `torchscan_version`, `torch_version`, `python_version`, `model_type`, `execution_mode`,
 `training_before`, `devices`, and `dtypes`.
 
+With `mode="structure"`, `context.analysis_mode` is `"structure"`. Layers contain the `calls` metric, and compute
+totals (`module_flops`, `operator_flops`, `macs`, `dmas`) are unavailable with method `not_requested`. The
+`operator_flops` report has empty operator/module mappings and diagnostics. `strict=True` checks requested metrics,
+so intentionally unrequested compute totals do not raise. Compare reports collected in the same mode; mixed modes
+have incompatible compute methods.
+
 `totals` contains `parameters`, `trainable_parameters`, `frozen_parameters`, `parameter_bytes`, `buffer_elements`,
 `buffer_bytes`, `module_flops`, `macs`, `dmas`, and the separate `operator_flops` result.
 
@@ -87,7 +93,8 @@ for `total` to be complete.
 
 `crawl_module` stores the complete report under `operator_flops` and the same `total` result under
 `totals.operator_flops`. Module hooks and the native operator counter observe the same forward call; module formulas
-run after the counter exits so their own bookkeeping is not counted.
+run in each leaf's post-hook with dispatch suspended so their own bookkeeping is not counted. Intermediate
+activations are released as the forward pass progresses; the report retains only metadata.
 
 `Global`/`total` is authoritative. `crawl_module` does not request PyTorch 2.1's explicit module tracker because that
 tracker replaces tensors passed through its hooks; preserving the caller's exact `args` and `kwargs` takes priority.

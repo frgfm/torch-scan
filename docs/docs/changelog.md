@@ -13,6 +13,7 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - PyTorch-native operator FLOPs through `measure_flops`, with per-call custom formulas and uncounted-op diagnostics.
 - Pure `compare_reports` before/after comparison.
 - Explicit workload peak-memory measurement through `measure_peak_memory` (#149).
+- Opt-in `mode="structure"` for inexpensive shapes, call metadata, parameters, and buffers.
 - Structured crawler output (#143), a `Trainable` summary column (#144), caller-provided tensors (#145), native
   Transformer FLOP formulas (#146), and raw structured compute totals (#148) during the v0.2 development cycle.
 
@@ -22,6 +23,10 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - Run model crawling under evaluation mode with gradients disabled, then restore every original module training flag.
 - Make crawler bookkeeping linear in layer-call count and cache forward signatures per module (#147, #152).
 - Separate module-formula metrics from operator-dispatch FLOPs.
+- Compute module estimates in post-hooks and release activations during the forward pass.
+- Share forward signatures across identical implementations and avoid binding fully supplied positional inputs.
+- Generate integer/boolean inputs without an FP32 temporary and normalize operator names once per distinct packet.
+- Cache installed package-version metadata across scans.
 - Modernize packaging, CI, and MkDocs Material documentation.
 
 ### Removed

@@ -172,6 +172,26 @@ def test_generated_input_supports_parameterless_modules_and_explicit_device():
     assert model.received.dtype == torch.float64
 
 
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float32, torch.float64, torch.long, torch.bool])
+def test_generated_inputs_preserve_dtype_and_avoid_integer_temporaries(monkeypatch, dtype):
+    allocated = []
+    original_rand = torch.rand
+
+    def rand(*args, **kwargs):
+        result = original_rand(*args, **kwargs)
+        allocated.append(result.dtype)
+        return result
+
+    monkeypatch.setattr(torch, "rand", rand)
+    report = crawl_module(nn.Identity(), (8,), dtype=dtype)
+
+    assert report["inputs"]["args"][0]["dtype"] == str(dtype)
+    if dtype.is_floating_point:
+        assert allocated == [torch.float32]
+    else:
+        assert allocated == []
+
+
 def test_training_flags_are_restored_and_batchnorm_state_is_unchanged():
     class MixedMode(nn.Module):
         def __init__(self):
@@ -197,7 +217,8 @@ def test_training_flags_are_restored_and_batchnorm_state_is_unchanged():
     assert torch.equal(model.batch_norm.num_batches_tracked, batches)
 
 
-def test_hooks_and_training_flags_are_restored_after_forward_error():
+@pytest.mark.parametrize("mode", ["full", "structure"])
+def test_hooks_and_training_flags_are_restored_after_forward_error(mode):
     class Broken(nn.Module):
         def __init__(self):
             super().__init__()
@@ -214,7 +235,7 @@ def test_hooks_and_training_flags_are_restored_after_forward_error():
     training_flags = [module.training for module in modules]
 
     with pytest.raises(RuntimeError, match="expected failure"):
-        crawl_module(model, args=(torch.randn(2, 4),))
+        crawl_module(model, args=(torch.randn(2, 4),), mode=mode)
 
     assert [(len(module._forward_pre_hooks), len(module._forward_hooks)) for module in modules] == hook_counts
     assert [module.training for module in modules] == training_flags

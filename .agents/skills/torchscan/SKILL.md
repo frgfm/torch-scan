@@ -14,6 +14,7 @@ Use the smallest API that answers the request:
 
 - `crawl_module(...)`: JSON-serializable module report.
 - `summary(...)`: printed table plus the same report.
+- `mode="structure"` on either API: hierarchy, shapes, calls, parameters, and buffers with less overhead.
 - `measure_flops(workload)`: operator FLOPs for one zero-argument workload call.
 - `measure_peak_memory(workload, device=...)`: backend-specific PyTorch peak memory.
 - `compare_reports(before, after)`: pure same-schema comparison.
@@ -33,6 +34,7 @@ Use the smallest API that answers the request:
 - `partial`: `known_value` is only a lower bound; do not extrapolate.
 - `unavailable`: report that no measurement was produced.
 - Zero is valid only with `status == "complete"`.
+- Structure mode's compute totals have method `not_requested`; strict checks cover requested metrics only.
 - Keep module FLOPs and operator FLOPs separate.
 - Peak PyTorch memory is not process RSS or total device memory.
 - Mocked or skipped CUDA/MPS checks are not hardware evidence.

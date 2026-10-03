@@ -1,0 +1,4 @@
+# Reproduce these reports with scripts/visual_report.py.
+*.html
+*.svg
+*.json

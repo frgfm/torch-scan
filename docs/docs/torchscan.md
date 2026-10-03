@@ -17,6 +17,10 @@ using non-trivial calls and [Understanding results](metrics.md) before comparing
 
 ::: torchscan.compare_reports
 
+## Offline visual reports
+
+::: torchscan.render_report
+
 ## Public report types and errors
 
 ::: torchscan.AnalysisReport

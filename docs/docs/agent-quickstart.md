@@ -33,6 +33,7 @@ print(json.dumps(report, sort_keys=True))
 | --- | --- |
 | Inspect module structure and formula metrics | `crawl_module` |
 | Show a table to a person and retain the report | `summary` |
+| Inspect shapes and parameters with less overhead | `crawl_module(..., mode="structure")` or `summary(..., mode="structure")` |
 | Count operator FLOPs for arbitrary code | `measure_flops` |
 | Measure one workload's PyTorch peak memory | `measure_peak_memory` |
 | Compare two compatible reports | `compare_reports` |

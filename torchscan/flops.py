@@ -83,7 +83,7 @@ def _operator_key(operator: Any) -> str:
 class _OperatorRecorder(TorchDispatchMode):
     # ponytail: PyTorch has no public uncounted-op callback; remove this adapter when FlopCounterMode exposes one.
     def __init__(self) -> None:
-        self.counts: Counter[str] = Counter()
+        self.counts: Counter[Any] = Counter()
 
     def __torch_dispatch__(
         self,
@@ -92,7 +92,7 @@ class _OperatorRecorder(TorchDispatchMode):
         args: tuple[Any, ...] = (),
         kwargs: dict[str, Any] | None = None,
     ) -> Any:
-        self.counts[_operator_key(func)] += 1
+        self.counts[getattr(func, "_overloadpacket", func)] += 1
         return func(*args, **(kwargs or {}))
 
 
@@ -137,15 +137,16 @@ def measure_flops(
     by_module = dict(
         sorted((name, int(sum(counts.values()))) for name, counts in raw_counts.items() if name != "Global")
     )
+    observed = sorted((_operator_key(operator), calls) for operator, calls in recorder.counts.items())
 
     ignored_operators: dict[str, IgnoredOperator] = {
         operator: {"calls": calls, "reason": _IGNORED_OPERATOR_REASONS[operator]}
-        for operator, calls in sorted(recorder.counts.items())
+        for operator, calls in observed
         if operator not in counted_operators and operator in _IGNORED_OPERATOR_REASONS
     }
     uncounted = {
         operator: calls
-        for operator, calls in sorted(recorder.counts.items())
+        for operator, calls in observed
         if operator not in counted_operators and operator not in _IGNORED_OPERATOR_REASONS
     }
     diagnostics: list[Diagnostic] = [

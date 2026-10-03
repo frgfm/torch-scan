@@ -31,6 +31,12 @@ package source; diagnostics expose unsupported paths.
 dispatcher can observe functional operations and work inside custom modules that hooks cannot assign to a supported
 leaf formula.
 
+For structure, shapes, parameters, and buffers alone, use `mode="structure"` in `crawl_module` or `summary`. This
+skips operator counting and module formulas while preserving one evaluation forward pass. Skipped compute totals
+are explicitly unavailable with method `not_requested`; strict checks apply only to requested metrics. Module
+formula work in full mode runs in post-hooks with dispatch suspended, allowing activations to be released during
+execution instead of retaining them for deferred analysis.
+
 Only operators with registered or caller-provided formulas contribute to the known count. TorchScan records executed
 but uncounted operators and marks the result partial. Caller formulas are scoped to one invocation and use the
 installed PyTorch version's shape-formula contract.

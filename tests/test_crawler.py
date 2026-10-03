@@ -1,11 +1,12 @@
 import json
 import warnings
+import weakref
 
 import pytest
 import torch
 from torch import nn
 
-from torchscan import crawler, modules
+from torchscan import compare_reports, crawler, modules
 
 
 def _total(report, name):
@@ -125,8 +126,13 @@ def test_package_fallback_and_object_metadata(monkeypatch):
     def missing_package(_):
         raise crawler.PackageNotFoundError
 
-    monkeypatch.setattr(crawler, "version", missing_package)
-    assert crawler._package_version() == "unknown"
+    with monkeypatch.context() as patch:
+        patch.setattr(crawler, "version", missing_package)
+        crawler._package_version.cache_clear()
+        try:
+            assert crawler._package_version() == "unknown"
+        finally:
+            crawler._package_version.cache_clear()
 
     class IgnoreObject(nn.Module):
         def forward(self, _value):
@@ -134,6 +140,36 @@ def test_package_fallback_and_object_metadata(monkeypatch):
 
     report = crawler.crawl_module(IgnoreObject(), args=(object(),))
     assert report["inputs"]["args"][0]["kind"] == "object"
+
+
+def test_signature_cache_is_shared_by_identical_implementations_and_scoped_to_crawl(monkeypatch):
+    model = nn.Sequential(nn.Linear(4, 4), nn.Linear(4, 4))
+    original_signature = crawler.inspect.signature
+    signature_calls = 0
+
+    def counting_signature(callable_):
+        nonlocal signature_calls
+        if getattr(callable_, "__func__", None) is nn.Linear.forward:
+            signature_calls += 1
+        return original_signature(callable_)
+
+    monkeypatch.setattr(crawler.inspect, "signature", counting_signature)
+    crawler.crawl_module(model, (4,))
+    assert signature_calls == 1
+    crawler.crawl_module(model, (4,))
+    assert signature_calls == 2
+
+
+def test_structure_comparison_keeps_skipped_metrics_unavailable():
+    before = crawler.crawl_module(nn.Linear(4, 2), (4,), mode="structure")
+    after = crawler.crawl_module(nn.Linear(4, 3), (4,), mode="structure")
+    diff = compare_reports(before, after)
+
+    assert diff["totals"]["parameters"]["delta"] == 5
+    assert diff["totals"]["operator_flops"]["status"] == "unavailable"
+    full = crawler.crawl_module(nn.Linear(4, 2), (4,))
+    with pytest.raises(ValueError, match="method"):
+        compare_reports(full, before)
 
 
 def test_receptive_field_failure_is_diagnostic(monkeypatch):
@@ -317,3 +353,80 @@ def test_summary_depth_and_trainable_column(capsys):
     assert "Trainable" in output
     assert "Linear" in output
     assert "False" in output
+
+
+@pytest.mark.parametrize("mode", ["full", "structure"])
+def test_crawl_releases_earlier_activations_during_forward(mode):
+    references = []
+
+    class TrackOutput(nn.ReLU):
+        def forward(self, value):
+            # The immediately preceding output is this module's input, but all
+            # earlier outputs should already have been released by the crawler.
+            assert all(reference() is None for reference in references[:-1])
+            output = super().forward(value)
+            references.append(weakref.ref(output))
+            return output
+
+    model = nn.Sequential(*(TrackOutput() for _ in range(8)))
+    report = crawler.crawl_module(model, args=(torch.randn(2, 64),), mode=mode)
+
+    assert len(report["layers"]) == 9
+    assert all(reference() is None for reference in references)
+
+
+def test_formula_uses_output_shape_before_later_inplace_resize():
+    class Resize(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.relu = nn.ReLU()
+
+        def forward(self, value):
+            result = self.relu(value)
+            result.resize_(1)
+            return result
+
+    report = crawler.crawl_module(Resize(), args=(torch.ones(4),))
+
+    assert _layer(report, "relu")["metrics"]["dmas"]["value"] == 8
+    assert _layer(report, "relu")["output"]["shape"] == [4]
+
+
+def test_structure_mode_skips_formula_and_dispatch_work(monkeypatch):
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Structure mode must not run formulas, inspect signatures, or count operators")
+
+    monkeypatch.setattr(crawler, "measure_flops", forbidden)
+    monkeypatch.setattr(crawler, "module_flops", forbidden)
+    monkeypatch.setattr(crawler.inspect, "signature", forbidden)
+    model = nn.Sequential(nn.Linear(4, 4), nn.GELU()).train()
+
+    report = crawler.crawl_module(model, args=(torch.randn(2, 4),), mode="structure", strict=True)
+
+    assert report["context"]["analysis_mode"] == "structure"
+    assert report["totals"]["parameters"]["value"] == 20
+    assert _layer(report, "1")["output"]["shape"] == [2, 4]
+    assert report["diagnostics"] == []
+    for metric in ("module_flops", "operator_flops", "macs", "dmas"):
+        assert report["totals"][metric]["status"] == "unavailable"
+        assert report["totals"][metric]["value"] is None
+        assert report["totals"][metric]["method"] == "not_requested"
+    assert all(layer["metrics"].keys() == {"calls"} for layer in report["layers"])
+    assert model.training
+    assert json.loads(json.dumps(report)) == report
+
+
+def test_invalid_mode_does_not_execute_model():
+    class NeverCalled(nn.Module):
+        def forward(self, _value):
+            pytest.fail("Invalid options must fail before model execution")
+
+    with pytest.raises(ValueError, match="mode"):
+        crawler.crawl_module(NeverCalled(), (4,), mode="invalid")
+
+
+def test_structure_summary_returns_report(capsys):
+    report = crawler.summary(nn.Linear(4, 2), (4,), mode="structure", strict=True)
+
+    assert report["totals"]["parameters"]["value"] == 10
+    assert "Operator forward FLOPs: unavailable" in capsys.readouterr().out

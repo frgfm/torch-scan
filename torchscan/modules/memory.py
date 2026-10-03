@@ -65,7 +65,7 @@ def num_params(module: Module) -> int:
     Returns:
         int: number of parameter elements
     """
-    return sum(p.data.numel() for p in module.parameters())
+    return sum(p.numel() for p in module.parameters())
 
 
 def dmas_identity(_: nn.Identity, inp: Tensor, __: Tensor) -> int:
@@ -173,7 +173,7 @@ def dmas_bn(module: _BatchNorm, inp: Tensor, out: Tensor) -> int:
         ops_dma += module.running_mean.numel() + module.running_var.numel()
     # Access to weight and bias
     if module.affine and module.weight is not None and module.bias is not None:
-        ops_dma += module.weight.data.numel() + module.bias.data.numel()
+        ops_dma += module.weight.numel() + module.bias.numel()
     # Exp avg factor
     if module.momentum is not None:
         ops_dma += 1

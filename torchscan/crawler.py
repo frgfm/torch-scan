@@ -8,8 +8,10 @@ import platform
 import warnings
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
+from functools import cache
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any, cast
+from itertools import starmap
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
@@ -23,6 +25,7 @@ from .utils import aggregate_info, format_info
 __all__ = ["crawl_module", "summary"]
 
 
+@cache
 def _package_version() -> str:
     try:
         return version("torchscan")
@@ -93,6 +96,17 @@ def _ordered_inputs(
     """Return forward arguments in signature order for the legacy formula functions."""
     if signature is None:
         return (*args, *kwargs.values())
+    # Most leaf modules have a single, fully supplied positional argument.
+    # Avoid constructing BoundArguments while still binding masks and defaults.
+    if (
+        not kwargs
+        and len(args) == len(signature.parameters)
+        and all(
+            parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            for parameter in signature.parameters.values()
+        )
+    ):
+        return args
     try:
         bound = signature.bind_partial(*args, **kwargs)
         bound.apply_defaults()
@@ -270,10 +284,16 @@ def _prepare_inputs(
         if any(not isinstance(item, torch.dtype) for item in dtypes):
             raise TypeError("Every dtype value must be a torch.dtype.")
 
-    call_args = tuple(
-        torch.rand(1, *shape, device=target_device).to(dtype=current_dtype)
-        for shape, current_dtype in zip(shapes, dtypes, strict=True)
-    )
+    def generate(shape: tuple[int, ...], current_dtype: torch.dtype) -> torch.Tensor:
+        # Integer inputs were generated as FP32 random values then truncated to
+        # zero. Allocate those zeros directly without a random/conversion pass.
+        if current_dtype == torch.bool:
+            return torch.ones(1, *shape, device=target_device, dtype=current_dtype)
+        if not current_dtype.is_floating_point and not current_dtype.is_complex:
+            return torch.zeros(1, *shape, device=target_device, dtype=current_dtype)
+        return torch.rand(1, *shape, device=target_device).to(dtype=current_dtype)
+
+    call_args = tuple(starmap(generate, zip(shapes, dtypes, strict=True)))
     call_kwargs: dict[str, Any] = {}
     return call_args, call_kwargs, {"source": "generated", **_describe_call(call_args, call_kwargs)}
 
@@ -287,12 +307,19 @@ def crawl_module(
     kwargs: Mapping[str, Any] | None = None,
     device: str | torch.device | None = None,
     strict: bool = False,
+    mode: Literal["full", "structure"] = "full",
 ) -> AnalysisReport:
     """Collect a truthful, machine-readable report from one inference forward pass.
 
     Calls sharing a module instance must be serialized because analysis temporarily
     changes its training state and installs forward hooks.
+
+    ``mode="structure"`` collects shapes, calls, parameters, and buffers without
+    module formulas or operator dispatch. Unrequested compute totals are unavailable
+    with method ``not_requested``; ``strict`` checks only requested metrics.
     """
+    if mode not in ("full", "structure"):
+        raise ValueError("mode must be 'full' or 'structure'.")
     call_args, call_kwargs, input_metadata = _prepare_inputs(module, input_shape, dtype, args, kwargs, device)
     diagnostics: list[Diagnostic] = []
     layers: list[LayerReport] = []
@@ -300,8 +327,8 @@ def crawl_module(
     pending: dict[int, list[int]] = {}
     call_counts: dict[int, int] = {}
     seen_tensor_ids: set[int] = set()
-    captured_calls: list[tuple[int, Module, tuple[Any, ...], Any, torch.Tensor | None, torch.Tensor | None]] = []
     training_flags = [(child, child.training) for child in module.modules()]
+    signatures: dict[Callable[..., Any], inspect.Signature | None] = {}
 
     def is_metric_leaf(current: Module) -> bool:
         return (
@@ -313,9 +340,17 @@ def crawl_module(
     def register(current: Module, path: str) -> None:
         forward_signature: inspect.Signature | None = None
         metric_leaf = is_metric_leaf(current)
-        if metric_leaf:
-            with suppress(TypeError, ValueError):
-                forward_signature = inspect.signature(current.forward)
+        if metric_leaf and mode == "full":
+            forward = current.forward
+            # Bound methods of the same implementation have the same signature.
+            signature_key = forward.__func__ if inspect.ismethod(forward) else None
+            if signature_key is not None and signature_key in signatures:
+                forward_signature = signatures[signature_key]
+            else:
+                with suppress(TypeError, ValueError):
+                    forward_signature = inspect.signature(forward)
+                if signature_key is not None:
+                    signatures[signature_key] = forward_signature
 
         def pre_hook(hooked: Module, hook_args: tuple[Any, ...], hook_kwargs: dict[str, Any]) -> None:
             call_index = call_counts.get(id(hooked), 0)
@@ -383,18 +418,23 @@ def crawl_module(
             layer_index = pending[id(hooked)].pop()
             layer = layers[layer_index]
             layer["output"] = _describe(output)
-            if not metric_leaf:
+            if not metric_leaf or mode == "structure":
                 return
 
             ordered_inputs = _ordered_inputs(forward_signature, hook_args, hook_kwargs)
-            captured_calls.append((
-                layer_index,
-                hooked,
-                ordered_inputs,
-                output,
-                _first_tensor(ordered_inputs),
-                _first_tensor(output),
-            ))
+            # Formula work must not appear in the operator report. Suspend dispatch
+            # only while calculating metadata-based estimates, then release all
+            # activation references before the next module executes.
+            # PyTorch exposes no public context for suspending dispatch modes.
+            with torch._C._DisableTorchDispatch():
+                populate_metrics(
+                    layer_index,
+                    hooked,
+                    ordered_inputs,
+                    output,
+                    _first_tensor(ordered_inputs),
+                    _first_tensor(output),
+                )
 
         handles.append(current.register_forward_pre_hook(pre_hook, with_kwargs=True))
         handles.append(current.register_forward_hook(post_hook, with_kwargs=True))
@@ -497,9 +537,21 @@ def crawl_module(
         with torch.no_grad():
             # PyTorch 2.1's explicit module tracker replaces caller tensors in hooks.
             # Omitting it preserves exact args; newer releases still attribute modules automatically.
-            flop_report = measure_flops(lambda: module(*call_args, **call_kwargs))
-            for captured_call in captured_calls:
-                populate_metrics(*captured_call)
+            if mode == "full":
+                flop_report = measure_flops(lambda: module(*call_args, **call_kwargs))
+            else:
+                module(*call_args, **call_kwargs)
+                flop_report = {
+                    "schema_version": 1,
+                    "context": {"torch_version": torch.__version__, "method": "not_requested"},
+                    "total": metric_result(
+                        status="unavailable", unit="FLOPs", scope="workload", method="not_requested"
+                    ),
+                    "by_module": {},
+                    "by_operator": {},
+                    "ignored_operators": {},
+                    "diagnostics": [],
+                }
     finally:
         for handle in handles:
             handle.remove()
@@ -557,8 +609,18 @@ def crawl_module(
         },
         "diagnostics": diagnostics,
     }
+    if mode == "structure":
+        report["context"]["analysis_mode"] = mode
+        for name, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
+            report["totals"][name] = metric_result(
+                status="unavailable", unit=unit, scope="forward", method="not_requested"
+            )
     if strict and (
-        report["diagnostics"] or any(result["status"] != "complete" for result in report["totals"].values())
+        report["diagnostics"]
+        or any(
+            result["status"] != "complete" and result["method"] != "not_requested"
+            for result in report["totals"].values()
+        )
     ):
         raise IncompleteAnalysisError(report)
     return report
@@ -577,8 +639,9 @@ def summary(
     kwargs: Mapping[str, Any] | None = None,
     device: str | torch.device | None = None,
     strict: bool = False,
+    mode: Literal["full", "structure"] = "full",
 ) -> AnalysisReport:
-    """Print and return a truthful module analysis report."""
+    """Print and return a module report; use ``mode="structure"`` for shapes and counts only."""
     report = crawl_module(
         module,
         input_shape,
@@ -587,6 +650,7 @@ def summary(
         kwargs=kwargs,
         device=device,
         strict=strict,
+        mode=mode,
     )
     display_report = aggregate_info(report, max_depth) if isinstance(max_depth, int) else report
     print(format_info(display_report, wrap_mode, receptive_field, effective_rf_stats))  # ruff: ignore[print] T201

@@ -39,39 +39,35 @@ class FlopReport(TypedDict):
 
 
 _IGNORED_OPERATOR_REASONS = {
-    # Metadata-only views.
-    "aten._unsafe_view": "Metadata-only tensor view.",
-    "aten.alias": "Metadata-only tensor view.",
-    "aten.as_strided": "Metadata-only tensor view.",
-    "aten.detach": "Metadata-only tensor view.",
-    "aten.expand": "Metadata-only tensor view.",
-    "aten.narrow": "Metadata-only tensor view.",
-    "aten.permute": "Metadata-only tensor view.",
-    "aten.select": "Metadata-only tensor view.",
-    "aten.slice": "Metadata-only tensor view.",
-    "aten.squeeze": "Metadata-only tensor view.",
-    "aten.t": "Metadata-only tensor view.",
-    "aten.transpose": "Metadata-only tensor view.",
-    "aten.unbind": "Metadata-only tensor view.",
-    "aten.unsqueeze": "Metadata-only tensor view.",
-    "aten.view": "Metadata-only tensor view.",
-    # Data movement is outside the FLOP convention used by PyTorch's counter.
-    "aten._to_copy": "Data movement is excluded from FLOPs.",
-    "aten.cat": "Data movement is excluded from FLOPs.",
-    "aten.clone": "Data movement is excluded from FLOPs.",
-    "aten.contiguous": "Data movement is excluded from FLOPs.",
-    "aten.copy_": "Data movement is excluded from FLOPs.",
-    "aten.split": "Data movement is excluded from FLOPs.",
-    "aten.to": "Data movement is excluded from FLOPs.",
-    # Tensor allocation and workload setup are not model arithmetic.
-    "aten.empty": "Tensor allocation is excluded from FLOPs.",
-    "aten.empty_strided": "Tensor allocation is excluded from FLOPs.",
-    "aten.full": "Tensor creation is excluded from FLOPs.",
-    "aten.lift_fresh": "Tensor creation is excluded from FLOPs.",
-    "aten.lift_fresh_copy": "Tensor creation is excluded from FLOPs.",
-    "aten.ones": "Tensor creation is excluded from FLOPs.",
-    "aten.scalar_tensor": "Tensor creation is excluded from FLOPs.",
-    "aten.zeros": "Tensor creation is excluded from FLOPs.",
+    **dict.fromkeys(
+        [
+            "aten._unsafe_view",
+            "aten.alias",
+            "aten.as_strided",
+            "aten.detach",
+            "aten.expand",
+            "aten.narrow",
+            "aten.permute",
+            "aten.select",
+            "aten.slice",
+            "aten.squeeze",
+            "aten.t",
+            "aten.transpose",
+            "aten.unbind",
+            "aten.unsqueeze",
+            "aten.view",
+        ],
+        "Metadata-only tensor view.",
+    ),
+    **dict.fromkeys(
+        ["aten._to_copy", "aten.cat", "aten.clone", "aten.contiguous", "aten.copy_", "aten.split", "aten.to"],
+        "Data movement is excluded from FLOPs.",
+    ),
+    **dict.fromkeys(["aten.empty", "aten.empty_strided"], "Tensor allocation is excluded from FLOPs."),
+    **dict.fromkeys(
+        ["aten.full", "aten.lift_fresh", "aten.lift_fresh_copy", "aten.ones", "aten.scalar_tensor", "aten.zeros"],
+        "Tensor creation is excluded from FLOPs.",
+    ),
 }
 
 

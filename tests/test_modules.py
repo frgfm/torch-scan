@@ -204,45 +204,22 @@ def test_module_rf_conv_transpose():
     assert modules.module_rf(mod, input_t, mod(input_t)) == (-3, 1, 0)
 
 
-# @torch.no_grad()
-# def test_module_rf(self):
+@pytest.mark.parametrize("kind", ["Max", "Avg"])
+@pytest.mark.parametrize(
+    ("dimension", "input_shape", "output_shape", "max_ops", "avg_ops", "dmas"),
+    [
+        (1, (2, 4, 7), (2, 4, 3), 24, 48, 72),
+        (2, (2, 4, 7, 8), (2, 4, 3, 4), 288, 480, 480),
+        (3, (2, 4, 7, 8, 5), (2, 4, 3, 4, 2), 1344, 1920, 1728),
+    ],
+)
+def test_adaptive_pool_metrics_for_non_divisible_spatial_shapes(
+    kind, dimension, input_shape, output_shape, max_ops, avg_ops, dmas
+):
+    module = getattr(nn, f"Adaptive{kind}Pool{dimension}d")(output_shape[2:])
+    inp, out = torch.zeros(input_shape), torch.zeros(output_shape)
+    expected_ops = max_ops if kind == "Max" else avg_ops
 
-#     # Check for unknown module that it returns 0 and throws a warning
-#     self.assertEqual(modules.module_rf(MyModule(), None, None), (1, 1, 0))
-#     self.assertWarns(UserWarning, modules.module_rf, MyModule(), None, None)
-
-#     # Common unit tests
-#     # Linear
-#     self.assertEqual(modules.module_rf(nn.Linear(8, 4), torch.zeros((1, 8)), torch.zeros((1, 4))),
-#                      (1, 1, 0))
-#     # Activation
-#     self.assertEqual(modules.module_rf(nn.Identity(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
-#     self.assertEqual(modules.module_rf(nn.Flatten(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
-#     self.assertEqual(modules.module_rf(nn.ReLU(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
-#     self.assertEqual(modules.module_rf(nn.ELU(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
-#     self.assertEqual(modules.module_rf(nn.Sigmoid(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
-#     self.assertEqual(modules.module_rf(nn.Tanh(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
-#     # Conv
-#     input_t = torch.rand((1, 3, 32, 32))
-#     mod = nn.Conv2d(3, 8, 3)
-#     self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (3, 1, 0))
-#     # Check for dilation support
-#     mod = nn.Conv2d(3, 8, 3, dilation=2)
-#     self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (5, 1, 0))
-#     # ConvTranspose
-#     mod = nn.ConvTranspose2d(3, 8, 3)
-#     self.assertEqual(modules.module_rf(mod, input_t, mod(input_t)), (-3, 1, 0))
-#     # BN
-#     self.assertEqual(modules.module_rf(nn.BatchNorm1d(8), torch.zeros((1, 8, 4)), torch.zeros((1, 8, 4))),
-#                      (1, 1, 0))
-
-#     # Pooling
-#     self.assertEqual(modules.module_rf(nn.MaxPool2d((2, 2)),
-#                                        torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
-#                      (2, 2, 0))
-#     self.assertEqual(modules.module_rf(nn.AdaptiveMaxPool2d((2, 2)),
-#                                        torch.zeros((1, 8, 4, 4)), torch.zeros((1, 8, 2, 2))),
-#                      (2, 2, 0))
-
-#     # Dropout
-#     self.assertEqual(modules.module_rf(nn.Dropout(), torch.zeros((1, 8)), torch.zeros((1, 8))), (1, 1, 0))
+    assert modules.module_flops(module, (inp,), out) == expected_ops
+    assert modules.module_macs(module, inp, out) == expected_ops
+    assert modules.module_dmas(module, inp, out) == dmas

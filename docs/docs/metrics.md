@@ -58,6 +58,7 @@ therefore yield partial or unavailable results.
 
 It does not report process RSS, total device use, driver memory, or third-party allocations. Compare memory only with
 matching hardware, PyTorch version, model state, inputs, dtype, optimizer state, allocator warmup, and workload.
+Accelerator statistics are process-global, so unrelated concurrent allocations can affect the result.
 
 ## Latency and throughput
 
@@ -74,7 +75,7 @@ For research or regression analysis, retain:
 - Input shapes, dtypes, devices, and non-sensitive call structure.
 - TorchScan, PyTorch, and Python versions.
 - Every diagnostic and custom formula definition.
-- Hardware and workload preparation for memory or latency measurements.
+- Hardware, warmup, allocator, model, gradient, autocast, and optimizer state for memory or latency measurements.
 
 Use [Report comparison](report-schema.md#reportdiff) only when both reports use the same schema and compatible
 methods.

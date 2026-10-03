@@ -1,109 +1,58 @@
-# Contributing to torchscan
+# Contributing to TorchScan
 
-Everything you need to know to contribute efficiently to the project.
-
-Whatever the way you wish to contribute to the project, please respect the [code of conduct](CODE_OF_CONDUCT.md).
-
+Please follow the [code of conduct](CODE_OF_CONDUCT.md). Report bugs and feature requests through
+[GitHub issues](https://github.com/frgfm/torch-scan/issues), checking existing issues first and using the templates.
+For usage questions, visit [GitHub discussions](https://github.com/frgfm/torch-scan/discussions).
 
 ## Codebase structure
 
-- [torchscan](https://github.com/frgfm/torch-scan/blob/main/torchscan) - The actual torchscan library
-- [tests](https://github.com/frgfm/torch-scan/blob/main/tests) - Python unit tests
-- [docs](https://github.com/frgfm/torch-scan/blob/main/docs) - MkDocs documentation building
-- [scripts](https://github.com/frgfm/torch-scan/blob/main/scripts) - Example and utilities scripts
+- [torchscan/](torchscan): library source.
+- [tests/](tests): unit and model integration tests.
+- [docs/](docs): MkDocs documentation.
+- [scripts/](scripts): examples and utilities.
 
+## Development setup
 
+[Fork the repository](https://docs.github.com/en/get-started/quickstart/fork-a-repo), then clone your fork and create a
+branch for the change:
 
-## Continuous Integration
-
-This project uses the following integrations to ensure proper codebase maintenance:
-
-- [Github Worklow](https://help.github.com/en/actions/configuring-and-managing-workflows/configuring-a-workflow) - run jobs for package build and coverage
-- [Codacy](https://www.codacy.com/) - analyzes commits for code quality
-- [Codecov](https://codecov.io/) - reports back coverage results
-
-As a contributor, you will only have to ensure coverage of your code by adding appropriate unit testing of your code.
-
-
-## Feedback
-
-### Feature requests & bug report
-
-Whether you encountered a problem, or you have a feature suggestion, your input has value and can be used by contributors to reference it in their developments. For this purpose, we advise you to use Github [issues](https://github.com/frgfm/torch-scan/issues).
-
-First, check whether the topic wasn't already covered in an open / closed issue. If not, feel free to open a new one! When doing so, use issue templates whenever possible and provide enough information for other contributors to jump in.
-
-### Questions
-
-If you are wondering how to do something with TorchScan, or a more general question, you should consider checking out Github [discussions](https://github.com/frgfm/torch-scan/discussions). See it as a Q&A forum, or the TorchScan-specific StackOverflow!
-
-
-
-## Submitting a Pull Request
-
-### Preparing your local branch
-
-1 - Fork this [repository](https://github.com/frgfm/torch-scan) by clicking on the "Fork" button at the top right of the page. This will create a copy of the project under your GitHub account (cf. [Fork a repo](https://docs.github.com/en/get-started/quickstart/fork-a-repo)).
-
-2 - [Clone your fork](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) to your local disk and set the upstream to this repo
 ```shell
 git clone git@github.com:<YOUR_GITHUB_ACCOUNT>/torch-scan.git
 cd torch-scan
 git remote add upstream https://github.com/frgfm/torch-scan.git
-```
-
-3 - You should not work on the `main` branch, so let's create a new one
-```shell
 git checkout -b a-short-description
+uv venv --python 3.11
 ```
 
-4 - Create a development environment with [uv](https://docs.astral.sh/uv/), install the contributor dependencies, and configure [prek](https://prek.j178.dev/):
+Activate `.venv` with `source .venv/bin/activate` on Linux/macOS or `.venv\Scripts\activate` on Windows, then install
+the contributor dependencies and hooks:
+
 ```shell
-uv venv
 make install-quality install-test install-docs
 prek install
 ```
 
-### Developing your feature
+## Checks before submitting
 
-#### Commits
+Add focused tests for changed behavior and use [Google-style docstrings](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings)
+for public Python functions and classes. Follow the [commit message guide](http://udacity.github.io/git-styleguide/).
 
-- **Code**: ensure to provide docstrings to your Python code. In doing so, please follow [Google-style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings) so it can ease the process of documentation later.
-- **Commit message**: please follow [Udacity guide](http://udacity.github.io/git-styleguide/)
-
-#### Unit tests
-
-In order to run the same unit tests as the CI workflows, you can run unittests locally:
+Run the checks used by CI:
 
 ```shell
 make test
-```
-
-#### Code quality
-
-The CI will also run some sanity checks (header format, dependency consistency, etc.), which you can run as follows:
-
-```shell
 make quality
 make precommit
+make build-docs
 ```
 
-This will read `pyproject.toml` and run:
-- lint checking, formatting ([ruff](https://docs.astral.sh/ruff/))
-- type annotation checking ([ty](https://docs.astral.sh/ty/))
-- repository hooks ([prek](https://prek.j178.dev/))
+`make quality` checks Ruff formatting/lint, ty types, and copyright headers. `make precommit` runs repository hooks.
+Use `make style` to apply Ruff fixes and `make headers-fix` to refresh headers. CI also verifies installation,
+compatibility, distributions, and model integrations; [Codecov](https://codecov.io/gh/frgfm/torch-scan) reports coverage.
+See [the documentation guide](docs/README.md) for local preview instructions.
 
-You can apply automatic fix to most of those by running:
+## Submitting a pull request
 
-```shell
-make style
-```
-
-### Submit your modifications
-
-Push your last modifications to your remote branch
-```shell
-git push -u origin a-short-description
-```
-
-Then [open a Pull Request](https://docs.github.com/en/github/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request) from your fork's branch. Follow the instructions of the Pull Request template and then click on "Create a pull request".
+Push your branch with `git push -u origin a-short-description`, then
+[open a pull request](https://docs.github.com/en/github/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
+and complete the repository's PR template.

@@ -21,13 +21,9 @@ jobs:
         python: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup
         with:
           python-version: ${{ matrix.python }}
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
       - name: Install package
         run: uv pip install -e .
       - name: Import package
@@ -37,13 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
+      - uses: ./.github/actions/setup
       - name: Install dependencies
         run: make install-quality
       - name: Run quality checks
@@ -59,13 +49,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
+      - uses: ./.github/actions/setup
       - name: Install dependencies
         run: make install-test
       - name: Run tests
@@ -95,13 +79,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup
         with:
           python-version: ${{ matrix.python }}
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
       - name: Install compatibility environment
         run: uv pip install -e ".[test]" "${{ matrix.torch }}"
       - name: Run v0.2 contract tests
@@ -119,13 +99,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
+      - uses: ./.github/actions/setup
       - name: Install model test dependencies
         run: uv pip install -e ".[test,model-test]"
       - name: Run no-download model smokes
@@ -149,11 +123,9 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
+          activate-environment: "false"
       - name: Resolve package version
         id: version
         run: |
@@ -190,13 +162,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
+      - uses: ./.github/actions/setup
       - uses: actions/download-artifact@v8
         with:
           name: distributions
@@ -230,11 +196,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup
         with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
+          activate-environment: "false"
       - uses: actions/download-artifact@v8
         with:
           name: distributions
@@ -252,13 +216,9 @@ jobs:
         python: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: ./.github/actions/setup
         with:
           python-version: ${{ matrix.python }}
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
       - name: Install released package
         working-directory: ${{ runner.temp }}
         run: uv pip install "torchscan==${{ needs.publish.outputs.version }}"

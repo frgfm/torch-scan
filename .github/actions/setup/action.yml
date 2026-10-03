@@ -1,0 +1,19 @@
+name: Set up Python and uv
+description: Use the shared Python architecture and uv environment settings.
+inputs:
+  python-version:
+    description: Python version to install.
+    default: "3.11"
+  activate-environment:
+    description: Activate a virtual environment for subsequent steps.
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+        architecture: x64
+    - uses: astral-sh/setup-uv@v10.0.1
+      with:
+        activate-environment: ${{ inputs.activate-environment }}

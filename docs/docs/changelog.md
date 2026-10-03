@@ -27,6 +27,8 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - Separate module-formula metrics from operator-dispatch FLOPs.
 - Correct transposed-convolution FLOP/MAC geometry, unbatched convolution channels, BatchNorm statistics work,
   dropout execution state, and stable attention softmax arithmetic. Keep native fused attention core counts partial.
+- Respect reduction arithmetic dtype, BatchNorm buffers, zero-width linear bias, and equivalent pooling kernels.
+  Keep sparse/nested shape counts, empty normalization groups, and custom Transformer final norms incomplete.
 - Label partial benchmark cells as lower bounds and unavailable cells explicitly; display both FLOP methods.
 - Compute module estimates in post-hooks and release activations during the forward pass.
 - Share forward signatures across identical implementations and avoid binding fully supplied positional inputs.

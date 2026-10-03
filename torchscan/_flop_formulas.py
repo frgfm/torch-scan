@@ -64,6 +64,8 @@ def _group_norm(
     **_kwargs: Any,
 ) -> int:
     elements = prod(input_shape)
+    if prod(input_shape[1:]) == 0:
+        raise NotImplementedError("GroupNorm FLOPs require a nonempty normalized group.")
     return 6 * elements + 2 * batch * groups + elements * (int(weight is not None) + int(bias is not None))
 
 
@@ -107,8 +109,17 @@ def _cpu_attention(
     attn_mask: Any = None,
     **_kwargs: Any,
 ) -> int:
-    if len(query) != 4 or len(key) != 4 or len(value) != 4 or query[1] != key[1] or key[1] != value[1]:
-        raise NotImplementedError("CPU attention formula supports dense 4D tensors with equal head counts only.")
+    if (
+        len(query) != 4
+        or len(key) != 4
+        or len(value) != 4
+        or query[:2] != key[:2]
+        or key[:3] != value[:3]
+        or query[3] != key[3]
+    ):
+        raise NotImplementedError(
+            "CPU attention formula requires matching batch/head counts, Q/K widths, and K/V lengths."
+        )
     if dropout_p != 0:
         raise NotImplementedError("CPU attention formula does not cover dropout.")
     # Keep PyTorch's two dense matrix products. Count score scaling and stable
@@ -122,7 +133,7 @@ def _cpu_attention(
         + scores
         + 5 * scores
         - 2 * rows
-        + scores * int(is_causal or attn_mask is not None)
+        + scores * (int(is_causal) + int(attn_mask is not None))
     )
 
 

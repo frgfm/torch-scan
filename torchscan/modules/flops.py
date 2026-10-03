@@ -7,6 +7,7 @@ import math
 import warnings
 from typing import Any, Callable, Tuple, cast
 
+import torch
 from torch import Tensor, nn
 from torch.nn import Module
 from torch.nn import functional as F
@@ -31,8 +32,11 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...]
     """
     if isinstance(module, (nn.Identity, nn.Flatten)):
         return 0
-    if any(isinstance(value, Tensor) and value.is_complex() for value in (inputs or ())):
-        raise NotImplementedError("Module FLOP formulas cover real arithmetic only.")
+    if any(
+        isinstance(value, Tensor) and (value.is_complex() or value.is_nested or value.layout != torch.strided)
+        for value in (inputs or ())
+    ):
+        raise NotImplementedError("Module FLOP formulas cover real dense strided tensors only.")
     if isinstance(module, nn.Linear):
         return flops_linear(module, inputs)
     if isinstance(module, nn.ReLU):
@@ -79,7 +83,7 @@ def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
     # batch size * out_chan * in_chan
     num_out_feats = module.out_features * math.prod(inputs[0].shape[:-1])
-    mm_flops = num_out_feats * (2 * module.in_features - 1)
+    mm_flops = num_out_feats * max(0, 2 * module.in_features - 1)
     bias_flops = num_out_feats if module.bias is not None else 0
 
     return mm_flops + bias_flops
@@ -157,13 +161,18 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
     bn_flops = norm_ops + scale_ops
 
     # Batch statistics are needed in training AND in eval without running stats.
-    if module.training or not module.track_running_stats:
+    if module.training or (module.running_mean is None and module.running_var is None):
         # Mean: N ops; biased variance: subtract, square, reduce, divide = 3N.
         bn_flops += 4 * inputs[0].numel()
 
     # Count floating-point running-stat updates, excluding the integer batch counter.
     tracking_flops = 0
-    if module.track_running_stats and module.training:
+    if (
+        module.track_running_stats
+        and module.training
+        and module.running_mean is not None
+        and module.running_var is not None
+    ):
         # Convert biased variance to unbiased (multiply/divide), then two
         # exponential averages: two multiplies and one addition each.
         tracking_flops += 8 * module.num_features
@@ -171,22 +180,28 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
     return bn_flops + tracking_flops
 
 
+def _pool_kernel_volume(module: _MaxPoolNd | _AvgPoolNd) -> int:
+    kernel_size = cast(int | Tuple[int, ...] | list[int], module.kernel_size)
+    rank = 1
+    if isinstance(module, (nn.MaxPool2d, nn.AvgPool2d)):
+        rank = 2
+    elif isinstance(module, (nn.MaxPool3d, nn.AvgPool3d)):
+        rank = 3
+    if isinstance(kernel_size, int):
+        return kernel_size**rank
+    return kernel_size[0] ** rank if len(kernel_size) == 1 else math.prod(kernel_size)
+
+
 def flops_maxpool(module: _MaxPoolNd, _: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
-    kernel_size = module.kernel_size
-    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
-
     # for each spatial output element, check max element in kernel scope
-    return out.numel() * (k_size - 1)
+    return out.numel() * (_pool_kernel_volume(module) - 1)
 
 
-def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def flops_avgpool(module: _AvgPoolNd, _inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
-    kernel_size = cast(int | Tuple[int, ...], module.kernel_size)
-    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
-
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (k_size - 1 + inputs[0].ndim - 2)
+    return out.numel() * _pool_kernel_volume(module)
 
 
 def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
@@ -219,6 +234,8 @@ def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
 def flops_groupnorm(module: nn.GroupNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.GroupNorm`."""
     numel = inputs[0].numel()
+    if math.prod(inputs[0].shape[1:]) == 0:
+        raise NotImplementedError("GroupNorm FLOPs require a nonempty normalized group.")
     rows = inputs[0].shape[0] * module.num_groups
     return 6 * numel + 2 * rows + numel * int(module.weight is not None) + numel * int(module.bias is not None)
 
@@ -323,6 +340,11 @@ def flops_transformer(module: nn.Transformer, inputs: Tuple[Any, ...]) -> int:
     """FLOPs estimation for `torch.nn.Transformer`"""
     if not isinstance(module.encoder, nn.TransformerEncoder) or not isinstance(module.decoder, nn.TransformerDecoder):
         raise NotImplementedError("Transformer FLOPs only support the native encoder and decoder stacks.")
+    if any(
+        stack.norm is not None and not isinstance(stack.norm, (nn.LayerNorm, nn.Identity))
+        for stack in (module.encoder, module.decoder)
+    ):
+        raise NotImplementedError("Transformer FLOPs only support LayerNorm, Identity, or no final normalization.")
 
     src_mask = inputs[2] if len(inputs) > 2 else None
     tgt_mask = inputs[3] if len(inputs) > 3 else None

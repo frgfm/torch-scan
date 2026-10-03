@@ -38,7 +38,7 @@ def test_module_flops_warning():
         (nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 336),
         # Pooling
         (nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
-        (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32),
         (nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
         (nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
         (nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),

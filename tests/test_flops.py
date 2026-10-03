@@ -254,14 +254,16 @@ def test_convolution_arithmetic(module, shape, output_shape, expected):
 
 
 @pytest.mark.parametrize("bias", [False, True])
-def test_linear_module_and_functional_arithmetic(bias):
-    inputs = torch.ones(2, 3, 4)
-    module = nn.Linear(4, 5, bias=bias)
+@pytest.mark.parametrize(("width", "dot_count", "native_count"), [(4, 210, 240), (0, 0, 0)])
+def test_linear_module_and_functional_arithmetic(bias, width, dot_count, native_count):
+    inputs = torch.ones(2, 3, width)
+    module = nn.Linear(width, 5, bias=bias)
     # Six vectors, five outputs: 30 dots with four multiplies and three adds.
     # Module: 210 plus 30 biases. Native: 120 MACs x 2, fused bias excluded.
     output = module(inputs)
-    assert module_flops(module, (inputs,), output) == (240 if bias else 210)
-    assert _complete_count(lambda: F.linear(inputs, module.weight, module.bias)) == 240
+    # Empty dots have no arithmetic; 30 optional bias additions remain.
+    assert module_flops(module, (inputs,), output) == dot_count + (30 if bias else 0)
+    assert _complete_count(lambda: F.linear(inputs, module.weight, module.bias)) == native_count
 
 
 @pytest.mark.parametrize("training", [False, True])
@@ -280,6 +282,34 @@ def test_batch_norm_statistics_arithmetic(training, tracking, affine):
     output = module(inputs)
     assert module_flops(module, (inputs,), output) == expected
     assert _complete_count(lambda: module(inputs)) == expected
+
+
+@pytest.mark.parametrize(
+    ("buffers", "tracking", "training", "expected"),
+    [(False, True, False, 198), (False, True, True, 198), (True, False, False, 102), (True, False, True, 198)],
+)
+def test_batch_norm_actual_buffer_state(buffers, tracking, training, expected):
+    module = nn.BatchNorm1d(3).train(training)
+    module.track_running_stats = tracking
+    if not buffers:
+        module.running_mean = module.running_var = None
+    inputs = torch.ones(2, 3, 4)
+    # Saved statistics: normalize48 + affine48 + eps/sqrt6 =102.
+    # Batch statistics add mean24 + variance72 =96, without running updates.
+    assert module_flops(module, (inputs,), module(inputs)) == expected
+    assert _complete_count(lambda: module(inputs)) == expected
+
+
+@pytest.mark.parametrize(("dimension", "maximum", "average"), [(1, 1, 2), (2, 3, 4), (3, 7, 8)])
+@pytest.mark.parametrize("batched", [False, True])
+def test_pooling_kernel_arguments_and_arithmetic(dimension, maximum, average, batched):
+    inputs = torch.ones(*((1, 1) if batched else (1,)), *([2] * dimension))
+    # A window has 2,4,8 values: max uses 1,3,7 comparisons;
+    # average uses that many additions plus one division.
+    for kernel in (2, (2,), (2,) * dimension, [2], [2] * dimension):
+        for kind, expected in (("Max", maximum), ("Avg", average)):
+            module = getattr(nn, f"{kind}Pool{dimension}d")(kernel)
+            assert module_flops(module, (inputs,), module(inputs)) == expected
 
 
 @pytest.mark.parametrize(
@@ -325,11 +355,11 @@ def test_functional_residual_softmax_and_reductions():
 
 
 @pytest.mark.parametrize("source_length", [3, 5])
-@pytest.mark.parametrize("mask_kind", [None, "float", "bool", "causal"])
+@pytest.mark.parametrize("mask_kind", [None, "float", "bool", "causal", "causal_float", "causal_bool"])
 def test_functional_cpu_attention_arithmetic(source_length, mask_kind):
     q = torch.ones(2, 2, 3, 2)
     k = torch.ones(2, 2, source_length, 2)
-    mask = torch.zeros(3, source_length, dtype=torch.bool if mask_kind == "bool" else torch.float32)
+    mask = torch.zeros(3, source_length, dtype=torch.bool if mask_kind in {"bool", "causal_bool"} else torch.float32)
     # Four heads/batches, three query rows. For S=3: 36 scores and 24
     # outputs, each with 3 value terms. Products: 72+72 = 144 => 288 ops.
     # Scale36; softmax 12 x (max2+sub3+exp3+sum2+div3) =156 =>480.
@@ -337,14 +367,30 @@ def test_functional_cpu_attention_arithmetic(source_length, mask_kind):
     expected = 480 if source_length == 3 else 816
     if mask_kind is not None:
         expected += 36 if source_length == 3 else 60
-    if mask_kind == "bool":
+    if mask_kind in {"causal_float", "causal_bool"}:
+        expected += 36 if source_length == 3 else 60  # Causal selection and explicit mask are separate.
+    if mask_kind in {"bool", "causal_bool"}:
         # Boolean-to-additive mask conversion selects once per stored mask entry.
         expected += 3 * source_length
-    report = measure_flops(
-        lambda: F.scaled_dot_product_attention(
-            q, k, k, attn_mask=mask if mask_kind in {"float", "bool"} else None, is_causal=mask_kind == "causal"
+
+    def workload():
+        return F.scaled_dot_product_attention(
+            q,
+            k,
+            k,
+            attn_mask=mask if mask_kind in {"float", "bool", "causal_float", "causal_bool"} else None,
+            is_causal=mask_kind in {"causal", "causal_float", "causal_bool"},
         )
-    )
+
+    if mask_kind in {"causal_float", "causal_bool"}:
+        try:
+            workload()
+        except RuntimeError:
+            # PyTorch 2.1 rejects this combination; preserve the workload error.
+            with pytest.raises(RuntimeError, match="Explicit attn_mask should not be set"):
+                measure_flops(workload)
+            return
+    report = measure_flops(workload)
     if "aten._scaled_dot_product_flash_attention_for_cpu" in report["by_operator"]:
         assert report["total"]["status"] == "complete"
         assert report["total"]["value"] == expected
@@ -441,6 +487,125 @@ def test_empty_normalized_rows_remain_visibly_unsupported():
     assert report["totals"]["module_flops"]["status"] == "unavailable"
     assert report["totals"]["operator_flops"]["status"] == "partial"
     assert report["totals"]["operator_flops"]["known_value"] == 0
+    assert any(item["code"] == "unsupported_operator_formula" for item in report["diagnostics"])
+
+
+def test_group_norm_empty_rows_and_zero_batch():
+    module = nn.GroupNorm(2, 4)
+    report = crawl_module(module, args=(torch.ones(2, 4, 0),))
+    assert report["totals"]["module_flops"]["status"] == "unavailable"
+    assert report["totals"]["operator_flops"]["status"] == "partial"
+    assert report["totals"]["operator_flops"]["known_value"] == 0
+    assert any("nonempty normalized group" in item["message"] for item in report["diagnostics"])
+    report = crawl_module(module, args=(torch.ones(0, 4, 3),))
+    assert report["totals"]["module_flops"]["value"] == 0
+    assert report["totals"]["operator_flops"]["value"] == 0
+
+
+@pytest.mark.parametrize("use_out", [False, True])
+@pytest.mark.parametrize(
+    ("reduction", "dtype", "expected"),
+    [
+        ("sum", torch.int64, 0),
+        ("sum", torch.complex64, None),
+        ("mean", torch.complex64, None),
+        ("sum", torch.float64, 5),
+        ("mean", torch.float64, 6),
+    ],
+)
+def test_reduction_arithmetic_dtype(reduction, dtype, expected, use_out):
+    inputs = torch.ones(2, 3)
+    options = {"out": torch.empty((), dtype=dtype)} if use_out else {"dtype": dtype}
+    total = measure_flops(lambda: getattr(torch, reduction)(inputs, dim=(0, 1), **options))["total"]
+    # Six real values need five additions; mean adds one division.
+    # Integer arithmetic is excluded. Complex arithmetic stays unsupported.
+    if expected is None:
+        assert total["status"] == "partial"
+        assert total["value"] is None
+        assert total["known_value"] == 0
+    else:
+        assert total["status"] == "complete"
+        assert total["value"] == expected
+
+
+@pytest.mark.parametrize("unsupported_first", [False, True])
+@pytest.mark.parametrize(
+    ("layout", "operation", "known"),
+    [
+        ("sparse", "add", 9),
+        ("sparse", "relu", 9),
+        ("sparse", "sum", 8),
+        ("nested", "add", 9),
+        ("nested", "relu", 9),
+        ("nested", "sum", 6),
+    ],
+)
+def test_unsupported_layouts_preserve_dense_call_counts(layout, operation, known, unsupported_first):
+    unsupported = (
+        torch.sparse_coo_tensor([[0, 1], [0, 1]], [1.0, 2.0], (3, 3), check_invariants=True).coalesce()
+        if layout == "sparse"
+        else torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(1, 3)])
+    )
+    dense = torch.ones(3, 3)
+
+    def apply(inputs):
+        if operation == "sum":
+            return inputs.sum(-1, keepdim=True) if layout == "nested" else inputs.sum()
+        return inputs + inputs if operation == "add" else inputs.relu()
+
+    ordered = (unsupported, dense) if unsupported_first else (dense, unsupported)
+    report = measure_flops(lambda: tuple(apply(inputs) for inputs in ordered))
+    # Dense add/ReLU:9, scalar sum:8, or three 3-value row sums:6.
+    assert report["total"]["status"] == "partial"
+    assert report["total"]["value"] is None
+    assert report["total"]["known_value"] == known
+    assert any(item["code"] == "unsupported_operator_formula" for item in report["diagnostics"])
+
+
+def test_native_sparse_matrix_layout_and_caller_override():
+    sparse = torch.sparse_coo_tensor([[0, 1], [0, 1]], [1.0, 2.0], (3, 3), check_invariants=True).coalesce()
+    dense, right = torch.ones(3, 3), torch.ones(3, 2)
+    # Sparse work is unsupported: two stored entries x two destinations =4
+    # MACs, so its dense shape estimate36 cannot be retained as a lower bound.
+    report = measure_flops(lambda: (sparse @ right, dense @ right))
+    assert report["total"]["status"] == "partial"
+    assert report["total"]["known_value"] == 36  # Dense only: 3x3x2 MACs x2.
+    assert report["by_operator"] == {"aten.mm": 36}
+    assert _complete_count(lambda: dense @ right) == 36
+    report = measure_flops(lambda: sparse + sparse, custom_mapping={torch.ops.aten.add: lambda *_args, **_kwargs: 2})
+    assert report["total"]["status"] == "complete"
+    assert report["total"]["value"] == 2  # Caller-supplied two stored-value adds.
+    report = crawl_module(nn.ReLU(), args=(sparse,))
+    assert report["totals"]["module_flops"]["status"] == "unavailable"
+    assert report["totals"]["operator_flops"]["status"] == "partial"
+    with pytest.raises(IncompleteAnalysisError):
+        crawl_module(nn.ReLU(), args=(sparse,), strict=True)
+
+
+@pytest.mark.parametrize("stack", ["encoder", "decoder"])
+@pytest.mark.parametrize("norm", [None, nn.Identity(), nn.Linear(4, 4, bias=False)])
+def test_transformer_final_norm_boundary(stack, norm):
+    module = nn.Transformer(
+        d_model=4, nhead=2, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=8, dropout=0, batch_first=True
+    )
+    getattr(module, stack).norm = norm
+    report = crawl_module(module, args=(torch.ones(1, 3, 4), torch.ones(1, 2, 4)))
+    if isinstance(norm, nn.Linear):
+        assert report["totals"]["module_flops"]["status"] == "unavailable"
+        assert any("final normalization" in item["message"] for item in report["diagnostics"])
+    else:
+        # Default2694 includes encoder102 and decoder68 final-normalization ops.
+        assert report["totals"]["module_flops"]["value"] == (2592 if stack == "encoder" else 2626)
+
+
+def test_cpu_attention_unsupported_broadcast_batch_is_partial():
+    operator = getattr(torch.ops.aten, "_scaled_dot_product_flash_attention_for_cpu", None)
+    if operator is None:
+        pytest.skip("This PyTorch release has no separate CPU attention operator.")
+    q, k = torch.ones(1, 2, 3, 2), torch.ones(2, 2, 5, 2)
+    report = measure_flops(lambda: operator(q, k, k))
+    assert report["total"]["status"] == "partial"
+    assert report["total"]["known_value"] == 0
     assert any(item["code"] == "unsupported_operator_formula" for item in report["diagnostics"])
 
 

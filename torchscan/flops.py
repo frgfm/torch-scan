@@ -103,11 +103,14 @@ def _operator_key(operator: Any) -> str:
 
 class _OperatorRecorder(TorchDispatchMode):
     # ponytail: PyTorch has no public uncounted-op callback; remove this adapter when FlopCounterMode exposes one.
-    def __init__(self) -> None:
+    def __init__(self, diagnostics: list[Diagnostic]) -> None:
         self.counts: Counter[Any] = Counter()
         self.floating: dict[Any, bool] = {}
         self.complex: dict[Any, bool] = {}
         self.complex_operators: set[Any] = set()
+        self.registry: dict[Any, Any] = {}
+        self.guarded_operators: set[Any] = set()
+        self.diagnostics = diagnostics
 
     def __torch_dispatch__(
         self,
@@ -126,8 +129,18 @@ class _OperatorRecorder(TorchDispatchMode):
             for value in leaves
         )
         self.complex[packet] = any(
-            (isinstance(value, torch.Tensor) and value.is_complex()) or isinstance(value, complex) for value in leaves
+            (isinstance(value, torch.Tensor) and value.is_complex())
+            or isinstance(value, complex)
+            or (isinstance(value, torch.dtype) and value.is_complex)
+            for value in leaves
         )
+        if packet in {torch.ops.aten.sum, torch.ops.aten.mean}:
+            # Reductions cast before arithmetic; an out buffer also sets the dtype.
+            dtype = (kwargs or {}).get("dtype")
+            out = (kwargs or {}).get("out")
+            dtype = dtype or (out.dtype if isinstance(out, torch.Tensor) else args[0].dtype)
+            self.floating[packet] = dtype.is_floating_point or dtype.is_complex
+            self.complex[packet] = dtype.is_complex
         if self.complex[packet]:
             self.complex_operators.add(packet)
         if packet in {torch.ops.aten.div, torch.ops.aten.div_} and (kwargs or {}).get("rounding_mode") is None:
@@ -136,6 +149,24 @@ class _OperatorRecorder(TorchDispatchMode):
             self.floating[packet] = True  # Transcendentals also promote integer inputs.
         if packet in {torch.ops.aten.masked_fill, torch.ops.aten.masked_fill_}:
             self.floating[packet] = args[0].is_floating_point() or args[0].is_complex()
+        if packet in self.guarded_operators and any(
+            isinstance(value, torch.Tensor) and (value.is_nested or value.layout != torch.strided) for value in leaves
+        ):
+            self.diagnostics.append({
+                "code": "unsupported_operator_formula",
+                "severity": "warning",
+                "metric": "flops",
+                "operator": _operator_key(packet),
+                "message": "Shape FLOP formulas require dense strided tensors; sparse and nested layouts are unsupported.",
+            })
+            # PyTorch 2.1 extracts shapes before calling formulas. Bypass this
+            # invocation's packet before extraction; restore it for later calls.
+            # Modern overload aliases still prevent unwanted decomposition.
+            formula = self.registry.pop(packet)
+            try:
+                return func(*args, **(kwargs or {}))
+            finally:
+                self.registry[packet] = formula
         return func(*args, **(kwargs or {}))
 
 
@@ -203,8 +234,8 @@ def measure_flops(
             "custom_mapping keys must be operator packets such as torch.ops.aten.sin, "
             "not overloads such as torch.ops.aten.sin.default."
         )
-    recorder = _OperatorRecorder()
     diagnostics: list[Diagnostic] = []
+    recorder = _OperatorRecorder(diagnostics)
     # Inspect the invocation's upstream mapping, then fill gaps. The caller wins.
     base_counter = FlopCounterMode(display=False)
     mapping = {**_scoped_mapping(base_counter, recorder, diagnostics), **mapping}
@@ -218,6 +249,8 @@ def measure_flops(
         for operator in mapping:
             for overload in getattr(operator, "overloads", lambda: ())():
                 counter.flop_registry[getattr(operator, overload)] = counter.flop_registry[operator]
+    recorder.registry = getattr(counter, "flop_registry", getattr(counter, "flop_mapping", {}))
+    recorder.guarded_operators = set(recorder.registry) - set(custom_mapping or {})
     with counter, recorder:
         workload()
 
@@ -235,10 +268,13 @@ def measure_flops(
         for operator, calls in observed
         if operator not in counted_operators and operator in _IGNORED_OPERATOR_REASONS
     }
+    diagnosed_operators = {item.get("operator") for item in diagnostics}
     uncounted = {
         operator: calls
         for operator, calls in observed
-        if operator not in counted_operators and operator not in _IGNORED_OPERATOR_REASONS
+        if operator not in counted_operators
+        and operator not in _IGNORED_OPERATOR_REASONS
+        and operator not in diagnosed_operators
     }
     diagnostics.extend([
         {

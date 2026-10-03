@@ -172,6 +172,29 @@ complete 112
 `compare_reports` propagates incomplete metrics. It does not store baselines or decide whether a model fits a budget;
 the model owner supplies those policies.
 
+## Offline visual report
+
+```python
+from pathlib import Path
+import webbrowser
+from torchscan import render_report
+
+path = Path("torchscan-report.html").resolve()
+path.write_text(render_report(report), encoding="utf-8")
+webbrowser.open(path.as_uri())
+
+# A static SVG, or an HTML comparison using compare_reports internally:
+Path("torchscan-report.svg").write_text(render_report(report, format="svg"), encoding="utf-8")
+Path("comparison.html").write_text(render_report(after, before=before), encoding="utf-8")
+```
+
+HTML opens a module cost explorer: nested rectangles show the hierarchy and the concentration of recorded compute or
+first-attributed parameters. Select a module for tensor shapes, repeated-call evidence, methods, and diagnostics.
+An unscaled rail keeps unknown work and tiny/zero contributions visible; comparisons share one hierarchy and scale.
+SVG exports the same visual composition. Reports work offline with no server, CDN, or extra dependencies.
+See [the guide](docs/docs/visual-report.md) for interpretation, comparison rules, and keyboard controls.
+Generate the [local-model examples](examples/visual-report/README.md) to explore incomplete work and a channel comparison.
+
 ## Trust the status, not only the number
 
 - `complete`: the requested scope was counted; `value` is authoritative for the documented method.

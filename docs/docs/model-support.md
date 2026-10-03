@@ -91,11 +91,17 @@ global registry. `crawl_module` uses built-in formulas for its same-forward oper
 mappings. Formulas use PyTorch's shape-based `FlopCounterMode` contract:
 
 ```python
+from math import prod
+
 report = measure_flops(
     lambda: torch.sin(inputs),
-    custom_mapping={torch.ops.aten.sin: lambda input_shape, *, out_shape: out_shape.numel()},
+    custom_mapping={torch.ops.aten.sin: lambda input_shape, *, out_shape: prod(out_shape)},
 )
 ```
+
+TorchScan fills selected missing formulas per call for arithmetic, reductions, normalization, softmax, and dense CPU
+SDPA. Native formulas take precedence and caller overrides win. See [the counting boundaries](methodology.md#flop-conventions)
+before interpreting a complete result or overriding a partial one.
 
 Use operator packets such as `torch.ops.aten.sin`, not overloads such as `.default`, and check the installed PyTorch
 version's documentation when defining formulas.

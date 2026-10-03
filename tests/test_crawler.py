@@ -304,7 +304,7 @@ def test_crawl_module_transformer_formula(batch_first):
     report = crawler.crawl_module(mod, args=(src, tgt))
 
     assert len(report["layers"]) == 1
-    assert report["layers"][0]["metrics"]["module_flops"]["value"] == 2635
+    assert report["layers"][0]["metrics"]["module_flops"]["value"] == 2694
 
 
 def test_metric_failure_is_diagnostic_and_hooks_are_removed():

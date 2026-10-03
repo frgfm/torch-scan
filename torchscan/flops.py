@@ -53,6 +53,7 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.select",
             "aten.slice",
             "aten.squeeze",
+            "aten.squeeze_",
             "aten.t",
             "aten.transpose",
             "aten.unbind",

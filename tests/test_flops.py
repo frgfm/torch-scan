@@ -9,6 +9,7 @@ from torch.utils.flop_counter import FlopCounterMode
 
 from scripts.benchmark import metric_cell
 from torchscan import IncompleteAnalysisError, crawl_module
+from torchscan._flop_formulas import _batch_norm
 from torchscan.flops import measure_flops
 from torchscan.modules import module_flops, module_macs
 from torchscan.report import metric_result
@@ -254,15 +255,18 @@ def test_convolution_arithmetic(module, shape, output_shape, expected):
 
 
 @pytest.mark.parametrize("bias", [False, True])
-@pytest.mark.parametrize(("width", "dot_count", "native_count"), [(4, 210, 240), (0, 0, 0)])
-def test_linear_module_and_functional_arithmetic(bias, width, dot_count, native_count):
-    inputs = torch.ones(2, 3, width)
-    module = nn.Linear(width, 5, bias=bias)
-    # Six vectors, five outputs: 30 dots with four multiplies and three adds.
-    # Module: 210 plus 30 biases. Native: 120 MACs x 2, fused bias excluded.
+@pytest.mark.parametrize(
+    ("shape", "dot_count", "bias_count", "native_count"),
+    [((2, 3, 4), 210, 30, 240), ((4,), 35, 5, 40), ((2, 3, 0), 0, 30, 0), ((0,), 0, 5, 0)],
+)
+def test_linear_module_and_functional_arithmetic(bias, shape, dot_count, bias_count, native_count):
+    inputs = torch.ones(shape)
+    module = nn.Linear(shape[-1], 5, bias=bias)
+    # Five outputs/vector: each four-term dot has four multiplies and three adds.
+    # Six vectors cost210, one costs35; native counts 2 ops/MAC, omitting fused bias.
     output = module(inputs)
-    # Empty dots have no arithmetic; 30 optional bias additions remain.
-    assert module_flops(module, (inputs,), output) == dot_count + (30 if bias else 0)
+    # Empty dots have no arithmetic; optional bias additions remain.
+    assert module_flops(module, (inputs,), output) == dot_count + (bias_count if bias else 0)
     assert _complete_count(lambda: F.linear(inputs, module.weight, module.bias)) == native_count
 
 
@@ -298,6 +302,43 @@ def test_batch_norm_actual_buffer_state(buffers, tracking, training, expected):
     # Batch statistics add mean24 + variance72 =96, without running updates.
     assert module_flops(module, (inputs,), module(inputs)) == expected
     assert _complete_count(lambda: module(inputs)) == expected
+
+
+@pytest.mark.parametrize("shape", [(0, 3, 4), (2, 3, 0)])
+@pytest.mark.parametrize("training", [False, True])
+@pytest.mark.parametrize("tracking", [False, True])
+def test_batch_norm_empty_module_work(shape, training, tracking):
+    module = nn.BatchNorm1d(3, track_running_stats=tracking).train(training)
+    inputs = torch.ones(shape)
+    saved = {name: value.clone() for name, value in module.named_buffers() if name != "num_batches_tracked"}
+    assert module_flops(module, (inputs,), module(inputs)) == 0
+    assert _complete_count(lambda: module(inputs)) == 0
+    assert all(torch.equal(getattr(module, name), value) for name, value in saved.items())
+
+
+@pytest.mark.parametrize(("missing", "expected"), [("running_var", 207), ("running_mean", 213)])
+def test_batch_norm_individual_running_updates(missing, expected):
+    module = nn.BatchNorm1d(3).train()
+    setattr(module, missing, None)
+    inputs = torch.ones(2, 3, 4)
+    try:
+        output = module(inputs)
+    except ValueError:
+        # Recent PyTorch requires both buffers together; preserve its workload error.
+        with pytest.raises(ValueError, match="running_mean and running_var must either both be None"):
+            measure_flops(lambda: module(inputs))
+        return
+    # Batch statistics/normalization/affine198; mean EMA3 ops/channel,
+    # or variance unbias2 + EMA3 ops/channel, across three channels.
+    assert module_flops(module, (inputs,), output) == expected
+    assert _complete_count(lambda: module(inputs)) == expected
+
+
+def test_empty_native_batch_norm_formula_is_unsupported():
+    # Shape-only rules cannot distinguish contiguous/no-work from strided work.
+    # Avoid executing private empty native kernels that can crash older PyTorch.
+    with pytest.raises(NotImplementedError, match="Empty native BatchNorm"):
+        _batch_norm((0, 3, 4), None, None, (3,), (3,), False)
 
 
 @pytest.mark.parametrize(("dimension", "maximum", "average"), [(1, 1, 2), (2, 3, 4), (3, 7, 8)])
@@ -492,11 +533,21 @@ def test_empty_normalized_rows_remain_visibly_unsupported():
 
 def test_group_norm_empty_rows_and_zero_batch():
     module = nn.GroupNorm(2, 4)
-    report = crawl_module(module, args=(torch.ones(2, 4, 0),))
-    assert report["totals"]["module_flops"]["status"] == "unavailable"
-    assert report["totals"]["operator_flops"]["status"] == "partial"
-    assert report["totals"]["operator_flops"]["known_value"] == 0
-    assert any("nonempty normalized group" in item["message"] for item in report["diagnostics"])
+    inputs = torch.ones(2, 4, 0)
+    with pytest.raises(NotImplementedError, match="nonempty normalized group"):
+        module_flops(module, (inputs,), None)
+    try:
+        module(inputs)
+    except RuntimeError:
+        # PyTorch 2.14 rejects the workload before formulas run.
+        with pytest.raises(RuntimeError, match="Expected HxW to be greater than 0"):
+            crawl_module(module, args=(inputs,))
+    else:
+        report = crawl_module(module, args=(inputs,))
+        assert report["totals"]["module_flops"]["status"] == "unavailable"
+        assert report["totals"]["operator_flops"]["status"] == "partial"
+        assert report["totals"]["operator_flops"]["known_value"] == 0
+        assert any("nonempty normalized group" in item["message"] for item in report["diagnostics"])
     report = crawl_module(module, args=(torch.ones(0, 4, 3),))
     assert report["totals"]["module_flops"]["value"] == 0
     assert report["totals"]["operator_flops"]["value"] == 0

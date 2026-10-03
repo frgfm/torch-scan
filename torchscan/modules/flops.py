@@ -152,6 +152,8 @@ def flops_convnd(module: _ConvNd, _inputs: Tuple[Tensor, ...], out: Tensor) -> i
 
 def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
+    if inputs[0].numel() == 0:
+        return 0  # The high-level wrapper skips normalization and running updates.
     # for each channel, add eps and running_var, sqrt it
     norm_ops = module.num_features * 2
     # For each element, sub running_mean, div by denom
@@ -167,15 +169,12 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
 
     # Count floating-point running-stat updates, excluding the integer batch counter.
     tracking_flops = 0
-    if (
-        module.track_running_stats
-        and module.training
-        and module.running_mean is not None
-        and module.running_var is not None
-    ):
+    if module.track_running_stats and module.training:
         # Convert biased variance to unbiased (multiply/divide), then two
         # exponential averages: two multiplies and one addition each.
-        tracking_flops += 8 * module.num_features
+        tracking_flops += module.num_features * (
+            3 * int(module.running_mean is not None) + 5 * int(module.running_var is not None)
+        )
 
     return bn_flops + tracking_flops
 

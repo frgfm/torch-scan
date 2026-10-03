@@ -80,11 +80,12 @@ def _batch_norm(
     **_kwargs: Any,
 ) -> int:
     elements, channels = prod(input_shape), input_shape[1]
+    if elements == 0:
+        raise NotImplementedError("Empty native BatchNorm work depends on strides unavailable to the shape formula.")
     result = 2 * elements + 2 * channels + elements * (int(weight is not None) + int(bias is not None))
     if training:
         result += 4 * elements
-        if running_mean is not None and running_var is not None:
-            result += 8 * channels
+        result += channels * (3 * int(running_mean is not None) + 5 * int(running_var is not None))
     return result
 
 

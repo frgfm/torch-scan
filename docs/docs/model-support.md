@@ -99,9 +99,7 @@ report = measure_flops(
 )
 ```
 
-TorchScan fills selected missing formulas per call for arithmetic, reductions, normalization, softmax, and dense CPU
-SDPA. Native formulas take precedence and caller overrides win. See [the counting boundaries](methodology.md#flop-conventions)
-before interpreting a complete result or overriding a partial one.
+See [FLOP conventions and limits](methodology.md#flop-conventions) before supplying overrides.
 
 Use operator packets such as `torch.ops.aten.sin`, not overloads such as `.default`, and check the installed PyTorch
 version's documentation when defining formulas.

@@ -88,10 +88,8 @@ Shared parameters are not duplicated in model totals merely because a module is 
 | `ignored_operators` | Explicit zero-FLOP metadata, movement, or allocation operators with call count and reason. |
 | `diagnostics` | `uncounted_operator`, `unsupported_operator_formula`, `incomplete_operator_formula`, and other method limitations. |
 
-An ignored operator is distinct from an uncounted operator. Every observed non-ignored operator must have a supported,
-scope-complete formula for `total` to be complete. A counted fused attention operator can still have an incomplete
-native formula; its matrix count remains in `known_value`. An unsupported invocation of a recognized packet retains
-a diagnostic even if other invocations of that packet were counted.
+Every non-ignored call needs a supported formula for completeness. Fused or unsupported calls retain diagnostics,
+even when the same packet has counted work.
 
 `crawl_module` stores the complete report under `operator_flops` and the same `total` result under
 `totals.operator_flops`. Module hooks and the native operator counter observe the same forward call; module formulas

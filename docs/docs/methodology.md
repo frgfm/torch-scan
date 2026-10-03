@@ -80,75 +80,44 @@ execution-state details. Target-device acceptance requires real checks on that d
 
 ## FLOP conventions
 
-Counts describe real scalar arithmetic. They do not describe kernel instructions or latency.
-Keep module and operator counts separate. The operator convention is `torchscan_flops_v1`.
-Native PyTorch formulas take priority. TorchScan fills missing formulas for one call only.
-Caller overrides take priority over both. No global registry changes.
+`torchscan_flops_v1` keeps module/operator counts separate. Priority: caller override > native PyTorch > invocation-only
+fallback; no global mutation. N = elements, R = rows, C = channels, A = affine tensors present (0–2).
+Scalar arithmetic, exp/sqrt, comparison, and selection each cost one operation.
 
-| Work | Module count | Operator count |
-| --- | --- | --- |
-| Dot product with K>0 terms | K multiplies + K-1 adds | Native: K multiply-adds x 2 |
-| Bias | One add per output | Native fused matrix/convolution bias is omitted; a separate add counts |
-| Grouped convolution | Each output uses `Cin/groups * kernel_volume` terms | Native grouped weight shape sets the dense MAC count |
-| Transposed convolution | `input_elements * Cout/groups * kernel_volume * 2`, plus output bias | Native uses the same input-based MAC count; bias is omitted |
-| Fixed pooling with K values per window | Max: K-1 comparisons; average: K-1 adds and one divide | Unregistered pooling operators stay partial |
-| Stable softmax: R rows, S values per row | R(5S-2) | Same; safe softmax adds 2RS for comparison and selection |
-| Dropout | Eval/p=0: zero; training: 2N for mask/rescale, or N when p=1 | Visible arithmetic counts; unknown dropout/RNG work stays partial |
+| Work | Count / boundary |
+| --- | --- |
+| K-term dot, K>0 | Module: K multiplies + K-1 adds; native: 2K. Empty dots: zero. |
+| Bias/scaling | Module: one bias add/output. Native fused bias and alpha/beta scaling omitted; separate arithmetic counts. |
+| Grouped convolution | Outputs × `Cin/groups × kernel_volume` terms; dense padded work. |
+| Transposed convolution | `2 × input_elements × Cout/groups × kernel_volume`, plus module bias; cropped scatter products included. |
+| Fixed pooling, K values/window | Max: K-1; average: K. Nominal dense padding/ceil windows. |
+| Broadcast/reduction | Per output; sum: max(N-R,0); mean adds R divides. |
+| Stable/safe softmax | `5N-2R`: max, subtract, exp, sum, divide. Safe adds 2N comparisons/selections. |
+| LayerNorm/GroupNorm | `6N+2R+AN`: mean N, variance 3N, normalize 2N, eps/sqrt 2R, affine AN. |
+| Rows | LayerNorm: `N/prod(normalized_shape)`; GroupNorm: batch × groups. Empty rows/groups unsupported; zero batches supported. |
+| BatchNorm | Saved stats: `2N+2C+AN`; batch stats add 4N. Actual buffers select the path; passed mean/variance updates add 3C/5C. Empty modules: zero; empty native calls unsupported. |
+| Dropout | Eval/p=0: zero; training mask/rescale: 2N, or N at p=1. RNG excluded. |
 
-Multiply-adds count as two native FLOPs. Module dot products omit the first accumulator add.
-Empty dot products cost zero; bias still counts separately.
-A scalar add, multiply, divide, exp, sqrt, comparison, or selection counts as one operation.
-Broadcast operations count output elements. Sum uses K-1 adds; mean adds one divide per output.
-Views, copies, fills, allocation, integer counters, boolean control operations, and Python shape/constant work are excluded.
-Reduction arithmetic uses the requested `dtype`, then the `out` buffer dtype, then the input dtype.
-Supplemental integer arithmetic is excluded; native matrix shape counts remain dtype-agnostic, including integer matrices.
-Native matrix formulas also omit alpha/beta scaling. Complex module/supplemental arithmetic is unsupported;
-native complex shape counts remain partial lower bounds unless the caller supplies a formula.
-Shape formulas require dense strided tensors. Sparse/nested calls remain incomplete before shape extraction;
-their dense estimates cannot become lower bounds. Caller overrides retain control.
+Transpose example: `(2,4,3)`, Cout=6, groups=2, kernel=3, stride=2, padding=output_padding=1:
+`24×3×3×2 + 72 biases = 504 module FLOPs`. Shape options add no scatter MACs.
 
-Convolution counts use dense padded arithmetic. They include zero-padding products and nominal transposed
-scatter products that can be cropped. Stride, dilation, and output padding set the output shape and bias count.
-They do not add input-based scatter MACs. For input `(2,4,3)`, six output channels, two groups, and three taps,
-24 input values each scatter to 3 channels through 3 taps: 216 MACs, or 432 native FLOPs.
-Stride two, padding one, and output padding one give 72 output biases: 504 module FLOPs.
+| Attention | Included work / limits |
+| --- | --- |
+| Batched MHA | Both layouts, unequal widths: projections/bias, Q scale, dense products, softmax, masks, dropout, optional head averaging. |
+| CPU SDPA fallback | Dense 4D, matching batch/heads and Q/K widths, equal K/V lengths, no dropout: native matrix work + score scale + softmax + masks. |
+| Masks/math | Each explicit/causal mask costs one operation/score; boolean conversion counts stored entries. Dense products unchanged. Math can scale Q/K separately and use safe softmax; explicit scale changes values only. |
+| Native fused attention | Matrix core only; ancillary gaps keep counts partial, including PyTorch 2.1 CPU. |
 
-Normalization uses a two-pass mathematical count. For N values in R rows: mean N, biased variance 3N,
-epsilon/sqrt 2R, and normalization 2N. LayerNorm and GroupNorm cost `6N + 2R`, plus N for each affine weight/bias.
-LayerNorm rows span `normalized_shape`; GroupNorm has `batch_size * num_groups` rows.
-BatchNorm with saved statistics costs `2N + 2C`, plus affine work. Batch statistics add 4N in training
-or evaluation without saved statistics. Tracked training adds 8C for unbiased variance and running averages.
-Actual saved buffers determine BatchNorm's statistics path, even if the tracking flag changes after construction.
-Running updates require the saved buffers. Kernel algorithms such as Welford can use different instruction counts.
-Empty LayerNorm rows and GroupNorm groups stay unsupported; a zero batch with nonempty rows can count zero.
+Reduction dtype: `dtype` > `out.dtype` > input. Fallback integer/boolean arithmetic, views/copies/fills/allocation, and
+Python constants are excluded. Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
+stay incomplete; native complex counts remain partial. Mixed-call diagnostics and strict mode are preserved.
 
-Batched MultiheadAttention includes projections and bias, query scaling, score/value dot products, stable softmax,
-visible masks, training dropout, and optional head averaging. Both layouts and unequal sequence/input widths are supported.
-Each mask adds one selection/add per score. Causal/masked positions do not reduce dense matrix work.
-Unbatched/empty sequences, `add_bias_kv`, and `add_zero_attn` remain unsupported.
-Transformer module estimates require native encoder/decoder stacks, ReLU feed-forward blocks, and final
-normalization that is LayerNorm, Identity, or absent. Other final modules remain unavailable.
+Remaining gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused MHA/encoder, specialized attention,
+unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered activations/pooling.
+Transformer requires native stacks, ReLU, final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
+approximations. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
 
-The CPU fused SDPA fallback supports dense 4D tensors, matching batch/head counts and Q/K widths, equal K/V lengths,
-and no dropout. Unsupported broadcast batches remain partial; functional SDPA can select a supported math path.
-It reuses native matrix formulas, then counts score scaling, stable softmax, and one mask operation per score.
-Boolean mask conversion counts separately at the stored mask shape. Explicit scale changes the value, not the count.
-When the backend accepts causal and explicit masks together, each adds its own operation per score.
-Saved-state outputs and data movement are excluded. The math path can scale Q and K separately and use safe softmax.
-Tests derive each path's count independently. Native fused flash/efficient/cuDNN attention counts only matrix work,
-so hidden scaling, softmax, masks, and dropout produce `incomplete_operator_formula`. PyTorch 2.1 uses this native
-core-only formula on CPU too. Fused MHA/encoder operations without formulas remain uncounted.
-
-`crawl_module` counts an evaluation forward under `no_grad`. `measure_flops` counts the supplied forward/backward
-workload; it does not multiply the forward count to estimate backward. Unknown normalization/softmax backward,
-RNG, optimizer, embedding/gather, and activation/pooling operations stay diagnostic gaps. Specialized nested/sparse
-attention and GPU ancillary work are not covered. Fixed pooling counts nominal dense windows, including padding
-and ceil boundaries. Adaptive pooling and the other pooling metrics retain legacy approximations.
-CPU and meta checks do not validate CUDA/MPS execution. Unsupported calls stay incomplete even when another call
-of the same operator packet was counted. Strict mode and independent MAC/DMA/receptive-field status are preserved.
-
-Run `python scripts/benchmark.py --json /tmp/torchscan-matrix.json` for three CNNs with seed zero,
-float32 `(1,3,32,32)` inputs, CPU execution, and one thread. Cells show complete, partial (`>=`), or unavailable.
-Full JSON retains diagnostics. `tests/test_flops.py` uses deterministic workloads and hand-derived counts.
-The seven-model matrix in `tests/test_model_zoo.py` adds timm ViT and tiny BERT/T5 self/cross attention.
-These optional smokes download no weights and check integration, not formula correctness.
+`crawl_module`: eval/no_grad forward. `measure_flops`: supplied forward/backward work, without a backward multiplier.
+Run `python scripts/benchmark.py --json /tmp/torchscan-matrix.json`: CPU, seed=0, one thread, float32 `(1,3,32,32)`.
+Cells retain complete/partial (`>=`)/unavailable states and JSON diagnostics. Derivations: `tests/test_flops.py`;
+seven no-weight-download integration smokes: `tests/test_model_zoo.py`.

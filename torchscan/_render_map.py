@@ -119,57 +119,92 @@ def _group_results(
     return [call["result"] for call in calls if call["result"] is not None and _key(call["result"]) == group]
 
 
-def _delta(
+def _direct_delta(
     path: str,
+    calls: list[dict[str, Any]],
+    before_calls: list[dict[str, Any]],
+    group: GroupKey,
+    changed: dict[tuple[str, int], Any],
+) -> tuple[float | None, str | None, bool]:
+    """Compare this path's own calls once, independently of its descendants."""
+    differences: list[float] = []
+    after = {call["call_index"]: call["result"] for call in calls}
+    earlier = {call["call_index"]: call["result"] for call in before_calls}
+    for index in sorted(after.keys() | earlier.keys()):
+        left, right = earlier.get(index), after.get(index)
+        left_group = left is not None and _key(left) == group
+        right_group = right is not None and _key(right) == group
+        if not left_group and not right_group:
+            continue
+        if not left_group or not right_group:
+            return None, "Added, removed, or differently measured calls have no comparable numeric delta", True
+        if left["status"] != "complete" or right["status"] != "complete":
+            return None, "Two comparable complete measurements are required", True
+        difference = changed.get((path, index))
+        if difference is None:
+            # compare_reports omits unchanged call metrics. Equal complete
+            # evidence has a zero delta, subject to the same context gate.
+            if left != right:
+                return None, "Comparable call evidence is missing from compare_reports", True
+            differences.append(0)
+        elif difference["status"] == "complete" and difference["delta"] is not None:
+            differences.append(difference["delta"])
+        else:
+            return None, "Two comparable complete measurements are required", True
+    if not differences:
+        return None, None, False
+    return sum(differences), None, True
+
+
+def _deltas(
     paths: list[str],
+    children: dict[str, list[str]],
     calls: dict[str, list[dict[str, Any]]],
     before_calls: dict[str, list[dict[str, Any]]],
     view: str,
     group: GroupKey,
     comparison: Comparison | None,
+    changed: dict[tuple[str, int], Any],
     *,
     synthetic: bool = False,
-) -> tuple[float | None, str]:
+) -> dict[str, tuple[float | None, str]]:
     if comparison is None:
-        return None, "No comparable before report"
-    if view in _PARAMETERS:
-        return None, "Call attribution can move between modules; use the authoritative model total"
-    if comparison[1]:
-        return None, "; ".join(comparison[1])
-    if synthetic:
-        return None, "No comparable recorded contributions"
-    changed = {
-        (layer["path"], layer["call_index"]): layer["metrics"].get(view) for layer in comparison[0]["layers"]["changed"]
+        reason = "No comparable before report"
+    elif view in _PARAMETERS:
+        reason = "Call attribution can move between modules; use the authoritative model total"
+    elif comparison[1]:
+        reason = "; ".join(comparison[1])
+    elif synthetic:
+        reason = "No comparable recorded contributions"
+    else:
+        reason = None
+    if reason is not None:
+        return dict.fromkeys(paths, (None, reason))
+
+    # Each call is compared once per measurement group. A reverse traversal
+    # aggregates child results without rescanning all paths for every ancestor.
+    # `relevant` distinguishes an empty structural branch from incomplete
+    # evidence, so only actual measurement failures block a parent's delta.
+    subtrees: dict[str, tuple[float | None, str | None, bool]] = {}
+    for path in reversed(paths):
+        direct, failure, relevant = _direct_delta(path, calls[path], before_calls[path], group, changed)
+        known = direct if direct is not None else 0
+        for child in children[path]:
+            child_delta, child_failure, child_relevant = subtrees[child]
+            relevant = relevant or child_relevant
+            if failure is None and child_failure is not None:
+                failure = child_failure
+            if child_delta is not None:
+                known += child_delta
+        subtrees[path] = known if relevant and failure is None else None, failure, relevant
+    return {
+        path: (
+            delta,
+            failure
+            or ("Comparable complete recorded contributions" if relevant else "No comparable recorded contributions"),
+        )
+        for path, (delta, failure, relevant) in subtrees.items()
     }
-    differences: list[float] = []
-    relevant = [child for child in paths if child == path or (child.startswith(f"{path}.") if path else True)]
-    for child in relevant:
-        after = {call["call_index"]: call["result"] for call in calls[child]}
-        earlier = {call["call_index"]: call["result"] for call in before_calls[child]}
-        for index in sorted(after.keys() | earlier.keys()):
-            left, right = earlier.get(index), after.get(index)
-            left_group = left is not None and _key(left) == group
-            right_group = right is not None and _key(right) == group
-            if not left_group and not right_group:
-                continue
-            if not left_group or not right_group:
-                return None, "Added, removed, or differently measured calls have no comparable numeric delta"
-            if left["status"] != "complete" or right["status"] != "complete":
-                return None, "Two comparable complete measurements are required"
-            difference = changed.get((child, index))
-            if difference is None:
-                # compare_reports omits unchanged call metrics. Equal complete
-                # evidence has a zero delta, subject to the same context gate.
-                if left != right:
-                    return None, "Comparable call evidence is missing from compare_reports"
-                differences.append(0)
-            elif difference["status"] == "complete" and difference["delta"] is not None:
-                differences.append(difference["delta"])
-            else:
-                return None, "Two comparable complete measurements are required"
-    if not differences:
-        return None, "No comparable recorded contributions"
-    return sum(differences), "Comparable complete recorded contributions"
 
 
 def _geometry(nodes: list[dict[str, Any]], children: dict[str, list[str]]) -> tuple[str, float]:
@@ -238,6 +273,14 @@ def build_maps(
     views: dict[str, Any] = {}
     for view, (label, unit) in _VIEWS.items():
         calls, before_calls = _calls(report, view), _calls(before, view)
+        changed = (
+            {
+                (layer["path"], layer["call_index"]): layer["metrics"].get(view)
+                for layer in comparison[0]["layers"]["changed"]
+            }
+            if comparison is not None
+            else {}
+        )
         keys = {
             _key(call["result"])
             for rows in (calls, before_calls)
@@ -257,6 +300,9 @@ def build_maps(
             group_keys.append(((_MISSING[0], unit, _MISSING[2]), True))
         groups: list[dict[str, Any]] = []
         for group_index, (group, synthetic) in enumerate(sorted(group_keys)):
+            deltas = _deltas(
+                ordered, children, calls, before_calls, view, group, comparison, changed, synthetic=synthetic
+            )
             direct_results = {
                 path: _group_results(calls[path], group, leaf=not children[path], synthetic=synthetic)
                 for path in ordered
@@ -280,7 +326,7 @@ def build_maps(
                 before_subtotal = _summary(before_subtree[path], group, derived=True) or _unavailable(
                     group, derived=True
                 )
-                delta, reason = _delta(path, ordered, calls, before_calls, view, group, comparison, synthetic=synthetic)
+                delta, reason = deltas[path]
                 own_results = direct_results[path] + before_results[path]
                 rail = ["unknown"] if any(result["status"] != "complete" for result in own_results) else []
                 if (

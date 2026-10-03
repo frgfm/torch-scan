@@ -89,6 +89,7 @@ SCRIPT = r"""
   const data = JSON.parse(document.getElementById('torchscan-data').textContent);
   const views = data.maps;
   let selected = null;
+  const selectedGroups = new Map();
   const collapsed = new Set();
   function el(tag, text, className) {
     const node = document.createElement(tag);
@@ -99,13 +100,19 @@ SCRIPT = r"""
   function activeView() { return document.querySelector('input[name="view"]:checked').id.slice(5); }
   function panel() { return document.querySelector('.metric-panel[data-view="' + activeView() + '"]'); }
   function findNode(id, groupId) {
-    const groups = views[activeView()].groups;
-    for (const group of groups) {
+    const matches = [];
+    for (const group of views[activeView()].groups) {
       if (groupId && group.id !== groupId) continue;
       const node = group.nodes.find(n => n.id === id);
-      if (node) return {node, group};
+      if (node) matches.push({node, group});
     }
-    return null;
+    // Keep an explicit group choice; otherwise prefer evidence, never its magnitude.
+    const remembered = selectedGroups.get(activeView() + ':' + id);
+    return matches.find(({group}) => group.id === remembered)
+      || matches.find(({node}) => node.direct || node.before_direct)
+      || matches.find(({node, group}) => group.nodes.some(n =>
+        (n.path === node.path || !node.path || n.path.startsWith(node.path + '.')) && (n.direct || n.before_direct)))
+      || matches[0] || null;
   }
   function badge(status) { return el('span', status, 'badge ' + status); }
   function metric(container, text, status, className) {
@@ -165,12 +172,22 @@ SCRIPT = r"""
         p.append(a, document.createTextNode(': ' + item.message)); aside.append(p);
       }
     }
+    const beforeDiagnostics = (data.before_diagnostics || []).filter(d => d.path === node.path || d.path === undefined);
+    if (beforeDiagnostics.length) {
+      aside.append(el('h4', 'Before diagnostics'));
+      for (const item of beforeDiagnostics) {
+        const p = el('p'); const a = el('a', (item.path === undefined ? 'Global · ' : '') + item.code);
+        a.href = '#before-diagnostic-' + item.index;
+        p.append(a, document.createTextNode(': ' + item.message)); aside.append(p);
+      }
+    }
     const suggestions = data.suggestions.filter(s => node.calls.some(c => s.target === 'call-' + c.index));
     if (suggestions.length) {
       aside.append(el('h4', 'Experiment to try'));
       aside.append(el('p', suggestions[0].experiment, 'under-map'));
     }
     selected = {id: node.id, group: group.id};
+    selectedGroups.set(activeView() + ':' + node.id, group.id);
     for (const a of panel().querySelectorAll('[data-map-node]')) {
       if (a.dataset.nodeId === node.id && a.dataset.groupId === group.id) a.setAttribute('aria-current','true');
       else a.removeAttribute('aria-current');
@@ -223,6 +240,19 @@ SCRIPT = r"""
     for (let node = target; node; node = node.parentElement) if (node.tagName === 'DETAILS') node.open = true;
     target.focus({preventScroll:true}); target.scrollIntoView({block:'start'});
   }
+  document.addEventListener('focusin', event => {
+    const anchor = event.target.closest('a[data-map-node]');
+    if (!anchor) return;
+    const svg = anchor.ownerSVGElement;
+    const box = anchor.querySelector('[data-tile]').getBBox();
+    const viewport = svg.viewBox.baseVal;
+    if (box.x < viewport.x || box.y < viewport.y
+      || box.x + box.width > viewport.x + viewport.width + .001
+      || box.y + box.height > viewport.y + viewport.height + .001) {
+      svg.setAttribute('viewBox', svg.dataset.originalViewbox);
+    }
+    anchor.scrollIntoView({block:'nearest', inline:'nearest'});
+  });
   document.addEventListener('click', event => {
     const link = event.target.closest('[data-node-id]');
     if (link && link.tagName.toLowerCase() === 'a') {

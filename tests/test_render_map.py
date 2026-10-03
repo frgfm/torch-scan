@@ -284,3 +284,54 @@ def test_preorder_geometry_handles_punctuation_in_valid_module_names(report):
     for node in group["nodes"]:
         assert 0 <= node["x"] <= 1
         assert 0 <= node["width"] <= 1
+
+
+def test_many_changed_calls_preserve_each_delta_and_the_derived_total():
+    before = crawl_module(nn.Sequential(*(nn.Linear(4, 4, bias=False) for _ in range(192))), (4,))
+    after = copy.deepcopy(before)
+    expected = {}
+    for increment, layer in enumerate(after["layers"][1:], start=1):
+        measurement = layer["metrics"]["module_flops"]
+        measurement["value"] += increment
+        measurement["known_value"] += increment
+        expected[layer["path"]] = increment
+    after["totals"]["module_flops"]["value"] += sum(expected.values())
+    after["totals"]["module_flops"]["known_value"] += sum(expected.values())
+    comparison = compare_reports(before, after)
+    assert len(comparison["layers"]["changed"]) == len(expected)
+    maps = build_maps(after, before=before, comparison=(comparison, []))
+    group = maps["module_flops"]["groups"][0]
+    assert {node["path"]: node["delta"] for node in group["nodes"] if node["path"]} == expected
+    assert _node(group, "")["delta"] == sum(expected.values())
+    assert maps["module_flops"]["comparison_delta"]["delta"] == _node(group, "")["delta"]
+    assert all(node["delta"] == 0 for node in maps["macs"]["groups"][0]["nodes"])
+
+
+def test_nested_failures_propagate_first_reason_without_blocking_complete_siblings():
+    class Punctuation(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.add_module("a!lane", nn.Sequential(nn.Linear(4, 4, bias=False), nn.Identity()))
+            self.add_module("a-lane", nn.Sequential(nn.Linear(4, 4, bias=False), nn.Identity()))
+
+        def forward(self, inputs):
+            return getattr(self, "a-lane")(getattr(self, "a!lane")(inputs))
+
+    before = crawl_module(Punctuation(), (4,))
+    after = copy.deepcopy(before)
+    first = next(layer for layer in before["layers"] if layer["path"] == "a!lane.0")
+    first["metrics"]["module_flops"] = _metric(0, status="partial")
+    removed = next(layer for layer in after["layers"] if layer["path"] == "a-lane.0")
+    removed["path"] = "a-lane.added"
+    group = build_maps(after, before=before, comparison=(compare_reports(before, after), []))["module_flops"]["groups"][
+        0
+    ]
+    assert _node(group, "a!lane")["delta"] is None
+    assert _node(group, "a-lane")["delta"] is None
+    assert _node(group, "")["delta"] is None
+    assert _node(group, "")["delta_reason"] == "Two comparable complete measurements are required"
+    assert _node(group, "a!lane")["delta_reason"] == _node(group, "")["delta_reason"]
+    assert "Added, removed" in _node(group, "a-lane")["delta_reason"]
+    assert _node(group, "a!lane.1")["delta"] == 0
+    assert _node(group, "a-lane.1")["delta"] == 0
+    assert _node(group, "a-lane.added")["delta"] is None

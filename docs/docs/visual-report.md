@@ -62,6 +62,7 @@ Enter activates links, and Enter/Space expands a summary. With a map rectangle f
 modules, Left selects the parent, Right expands and selects a visible child, Home/End selects the first/last module,
 and Enter/Space selects its evidence. Buttons collapse, zoom, select the parent, or reset all groups in the current view.
 Status cards stay selectable when branches collapse. On narrow screens, the inspector stacks below the map.
+Keyboard focus reveals tiles outside a zoomed viewport. Each view remembers the selected measurement group.
 
 All contents work offline. With JavaScript disabled, native views, maps, hierarchy, and call evidence remain available;
 expand linked details manually. SVG is a static, searchable snapshot with internal evidence links, without live
@@ -83,8 +84,9 @@ have snapshots without numeric deltas. Both reports share fixed hierarchy geomet
 Execution deltas are also withheld when inputs, execution/analysis modes, software versions (TorchScan/PyTorch/Python),
 devices, or dtypes differ or are missing. Absent `analysis_mode` means `full`. Complete compatible storage totals can
 be compared independently of execution inputs. Per-module parameter deltas are withheld because first attribution
-can move without changing shared storage. Both input/measurement contexts are shown. This presentation rule does not
-change `compare_reports`. Matching context still does not establish equal latency or peak memory: the schema lacks
+can move without changing shared storage. Both input/measurement contexts and baseline diagnostics are shown,
+including evidence for removed modules. These presentation rules do not change `compare_reports`.
+Matching context still does not establish equal latency or peak memory: the schema lacks
 those benchmarks, hardware identity, model revision, and full custom-formula provenance.
 
 ## Examples and validation

@@ -365,6 +365,8 @@ def test_untrusted_content_escaped_and_embedded_json_round_trips(report):
     assert not root.find("img")
     assert all(not attr.startswith("on") for node in root.find() for attr in node.attrs)
     assert _embedded(root)["report"] == report
+    assert _embedded(root)["before_diagnostics"][-1]["message"] == payload
+    assert payload in root.find("li", id=f"before-diagnostic-{len(report['diagnostics']) - 1}")[0].text()
     raw = root.find("script", id="torchscan-data")[0].text()
     assert "<" not in raw
     assert "&" not in raw
@@ -376,7 +378,7 @@ def test_untrusted_content_escaped_and_embedded_json_round_trips(report):
     csp = root.find("meta", **{"http-equiv": "Content-Security-Policy"})[0].attrs["content"]
     assert f"'sha256-{digest}'" in csp
     assert "default-src 'none'" in csp
-    svg = ET.fromstring(render_report(report, format="svg", title=payload))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    svg = ET.fromstring(render_report(report, format="svg", title=payload, before=report))  # ruff: ignore[suspicious-xml-element-tree-usage]
     assert svg.find("{*}title").text == payload
     assert all(element.tag.split("}")[-1] not in {"script", "image", "foreignObject"} for element in svg.iter())
 
@@ -394,6 +396,134 @@ def test_svg_valid_searchable_and_internal_evidence_links(report):
     for link in svg.findall(".//{*}a"):
         assert link.attrib["href"][1:] in identifiers
         assert link.attrib["tabindex"] == "0"
+
+
+@pytest.mark.parametrize("field", ["method", "unit", "scope"])
+@pytest.mark.parametrize("repeated", [False, True])
+@pytest.mark.parametrize("view", ["module_flops", "parameters"])
+def test_svg_experiment_links_use_rendered_compatible_call_evidence(field, repeated, view):
+    class Repeated(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.block = nn.Linear(4, 4, bias=False)
+
+        def forward(self, inputs):
+            return self.block(self.block(inputs))
+
+    model = Repeated() if repeated else nn.Sequential(nn.Linear(4, 8, bias=False), nn.Linear(8, 2, bias=False))
+    report = crawl_module(model, (4,))
+    report["layers"][2]["metrics"]["module_flops"][field] = "aaa_custom"
+    groups = _embedded(_document(report))["maps"][view]["groups"]
+    svg = ET.fromstring(render_report(report, format="svg", metric=view))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    identifiers = {element.attrib["id"]: element for element in svg.iter() if "id" in element.attrib}
+    parents = {child: parent for parent in svg.iter() for child in parent}
+    links = svg.findall(".//{*}a")
+    assert all(link.attrib["href"][1:] in identifiers for link in links)
+    experiments = [
+        link
+        for link in links
+        if "Recorded fact:" in "".join(link.itertext()) and "largest complete" in "".join(link.itertext())
+    ]
+    assert len(experiments) == 2
+    for link in experiments:
+        # Both compute and parameter experiments refer to the first call. A
+        # repeated module can contain calls from two different method groups.
+        group = next(
+            group
+            for group in groups
+            if any(call["index"] == 1 and call["in_group"] for node in group["nodes"] for call in node["calls"])
+        )
+        node = next(node for node in group["nodes"] if any(call["index"] == 1 for call in node["calls"]))
+        target = identifiers[link.attrib["href"][1:]]
+        if target.attrib["id"] == "call-1":
+            while target in parents and target.attrib.get("id") != f"inspector-{group['id']}-{node['id']}":
+                target = parents[target]
+            assert target.attrib.get("id") == f"inspector-{group['id']}-{node['id']}"
+        else:
+            assert target.attrib["id"] in {f"static-{group['id']}-{node['id']}", f"rail-{group['id']}-{node['id']}"}
+
+
+def test_svg_missing_metric_experiment_links_use_the_synthetic_group():
+    report = crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Linear(8, 2, bias=False)), (4,))
+    del report["layers"][1]["metrics"]["module_flops"]
+    # A real user method can have the same name as the missing-measurement group.
+    report["layers"][2]["metrics"]["module_flops"]["method"] = "no_recorded_measurement"
+    groups = _embedded(_document(report))["maps"]["module_flops"]["groups"]
+    missing = next(group for group in groups if group["kind"] == "unrecorded")
+    node = next(node for node in missing["nodes"] if node["path"] == "0")
+    svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    identifiers = {element.attrib["id"] for element in svg.iter() if "id" in element.attrib}
+    links = svg.findall(".//{*}a")
+    assert all(link.attrib["href"][1:] in identifiers for link in links)
+    storage_experiments = [
+        link for link in links if "largest complete attributed parameters" in "".join(link.itertext())
+    ]
+    assert len(storage_experiments) == 1
+    assert storage_experiments[0].attrib["href"] == f"#static-{missing['id']}-{node['id']}"
+
+
+@pytest.mark.parametrize("removed", [False, True])
+@pytest.mark.parametrize("output_format", ["html", "svg"])
+def test_comparison_visibly_preserves_baseline_diagnostics(removed, output_format):
+    class Sine(nn.Module):
+        def forward(self, inputs):
+            return inputs.sin()
+
+    before = crawl_module(nn.Sequential(nn.Linear(4, 4, bias=False), Sine()), (4,))
+    after = crawl_module(nn.Sequential() if removed else nn.Sequential(nn.Identity(), nn.Identity()), (4,))
+    diagnostics = before["diagnostics"] + [
+        item for item in before["operator_flops"]["diagnostics"] if item not in before["diagnostics"]
+    ]
+    source = render_report(after, before=before, format=output_format)
+    if output_format == "html":
+        root = Document(source).root
+        rows = [root.find("li", id=f"before-diagnostic-{index}")[0] for index in range(len(diagnostics))]
+        assert all(item["message"] in row.text() for item, row in zip(diagnostics, rows, strict=True))
+        assert _embedded(root)["before_diagnostics"] == [
+            {**item, "index": index} for index, item in enumerate(diagnostics)
+        ]
+        identifiers = {node.attrs["id"] for node in root.find() if "id" in node.attrs}
+        assert all(link.attrs["href"][1:] in identifiers for link in root.find("a"))
+        assert root.find("details", id="before-call-2")[0].find("a", href="#before-diagnostic-0")
+        return
+    svg = ET.fromstring(source)  # ruff: ignore[suspicious-xml-element-tree-usage]
+    visible = " ".join(element.text or "" for element in svg.iter() if element.tag.endswith("}text"))
+    assert "Before diagnostics" in visible
+    assert "Module type not supported: Sine" in visible
+    assert "aten.sin was observed" in visible
+    assert all(diagnostic["message"] in visible for diagnostic in diagnostics)
+    if removed:
+        assert "Before measurement diagnostics" in visible
+    identifiers = {element.attrib["id"]: element for element in svg.iter() if "id" in element.attrib}
+    assert all(f"before-diagnostic-{index}" in identifiers for index in range(len(diagnostics)))
+    context = json.loads(identifiers["svg-evidence"].find("{*}title").text)
+    assert context["before"]["diagnostics"] == diagnostics
+    assert context["before"]["inputs"] == before["inputs"]
+    assert all(link.attrib["href"][1:] in identifiers for link in svg.findall(".//{*}a"))
+
+
+def test_svg_accessible_names_exclude_raw_call_json_but_tooltips_keep_exact_evidence():
+    class Repeated(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.block = nn.Linear(4, 4, bias=False)
+
+        def forward(self, inputs):
+            for _ in range(32):
+                inputs = self.block(inputs)
+            return inputs
+
+    report = crawl_module(Repeated(), (4,))
+    svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    anchors = [element for element in svg.iter() if "data-map-node" in element.attrib]
+    for anchor in anchors:
+        assert "Call evidence:" not in anchor.attrib["aria-label"]
+        assert '"metrics"' not in anchor.attrib["aria-label"]
+        tooltip = anchor.find("{*}title").text
+        evidence = json.loads(tooltip.split(" Call evidence: ", 1)[1])
+        path = evidence[0]["path"]
+        assert evidence == [layer for layer in report["layers"] if layer["path"] == path]
+    assert any("32 observed calls" in anchor.attrib["aria-label"] for anchor in anchors)
 
 
 @pytest.mark.parametrize("output_format", ["html", "svg"])

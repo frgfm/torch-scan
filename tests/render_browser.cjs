@@ -13,6 +13,7 @@ const generated = spawnSync(process.env.PYTHON || '.venv/bin/python', ['-c', `
 import copy
 import sys
 from pathlib import Path
+import torch
 from torch import nn
 from torchscan import crawl_module, metric_result, render_report
 
@@ -26,8 +27,34 @@ output.joinpath('complete.html').write_text(render_report(report), encoding='utf
 output.joinpath('complete.svg').write_text(render_report(report, format='svg'), encoding='utf-8')
 
 mixed = copy.deepcopy(report)
-next(layer for layer in mixed['layers'] if layer['path'] == '0.2')['metrics']['module_flops']['method'] = 'custom_formula'
+next(layer for layer in mixed['layers'] if layer['path'] == '0.2')['metrics']['module_flops']['method'] = 'zzz_custom_formula'
 output.joinpath('mixed.html').write_text(render_report(mixed), encoding='utf-8')
+missing = copy.deepcopy(mixed)
+del next(layer for layer in missing['layers'] if layer['path'] == '0.2')['metrics']['module_flops']
+output.joinpath('missing.html').write_text(render_report(missing), encoding='utf-8')
+removed = copy.deepcopy(mixed)
+removed['layers'] = [layer for layer in removed['layers'] if layer['path'] != '0.2']
+output.joinpath('removed.html').write_text(render_report(removed, before=mixed), encoding='utf-8')
+
+class Repeated(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layer = nn.Linear(4, 4, bias=False)
+
+    def forward(self, inputs):
+        return self.layer(self.layer(inputs))
+
+repeated = crawl_module(Repeated(), (4,))
+next(layer for layer in repeated['layers'] if layer['path'] == 'layer' and layer['call_index'] == 1)['metrics']['module_flops']['method'] = 'zzz_custom_formula'
+output.joinpath('repeated.html').write_text(render_report(repeated), encoding='utf-8')
+
+class Sine(nn.Module):
+    def forward(self, inputs):
+        return torch.sin(inputs)
+
+output.joinpath('baseline.html').write_text(render_report(
+    crawl_module(nn.Sequential(nn.Identity()), (4,)), before=crawl_module(nn.Sequential(Sine()), (4,))
+), encoding='utf-8')
 
 unknown = copy.deepcopy(report)
 for layer in unknown['layers']:
@@ -86,6 +113,16 @@ assert.equal(generated.status, 0, generated.stderr);
       return panel().locator('.rail-card[data-node-id="' + node.id + '"][data-group-id="' + currentGroup.id + '"]');
     }
     async function selectedPath() { return inspector().locator('h3').textContent(); }
+    async function assertFocusedTileFits(locator) {
+      assert.equal(await locator.evaluate(node => node === document.activeElement), true);
+      assert.equal(await locator.locator('[data-tile]').evaluate(tile => {
+        const box = tile.getBBox();
+        const view = tile.ownerSVGElement.viewBox.baseVal;
+        return box.x >= view.x && box.y >= view.y
+          && box.x + box.width <= view.x + view.width + .001
+          && box.y + box.height <= view.y + view.height + .001;
+      }), true, 'focused module fits inside its SVG viewport');
+    }
 
     await load('complete.html');
     await chartNode('0.0').focus();
@@ -145,6 +182,25 @@ assert.equal(generated.status, 0, generated.stderr);
     assert.ok(parentViewBox[1] <= parentTile.y && parentViewBox[1] + parentViewBox[3] >= parentTile.y + parentTile.height,
       'parent rectangle fits vertically in the viewport');
 
+    // Zoom must not leave keyboard targets outside the displayed SVG viewport.
+    for (const key of ['End', 'Home', 'ArrowLeft']) {
+      await chartNode('0').click();
+      await action('zoom').click();
+      await chartNode('0').focus();
+      await page.keyboard.press(key);
+      const expected = key === 'End' ? '1' : '';
+      assert.equal(await selectedPath(), expected || '(root)');
+      await assertFocusedTileFits(chartNode(expected));
+    }
+    await chartNode('0').click();
+    await action('zoom').click();
+    await chartNode('0.2').focus();
+    await page.keyboard.press('Tab');
+    await assertFocusedTileFits(chartNode('1'));
+    assert.equal(await selectedPath(), '0', 'Tab reveals focus without selecting the module');
+    await page.keyboard.press('Enter');
+    assert.equal(await selectedPath(), '1');
+
     // Metric switching preserves module selection, and native radios work from the keyboard.
     await chartNode('0.0').click();
     await page.locator('#view-parameters').check();
@@ -172,6 +228,19 @@ assert.equal(generated.status, 0, generated.stderr);
     // One reset restores every incompatible method group's independent branch state.
     await load('mixed.html');
     assert.equal(data.maps.module_flops.groups.length, 2);
+    const custom = group('module_flops', 'zzz_custom_formula');
+    await chartNode('0.2', custom).click();
+    await page.locator('#view-parameters').check();
+    await page.locator('#view-module_flops').check();
+    assert.equal(await chartNode('0.2', custom).getAttribute('aria-current'), 'true');
+    assert.match(await inspector().locator('.metric-value').textContent(), /complete.*60 FLOPs/);
+    assert.match(await inspector().textContent(), /Method: zzz_custom_formula/);
+    await load('mixed.html');
+    await page.locator('#view-parameters').check();
+    await chartNode('0.2', group('parameters')).click();
+    await page.locator('#view-module_flops').check();
+    assert.equal(await chartNode('0.2', group('module_flops', 'zzz_custom_formula')).getAttribute('aria-current'), 'true',
+      'a newly selected module prefers its recorded method group over a placeholder');
     for (const currentGroup of data.maps.module_flops.groups) {
       await chartNode('', currentGroup).click();
       await action('collapse').click();
@@ -182,6 +251,37 @@ assert.equal(generated.status, 0, generated.stderr);
       assert.equal(await chartNode('0', currentGroup).isVisible(), true);
     }
     assert.equal(await action('collapse').textContent(), 'Collapse branch');
+
+    for (const name of ['missing.html', 'removed.html']) {
+      await load(name);
+      await page.locator('#view-parameters').check();
+      const parameters = group('parameters');
+      await chartNode('0.2', parameters).click();
+      await page.locator('#view-module_flops').check();
+      const evidenceGroup = group('module_flops', name === 'missing.html' ? 'no_recorded_measurement' : 'zzz_custom_formula');
+      assert.equal(await selectedPath(), '0.2');
+      if (name === 'missing.html') assert.match(await inspector().textContent(), /unavailable.*unknown/s);
+      else assert.match(await inspector().textContent(), /Removed module; only before calls are recorded/);
+      assert.equal(await chartNode('0.2', evidenceGroup).getAttribute('aria-current'), 'true');
+    }
+
+    await load('repeated.html');
+    const repeatedCustom = group('module_flops', 'zzz_custom_formula');
+    await chartNode('layer', repeatedCustom).click();
+    await page.locator('#view-parameters').check();
+    await page.locator('#view-module_flops').check();
+    assert.equal(await chartNode('layer', repeatedCustom).getAttribute('aria-current'), 'true');
+    assert.equal(await inspector().locator('.call-card').count(), 2);
+    assert.match(await inspector().locator('.metric-value').textContent(), /complete.*28 FLOPs/);
+
+    await load('baseline.html');
+    await chartNode('0').click();
+    assert.match(await inspector().textContent(), /Before diagnostics/);
+    const beforeWarnings = inspector().locator('a[href^="#before-diagnostic-"]');
+    assert.ok(await beforeWarnings.count() >= 2);
+    assert.match((await beforeWarnings.allTextContents()).join(' '), /Global.*uncounted_operator/);
+    await beforeWarnings.last().click();
+    assert.equal(await page.locator('#' + (await beforeWarnings.last().getAttribute('href')).slice(1)).isVisible(), true);
 
     // An unavailable ancestor has descendants but no numerical rectangle to zoom into.
     await load('unknown.html');

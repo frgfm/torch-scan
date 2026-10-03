@@ -360,6 +360,14 @@ def _all_diagnostics(report: AnalysisReport) -> list[Diagnostic]:
     return diagnostics
 
 
+def _diagnostic_rows(diagnostics: list[Diagnostic], *, prefix: str = "diagnostic") -> str:
+    return "".join(
+        f'<li id="{prefix}-{i}" tabindex="-1"><strong>{escape(item["severity"])} · {escape(item["code"])}</strong> '
+        f"[{escape(item['metric'])}] {escape(item['message'])}{_metadata({key: item[key] for key in ('path', 'operator') if key in item})}</li>"
+        for i, item in enumerate(diagnostics)
+    )
+
+
 def _suggestions(report: AnalysisReport) -> list[tuple[str, str, str]]:
     suggestions = []
     for view in ("module_flops", "parameters"):
@@ -596,6 +604,7 @@ def _html(
     maps = _explorer_data(report, before, comparison)
     call_details = []
     diagnostics = _all_diagnostics(report)
+    before_diagnostics = _all_diagnostics(before) if before is not None else []
     for i, layer in enumerate(report["layers"]):
         metrics = dict(layer["metrics"])
         for name, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
@@ -625,11 +634,7 @@ def _html(
         f'<label class="view-label" for="view-{key}">{label}</label>'
         for key, label in _VIEWS.items()
     )
-    diagnostic_rows = "".join(
-        f'<li id="diagnostic-{i}" tabindex="-1"><strong>{escape(item["severity"])} · {escape(item["code"])}</strong> '
-        f"[{escape(item['metric'])}] {escape(item['message'])}{_metadata({key: item[key] for key in ('path', 'operator') if key in item})}</li>"
-        for i, item in enumerate(_all_diagnostics(report))
-    )
+    diagnostic_rows = _diagnostic_rows(diagnostics)
     suggestions = "".join(
         f'<li class="suggestion"><p><strong>Recorded fact:</strong> {escape(fact)} <a href="#{target}">Evidence</a></p>'
         f"<p><strong>Experiment to try:</strong> {escape(experiment)}</p></li>"
@@ -650,6 +655,7 @@ def _html(
         "comparison": comparison[0] if comparison else None,
         "maps": maps,
         "diagnostics": [{**item, "index": i} for i, item in enumerate(diagnostics)],
+        "before_diagnostics": [{**item, "index": i} for i, item in enumerate(before_diagnostics)],
         "suggestions": [
             {"fact": fact, "experiment": experiment, "target": target}
             for fact, experiment, target in _suggestions(report)
@@ -699,9 +705,18 @@ def _html(
                 f'<details id="before-call-{i}" tabindex="-1"><summary>{escape(_label(layer))}</summary>'
                 f"<h3>Before input shapes and metadata</h3>{_metadata(layer['input'])}"
                 f"<h3>Before output shapes and metadata</h3>{_metadata(layer['output'])}"
-                f"{_metric_table(layer['metrics'])}</details>"
+                f"{_metric_table(layer['metrics'])}<h3>Before diagnostics for this module path</h3><ul>"
+                + "".join(
+                    f'<li><a href="#before-diagnostic-{j}">{escape(item["code"])}</a>: {escape(item["message"])}</li>'
+                    for j, item in enumerate(before_diagnostics)
+                    if item.get("path") == layer["path"]
+                )
+                + "</ul></details>"
                 for i, layer in enumerate(before["layers"])
             )
+            + "<h3>Before diagnostics</h3><ul>"
+            + _diagnostic_rows(before_diagnostics, prefix="before-diagnostic")
+            + "</ul>"
             + "</section>"
         )
     return (

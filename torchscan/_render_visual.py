@@ -178,7 +178,7 @@ def _node_description(node: dict[str, Any], group: dict[str, Any]) -> str:
             description += f" Complete comparable delta: {node['delta']:+,} {group['unit']}."
     if group["scale"] == "structure":
         description += " Unscaled structural layout; widths do not encode cost."
-    return description + str(node.get("_evidence", ""))
+    return description
 
 
 def map_svg(group: dict[str, Any], *, selected: str, prefix: str, interactive: bool = False) -> str:
@@ -240,7 +240,7 @@ def map_svg(group: dict[str, Any], *, selected: str, prefix: str, interactive: b
                 f'<a id="{element_id}" href="#{target}" tabindex="0"{data} '
                 f'aria-label="{escape(description, quote=True)}"'
                 f"{current_attribute}>"
-                f"<title>{escape(description)}</title>"
+                f"<title>{escape(description + node.get('_evidence', ''))}</title>"
             ),
             _rect(
                 x,
@@ -340,6 +340,17 @@ def _tensor_glyph(x: int, y: float, label: str, metadata: Any, *, prefix: str) -
     )
 
 
+def _call_result(call: Mapping[str, Any], group: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    result = call["result"]
+    return (
+        result
+        if group.get("kind") == "recorded"
+        and result is not None
+        and all(result[field] == group[field] for field in ("method", "unit", "scope"))
+        else None
+    )
+
+
 def _inspector(
     report: Mapping[str, Any],
     node: dict[str, Any] | None,
@@ -429,16 +440,6 @@ def _inspector(
     calls = node["before_calls"] if baseline else node["calls"]
     source = before if baseline and before is not None else report
 
-    def call_result(call: Mapping[str, Any]) -> Mapping[str, Any] | None:
-        result = call["result"]
-        return (
-            result
-            if group.get("kind") == "recorded"
-            and result is not None
-            and all(result[field] == group[field] for field in ("method", "unit", "scope"))
-            else None
-        )
-
     if calls:
         cursor += 24
         output.append(
@@ -469,14 +470,14 @@ def _inspector(
         maximum = max(
             (
                 result["value"] or 0 if result and result["status"] == "complete" else 0
-                for result in (call_result(call) for call in calls)
+                for result in (_call_result(call, group) for call in calls)
             ),
             default=0,
         )
         for call in calls:
             layer = source["layers"][call["index"]]
             call_id = f"{'before-call' if baseline else 'call'}-{call['index']}"
-            result = call_result(call)
+            result = _call_result(call, group)
             description = f"{node['path'] or '(root)'} call #{call['call_index']}: {_measurement(result)}. Input {shape_text(layer['input'])}; output {shape_text(layer['output'])}."
             output.extend((
                 f'<g id="{call_id}"><title>{escape(description)}</title>',
@@ -513,15 +514,21 @@ def _inspector(
             )
             output.extend((_text(left + 10, cursor + 51, storage, size=11, color=_MUTED), "</g>"))
             cursor += 74
-    diagnostics = list(report["diagnostics"]) + [
-        item for item in report["operator_flops"]["diagnostics"] if item not in report["diagnostics"]
-    ]
+    diagnostics = _diagnostics(source)
     view = group.get("view", "module_flops")
     metrics = {view, "flops", "module_flops"} if view in ("module_flops", "macs", "dmas") else {view}
     relevant = [item for item in diagnostics if item.get("path") in (None, node["path"]) and item["metric"] in metrics]
     if relevant:
         cursor += 16
-        output.append(_text(left, cursor, "Measurement diagnostics", size=14, weight=650))
+        output.append(
+            _text(
+                left,
+                cursor,
+                "Before measurement diagnostics" if baseline else "Measurement diagnostics",
+                size=14,
+                weight=650,
+            )
+        )
         for item in relevant:
             cursor = _paragraph(
                 output,
@@ -533,6 +540,12 @@ def _inspector(
             )
     output.append("</g>")
     return "".join(output), cursor + 22
+
+
+def _diagnostics(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    return list(report["diagnostics"]) + [
+        item for item in report["operator_flops"]["diagnostics"] if item not in report["diagnostics"]
+    ]
 
 
 def _context_lines(report: Mapping[str, Any]) -> list[str]:
@@ -577,8 +590,15 @@ def visual_svg(
             target = (
                 f"static-{current['id']}-{node['id']}" if node["width"] > 0 else f"rail-{current['id']}-{node['id']}"
             )
-            for call in node["calls"]:
-                call_targets.setdefault(f"call-{call['index']}", target)
+            if node["width"] > 0 or node["id"] in current["rails"]:
+                for call in node["calls"]:
+                    call_id = f"call-{call['index']}"
+                    if _call_result(call, current) is not None or (
+                        current["kind"] == "unrecorded" and call["result"] is None
+                    ):
+                        call_targets[call_id] = target
+                    else:
+                        call_targets.setdefault(call_id, target)
         groups.append(current)
     group: dict[str, Any] = (
         groups[0]
@@ -699,8 +719,9 @@ def visual_svg(
             target = f"static-{current['id']}-{node['id']}" if node["width"] > 0 else rail_id
             fill = "#fff4df" if "unknown" in node["rail"] and node["status"] != "unavailable" else "#f0f4f7"
             description = _node_description(node, current)
+            evidence = "" if node["width"] > 0 else node.get("_evidence", "")
             fragments.extend((
-                f'<a id="{rail_id}" href="#{target}" tabindex="0" aria-label="{escape(description, quote=True)}"><title>{escape(description)}</title>',
+                f'<a id="{rail_id}" href="#{target}" tabindex="0" aria-label="{escape(description, quote=True)}"><title>{escape(description + evidence)}</title>',
                 _rect(x, y, 409, 72, fill=fill),
             ))
             if node["direct"] and node["direct"]["status"] == "partial":
@@ -779,7 +800,11 @@ def visual_svg(
     if suggestions:
         content, card_cursor = [], cursor + 59
         content.append(_text(52, cursor + 29, "Evidence-linked experiments", size=18, weight=650))
-        selected_call_ids = {f"call-{call['index']}" for call in selected["calls"]} if selected else set()
+        selected_call_ids = (
+            {f"call-{call['index']}" for call in selected["calls"] if _call_result(call, group) is not None}
+            if selected
+            else set()
+        )
         # Facts and hypotheses remain separate and fully searchable in the SVG.
         for fact, experiment, target in suggestions:
             evidence_target = target if target in selected_call_ids else call_targets.get(target, "svg-evidence")
@@ -804,6 +829,13 @@ def visual_svg(
                     "context": report["context"],
                     "diagnostics": report["diagnostics"],
                     "operator_diagnostics": report["operator_flops"]["diagnostics"],
+                    "before": {
+                        "inputs": before["inputs"],
+                        "context": before["context"],
+                        "diagnostics": _diagnostics(before),
+                    }
+                    if before is not None
+                    else None,
                 },
                 ensure_ascii=False,
             )
@@ -816,6 +848,23 @@ def visual_svg(
             context_cursor = _paragraph(
                 context_body, 52, context_cursor + (5 if label == "Before · " else 0), label + line, width=162
             )
+    if before is not None and _diagnostics(before):
+        context_cursor = _paragraph(
+            context_body, 52, context_cursor + 15, "Before diagnostics", size=14, color=_INK, weight=650
+        )
+        for index, diagnostic in enumerate(_diagnostics(before)):
+            context_body.append(
+                f'<g id="before-diagnostic-{index}"><title>{escape(json.dumps(diagnostic, ensure_ascii=False))}</title>'
+            )
+            context_cursor = _paragraph(
+                context_body,
+                52,
+                context_cursor + 8,
+                f"Before · {diagnostic.get('path') or 'Global'} · {diagnostic['metric']} · {diagnostic['code']}: {diagnostic['message']}",
+                width=168,
+                color=_AMBER,
+            )
+            context_body.append("</g>")
     context_cursor = _paragraph(
         context_body,
         52,

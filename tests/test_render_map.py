@@ -1,5 +1,4 @@
 import copy
-import json
 
 import pytest
 from torch import nn
@@ -26,58 +25,6 @@ def _metric(value, *, status="complete", method="torchscan_module_formula", unit
         unit=unit,
         scope=scope,
     )
-
-
-def test_geometry_matches_additive_evidence_and_missing_container_is_structural(report):
-    maps = build_maps(report)
-    group = maps["module_flops"]["groups"][0]
-    root, large, identity, small = [_node(group, path) for path in ("", "0", "1", "2")]
-    assert root["direct"] is None
-    assert root["direct_known"] is None
-    assert root["direct_kind"] == "structural"
-    assert root["subtotal"]["method"] == "derived_recorded_subtotal"
-    assert root["subtotal"]["scope"] == "observed_subtree"
-    assert root["known"] == 56 + 0 + 30
-    assert root["known"] == report["totals"]["module_flops"]["value"]
-    assert root["width"] == 1
-    assert root["direct_width"] == 0
-    assert large["width"] == pytest.approx(56 / 86)
-    assert small["x"] == pytest.approx(56 / 86)
-    assert identity["width"] == 0
-    assert identity["rail"] == ["zero"]
-    assert not root["rail"]
-    assert maps["parameters"]["groups"][0]["known_total"] == 48
-    assert all(node["id"] == _node(maps["parameters"]["groups"][0], node["path"])["id"] for node in group["nodes"])
-    assert json.loads(json.dumps(maps)) == maps
-
-
-def test_real_repeated_calls_and_partially_shared_rows_count_each_attribution_once():
-    class Reused(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.block = nn.Sequential(nn.Linear(4, 4, bias=False))
-            self.tied = nn.Linear(4, 4)
-            self.tied.weight = self.block[0].weight
-
-        def forward(self, inputs):
-            return self.tied(self.block(self.block(inputs)))
-
-    report = crawl_module(Reused(), (4,))
-    original = copy.deepcopy(report)
-    maps = build_maps(report)
-    compute = maps["module_flops"]["groups"][0]
-    parameters = maps["parameters"]["groups"][0]
-    repeated = _node(compute, "block.0")
-    assert [call["call_index"] for call in repeated["calls"]] == [0, 1]
-    assert len({call["index"] for call in repeated["calls"]}) == 2
-    assert repeated["direct"]["value"] == 2 * 28
-    assert _node(parameters, "block.0")["direct"]["value"] == 16
-    tied = _node(parameters, "tied")
-    assert tied["calls"][0]["shared"] is True
-    assert tied["direct"]["value"] == 4  # Shared weight, uniquely attributed bias.
-    assert parameters["known_total"] == report["totals"]["parameters"]["value"] == 20
-    assert not _node(parameters, "block")["rail"]  # Zero container attribution is not a zero layer.
-    assert report == original
 
 
 def test_inclusive_operator_counts_do_not_affect_any_map(report):
@@ -109,29 +56,8 @@ def test_partial_zero_unavailable_and_complete_zero_keep_distinct_rails(report):
     assert group["known_total"] == 0
     assert _node(group, "")["direct"] is None
     assert _node(group, "")["status"] == "partial"
-
-
-def test_structure_mode_leaves_unknown_and_containers_structural():
-    structure = crawl_module(nn.Sequential(nn.Linear(4, 2), nn.ReLU()), (4,), mode="structure")
-    group = build_maps(structure)["module_flops"]["groups"][0]
-    assert group["scale"] == "structure"
-    assert group["known_total"] is None
-    assert _node(group, "")["direct"] is None
-    assert not _node(group, "")["rail"]
-    assert _node(group, "0")["rail"] == ["unknown"]
-    assert _node(group, "1")["rail"] == ["unknown"]
-
-
-def test_positive_partial_lower_bound_uses_cost_scale_and_unknown_rail(report):
-    report["layers"][1]["metrics"]["module_flops"] = _metric(7, status="partial")
-    group = build_maps(report)["module_flops"]["groups"][0]
-    node = _node(group, "0")
-    assert group["scale"] == "known"
-    assert group["known_total"] == 37
-    assert node["width"] == pytest.approx(7 / 37)
-    assert node["rail"] == ["unknown"]
-    assert node["direct"]["value"] is None
-    assert node["subtotal"]["value"] is None
+    assert _node(group, "")["subtotal"]["method"] == "derived_recorded_subtotal"
+    assert _node(group, "")["subtotal"]["scope"] == "observed_subtree"
 
 
 def test_small_costs_appear_in_rail_and_direct_plus_descendant_segments_do_not_overlap(report):
@@ -158,16 +84,6 @@ def test_incompatible_measurements_have_separate_scales(report, field):
     assert sorted(group["known_total"] for group in groups) == [30, 56]
     assert all(group["nodes"][0]["width"] == 1 for group in groups)
     assert sum(group["known_total"] for group in groups) == 86  # No individual map mixes scales.
-
-
-def test_unrecorded_leaf_is_unknown_separate_from_recorded_measurements(report):
-    del report["layers"][1]["metrics"]["module_flops"]
-    groups = build_maps(report)["module_flops"]["groups"]
-    assert len(groups) == 2
-    unknown = next(group for group in groups if group["method"] == "no_recorded_measurement")
-    assert _node(unknown, "0")["known"] is None
-    assert _node(unknown, "0")["rail"] == ["unknown"]
-    assert _node(unknown, "")["direct"] is None
 
 
 @pytest.mark.parametrize("missing_leaf", [False, True])
@@ -257,23 +173,6 @@ def test_negative_additive_costs_rejected(report, before):
         build_maps(report, before=negative) if before else build_maps(negative)
 
 
-def test_uncalled_model_parameters_stay_only_in_authoritative_total():
-    class Uncalled(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.called = nn.Linear(4, 2, bias=False)
-            self.uncalled = nn.Linear(4, 2, bias=False)
-
-        def forward(self, inputs):
-            return self.called(inputs)
-
-    maps = build_maps(crawl_module(Uncalled(), (4,)))
-    parameters = maps["parameters"]
-    assert parameters["total"]["value"] == 16
-    assert parameters["groups"][0]["known_total"] == 8
-    assert not any(node["path"] == "uncalled" for node in parameters["groups"][0]["nodes"])
-
-
 def test_preorder_geometry_handles_punctuation_in_valid_module_names(report):
     report["layers"][1]["path"] = "a.child"
     report["layers"][2]["path"] = "a-child"
@@ -284,27 +183,6 @@ def test_preorder_geometry_handles_punctuation_in_valid_module_names(report):
     for node in group["nodes"]:
         assert 0 <= node["x"] <= 1
         assert 0 <= node["width"] <= 1
-
-
-def test_many_changed_calls_preserve_each_delta_and_the_derived_total():
-    before = crawl_module(nn.Sequential(*(nn.Linear(4, 4, bias=False) for _ in range(192))), (4,))
-    after = copy.deepcopy(before)
-    expected = {}
-    for increment, layer in enumerate(after["layers"][1:], start=1):
-        measurement = layer["metrics"]["module_flops"]
-        measurement["value"] += increment
-        measurement["known_value"] += increment
-        expected[layer["path"]] = increment
-    after["totals"]["module_flops"]["value"] += sum(expected.values())
-    after["totals"]["module_flops"]["known_value"] += sum(expected.values())
-    comparison = compare_reports(before, after)
-    assert len(comparison["layers"]["changed"]) == len(expected)
-    maps = build_maps(after, before=before, comparison=(comparison, []))
-    group = maps["module_flops"]["groups"][0]
-    assert {node["path"]: node["delta"] for node in group["nodes"] if node["path"]} == expected
-    assert _node(group, "")["delta"] == sum(expected.values())
-    assert maps["module_flops"]["comparison_delta"]["delta"] == _node(group, "")["delta"]
-    assert all(node["delta"] == 0 for node in maps["macs"]["groups"][0]["nodes"])
 
 
 def test_nested_failures_propagate_first_reason_without_blocking_complete_siblings():

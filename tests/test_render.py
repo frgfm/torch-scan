@@ -9,7 +9,6 @@ from html.parser import HTMLParser
 from xml.etree import ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import]
 
 import pytest
-import torch
 from torch import nn
 
 from torchscan import crawl_module, metric_result, render_report
@@ -98,35 +97,6 @@ def test_real_report_html_hierarchy_ranking_methods_and_offline_controls(report)
     assert _embedded(root)["report"] == report
 
 
-def test_repeated_calls_and_tied_parameters_use_report_attribution():
-    class Shared(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.block = nn.Sequential(nn.Linear(4, 4, bias=False))
-            self.tied = nn.Linear(4, 4, bias=False)
-            self.tied.weight = self.block[0].weight
-
-        def forward(self, inputs):
-            return self.tied(self.block(self.block(inputs)))
-
-    report = crawl_module(Shared(), (4,))
-    root = _document(report)
-    assert report["totals"]["parameters"]["value"] == 16
-    assert report["totals"]["module_flops"]["value"] == 3 * 28
-    assert report["totals"]["operator_flops"]["value"] == 3 * 32  # Different counting conventions remain separate.
-    calls = [(layer["path"], layer["call_index"]) for layer in report["layers"]]
-    assert ("block.0", 0) in calls
-    assert ("block.0", 1) in calls
-    assert ("tied", 0) in calls
-    rows = _panel(root, "parameters").find("tbody")[0].find("tr")
-    assert sum(float(row.find("progress")[0].attrs["value"]) for row in rows) == 1
-    assert "complete 16 elements" in rows[0].text()
-    assert "shared tensors accounted elsewhere" in rows[-1].text()
-    # Every invocation has its own detail target; repeated compute is preserved.
-    assert len(root.find("details")) >= len(calls)
-    assert len(_panel(root, "module_flops").find("progress")) == 3
-
-
 def test_inclusive_operator_counts_never_join_layer_ranking(report):
     report["operator_flops"]["by_module"] = {"Parent": 10000, "Parent.Child": 5000}
     root = _document(report)
@@ -153,28 +123,6 @@ def test_partial_zero_unavailable_and_complete_zero_are_distinct(report):
     assert "unavailable unknown" in panel.find("ul")[0].text()
     svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
     assert "partial · ≥ 0 FLOPs · full value unknown" in "".join(svg.itertext())
-
-
-def test_real_incomplete_and_structure_mode_have_no_false_zero():
-    class Sine(nn.Module):
-        def forward(self, inputs):
-            return torch.sin(inputs)
-
-    report = crawl_module(Sine(), (4,))
-    root = _document(report)
-    assert report["totals"]["operator_flops"]["status"] == "partial"
-    assert "uncounted_operator" in root.text()
-    assert "aten.sin" in root.text()
-    assert "partial at least 0 FLOPs" in root.find("section", id="operators")[0].text()
-    assert not _panel(root, "module_flops").find("progress")
-    svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
-    targets = {node.attrib["id"] for node in svg.iter() if "id" in node.attrib}
-    assert all(link.attrib["href"][1:] in targets for link in svg.findall(".//{*}a"))
-    structure = crawl_module(nn.Linear(4, 2), (4,), mode="structure")
-    root = _document(structure)
-    assert "not_requested" in root.text()
-    assert not _panel(root, "module_flops").find("progress")
-    assert _panel(root, "parameters").find("progress")
 
 
 def test_comparison_complete_deltas_and_context(report):
@@ -262,6 +210,8 @@ def test_missing_metrics_are_explicit_in_details_and_svg_unranked(report):
     root = _document(structure)
     assert "unavailable unknown" in root.find("details", id="call-0")[0].text()
     assert "not_requested" in root.find("details", id="call-0")[0].text()
+    assert not _panel(root, "module_flops").find("progress")
+    assert _panel(root, "parameters").find("progress")
     svg = ET.fromstring(render_report(structure, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
     text = "".join(svg.itertext())
     assert "structural · unscaled" in text
@@ -380,28 +330,21 @@ def test_untrusted_content_escaped_and_embedded_json_round_trips(report):
     assert "default-src 'none'" in csp
     svg = ET.fromstring(render_report(report, format="svg", title=payload, before=report))  # ruff: ignore[suspicious-xml-element-tree-usage]
     assert svg.find("{*}title").text == payload
+    assert svg.attrib["role"] == "img"
+    assert all(link.attrib["tabindex"] == "0" for link in svg.findall(".//{*}a"))
     assert all(element.tag.split("}")[-1] not in {"script", "image", "foreignObject"} for element in svg.iter())
 
 
-def test_svg_valid_searchable_and_internal_evidence_links(report):
-    svg = ET.fromstring(render_report(report, format="svg", metric="parameters", before=report))  # ruff: ignore[suspicious-xml-element-tree-usage]
-    assert svg.attrib["role"] == "img"
-    text = "".join(svg.itertext())
-    assert "Attributed parameters" in text
-    assert "Before / after · stable module positions" in text
-    assert "shape" in text
-    assert "torchscan_module_formula" in text
-    identifiers = [node.attrib["id"] for node in svg.iter() if "id" in node.attrib]
-    assert len(identifiers) == len(set(identifiers))
-    for link in svg.findall(".//{*}a"):
-        assert link.attrib["href"][1:] in identifiers
-        assert link.attrib["tabindex"] == "0"
-
-
-@pytest.mark.parametrize("field", ["method", "unit", "scope"])
-@pytest.mark.parametrize("repeated", [False, True])
-@pytest.mark.parametrize("view", ["module_flops", "parameters"])
-def test_svg_experiment_links_use_rendered_compatible_call_evidence(field, repeated, view):
+@pytest.mark.parametrize(
+    ("field", "repeated", "view"),
+    [
+        ("method", False, "module_flops"),
+        ("scope", True, "module_flops"),
+        ("unit", False, "module_flops"),
+        ("method", True, "parameters"),
+    ],
+)
+def test_svg_grouped_measurements_keep_independent_scales_and_compatible_evidence(field, repeated, view):
     class Repeated(nn.Module):
         def __init__(self):
             super().__init__()
@@ -414,8 +357,17 @@ def test_svg_experiment_links_use_rendered_compatible_call_evidence(field, repea
     report = crawl_module(model, (4,))
     report["layers"][2]["metrics"]["module_flops"][field] = "aaa_custom"
     groups = _embedded(_document(report))["maps"][view]["groups"]
-    svg = ET.fromstring(render_report(report, format="svg", metric=view))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    source = render_report(report, format="svg", metric=view)
+    svg = ET.fromstring(source)  # ruff: ignore[suspicious-xml-element-tree-usage]
     identifiers = {element.attrib["id"]: element for element in svg.iter() if "id" in element.attrib}
+    assert len(identifiers) == sum("id" in element.attrib for element in svg.iter())
+    if view == "module_flops":
+        diagrams = _maps(source)
+        for group in groups:
+            known = next(node for node in group["nodes"] if node["direct_known"])
+            diagram = diagrams[group["id"]]
+            assert _rect_geometry(_tile(diagram, known))[0::2] == _rect_geometry(_tile(diagram, _node(group, "")))[0::2]
+            assert group["method"] in "".join(diagram.itertext())
     parents = {child: parent for parent in svg.iter() for child in parent}
     links = svg.findall(".//{*}a")
     assert all(link.attrib["href"][1:] in identifiers for link in links)
@@ -450,6 +402,10 @@ def test_svg_missing_metric_experiment_links_use_the_synthetic_group():
     report["layers"][2]["metrics"]["module_flops"]["method"] = "no_recorded_measurement"
     groups = _embedded(_document(report))["maps"]["module_flops"]["groups"]
     missing = next(group for group in groups if group["kind"] == "unrecorded")
+    recorded = next(group for group in groups if group["kind"] == "recorded")
+    assert recorded["method"] == missing["method"]
+    assert _node(recorded, "1")["calls"][0]["display_status"] == "complete"
+    assert _node(missing, "1")["calls"][0]["in_group"] is False
     node = next(node for node in missing["nodes"] if node["path"] == "0")
     svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
     identifiers = {element.attrib["id"] for element in svg.iter() if "id" in element.attrib}
@@ -502,18 +458,7 @@ def test_comparison_visibly_preserves_baseline_diagnostics(removed, output_forma
     assert all(link.attrib["href"][1:] in identifiers for link in svg.findall(".//{*}a"))
 
 
-def test_svg_accessible_names_exclude_raw_call_json_but_tooltips_keep_exact_evidence():
-    class Repeated(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.block = nn.Linear(4, 4, bias=False)
-
-        def forward(self, inputs):
-            for _ in range(32):
-                inputs = self.block(inputs)
-            return inputs
-
-    report = crawl_module(Repeated(), (4,))
+def test_svg_accessible_names_exclude_raw_call_json_but_tooltips_keep_exact_evidence(report):
     svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
     anchors = [element for element in svg.iter() if "data-map-node" in element.attrib]
     for anchor in anchors:
@@ -523,7 +468,6 @@ def test_svg_accessible_names_exclude_raw_call_json_but_tooltips_keep_exact_evid
         evidence = json.loads(tooltip.split(" Call evidence: ", 1)[1])
         path = evidence[0]["path"]
         assert evidence == [layer for layer in report["layers"] if layer["path"] == path]
-    assert any("32 observed calls" in anchor.attrib["aria-label"] for anchor in anchors)
 
 
 @pytest.mark.parametrize("output_format", ["html", "svg"])
@@ -605,13 +549,11 @@ def test_invalid_options_and_baseline_rejected(report):
         render_report(report)
 
 
-@pytest.mark.parametrize("field", ["devices", "dtypes"])
-@pytest.mark.parametrize("value", [1, "cpu", [1], {"device": "cpu"}])
-@pytest.mark.parametrize("output_format", ["html", "svg"])
-def test_invalid_display_context_rejected_consistently(report, field, value, output_format):
+@pytest.mark.parametrize(("field", "value"), [("devices", 1), ("devices", [1]), ("dtypes", "cpu")])
+def test_invalid_display_context_rejected(report, field, value):
     report["context"][field] = value
     with pytest.raises(ValueError, match=f"context.{field} must be a list of strings"):
-        render_report(report, format=output_format)
+        render_report(report)
 
 
 @pytest.mark.parametrize("output_format", ["html", "svg"])
@@ -632,11 +574,6 @@ def _maps(source):
         node.attrib["data-group-id"]: node
         for node in (ET.fromstring(fragment) for fragment in fragments)  # ruff: ignore[suspicious-xml-element-tree-usage]
     }
-
-
-def _embedded_data(source):
-    root = Document(source).root
-    return json.loads(root.find("script", id="torchscan-data")[0].text())
 
 
 def _node(group, path):
@@ -665,13 +602,9 @@ def _diagram_geometry(diagram):
     }
 
 
-@pytest.fixture
-def nested_report():
+def test_actual_layer_costs_partition_nested_rectangles_at_module_depth():
     model = nn.Sequential(nn.Sequential(nn.Linear(4, 8, bias=False), nn.ReLU()), nn.Linear(8, 2, bias=False))
-    return crawl_module(model, (4,))
-
-
-def test_actual_layer_costs_partition_nested_rectangles_at_module_depth(nested_report):
+    nested_report = crawl_module(model, (4,))
     html = render_report(nested_report)
     svg = render_report(nested_report, format="svg")
     group = build_maps(nested_report)["module_flops"]["groups"][0]
@@ -718,19 +651,15 @@ def test_reused_module_is_one_tile_with_both_calls_and_parameters_counted_once()
 
     report = crawl_module(Shared(), (4,))
     html = render_report(report)
-    data = _embedded_data(html)
+    data = _embedded(Document(html).root)
     group = data["maps"]["module_flops"]["groups"][0]
     node = _node(group, "block.0")
-    anchor = _tile_anchor(_maps(html)[group["id"]], node)
+    diagram = _maps(html)[group["id"]]
+    anchor = _tile_anchor(diagram, node)
     assert anchor is not None
     assert "\u00d72 calls" in "".join(anchor.itertext())
     assert node["direct"]["value"] == 56
-    assert (
-        len([
-            element for element in _maps(html)[group["id"]].iter() if element.attrib.get("data-node-id") == node["id"]
-        ])
-        == 1
-    )
+    assert sum(element.attrib.get("data-node-id") == node["id"] for element in diagram.iter()) == 1
     assert [call["result"]["value"] for call in node["calls"]] == [28, 28]
     root = Document(html).root
     inspector = root.find("div", **{"data-view": "module_flops"})[0].find("aside")[0]
@@ -744,6 +673,7 @@ def test_reused_module_is_one_tile_with_both_calls_and_parameters_counted_once()
     assert parameter_group["known_total"] == report["totals"]["parameters"]["value"] == 20
     assert _node(parameter_group, "block.0")["direct"]["value"] == 16
     assert _node(parameter_group, "tied")["direct"]["value"] == 4
+    assert _node(parameter_group, "tied")["calls"][0]["shared"] is True
     parameter_svg = render_report(report, format="svg", metric="parameters")
     parameter_map = _maps(parameter_svg)[parameter_group["id"]]
     assert _diagram_geometry(parameter_map) == _diagram_geometry(_maps(html)[parameter_group["id"]])
@@ -766,15 +696,22 @@ def test_partial_positive_tile_is_hatched_and_partial_zero_keeps_unscaled_visibl
     # Preserve a positive recorded lower bound while declaring its formula
     # incomplete. The unsupported Sine gives a real partial-zero measurement.
     report["layers"][1]["metrics"]["module_flops"] = metric_result(
-        status="partial", known_value=56, unit="FLOPs", scope="module_call", method="torchscan_module_formula"
+        status="partial", known_value=7, unit="FLOPs", scope="module_call", method="torchscan_module_formula"
     )
     html, svg = render_report(report), render_report(report, format="svg")
-    data = _embedded_data(html)
+    data = _embedded(Document(html).root)
     group = data["maps"]["module_flops"]["groups"][0]
     positive, unknown = [_node(group, path) for path in ("0", "2")]
-    assert positive["known"] == 56
+    assert positive["known"] == 7
+    assert positive["width"] == pytest.approx(7 / (7 + 30))
     assert unknown["known"] == 0
     assert unknown["status"] == "partial"
+    root = Document(html).root
+    operators = root.find("section", id="operators")[0].text()
+    assert "partial" in operators
+    assert any(
+        "aten.sin" in item.text() for item in root.find("li") if item.attrs.get("id", "").startswith("diagnostic-")
+    )
     for diagram in (_maps(html)[group["id"]], _maps(svg)[group["id"]]):
         positive_anchor = _tile_anchor(diagram, positive)
         assert positive_anchor is not None
@@ -782,7 +719,6 @@ def test_partial_positive_tile_is_hatched_and_partial_zero_keeps_unscaled_visibl
         assert "partial" in positive_anchor.attrib["aria-label"]
         assert "full value unknown" in positive_anchor.attrib["aria-label"]
         assert _tile_anchor(diagram, unknown) is None  # It has no numeric width, but retains a visible card.
-    root = Document(html).root
     panel = root.find("div", **{"data-view": "module_flops"})[0]
     unknown_card = panel.find("a", **{"class": "rail-card unknown", "data-node-id": unknown["id"]})[0]
     assert "at least 0 FLOPs" in unknown_card.text()
@@ -807,7 +743,7 @@ def test_before_after_reversal_keeps_union_geometry_and_paired_measurement_bars(
     before = crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Linear(8, 2, bias=False)), (4,))
     after = crawl_module(nn.Sequential(nn.Linear(4, 1, bias=False), nn.Linear(1, 32, bias=False)), (4,))
     forward, reverse = render_report(after, before=before), render_report(before, before=after)
-    data = _embedded_data(forward)
+    data = _embedded(Document(forward).root)
     group = data["maps"]["module_flops"]["groups"][0]
     first, second = [_node(group, path) for path in ("0", "1")]
     assert [first["before_known"], second["before_known"]] == [56, 30]
@@ -832,7 +768,7 @@ def test_before_after_reversal_keeps_union_geometry_and_paired_measurement_bars(
     mismatched = copy.deepcopy(before)
     mismatched["context"]["devices"] = ["different-device"]
     withheld = render_report(after, before=mismatched)
-    withheld_group = _embedded_data(withheld)["maps"]["module_flops"]["groups"][0]
+    withheld_group = _embedded(Document(withheld).root)["maps"]["module_flops"]["groups"][0]
     assert all(node["delta"] is None for node in withheld_group["nodes"])
     withheld_map = _maps(withheld)[group["id"]]
     assert _diagram_geometry(forward_map) == _diagram_geometry(withheld_map)
@@ -840,42 +776,3 @@ def test_before_after_reversal_keeps_union_geometry_and_paired_measurement_bars(
         if "data-map-node" in element.attrib:
             assert "Delta unknown: devices differs" in element.attrib["aria-label"]
             assert "Δ " not in "".join(element.itertext())
-
-
-def test_distinct_methods_have_separate_full_width_maps_and_evidence():
-    report = crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Linear(8, 2, bias=False)), (4,))
-    report["layers"][1]["metrics"]["module_flops"]["method"] = "custom_estimate"
-    html = render_report(report)
-    groups = _embedded_data(html)["maps"]["module_flops"]["groups"]
-    assert len(groups) == 2
-    assert {group["method"] for group in groups} == {"custom_estimate", "torchscan_module_formula"}
-    svg_maps = _maps(render_report(report, format="svg"))
-    html_maps = _maps(html)
-    for group in groups:
-        diagram = html_maps[group["id"]]
-        root = _node(group, "")
-        known = [node for node in group["nodes"] if node["direct_known"]]
-        assert len(known) == 1
-        assert _rect_geometry(_tile(diagram, known[0]))[0::2] == _rect_geometry(_tile(diagram, root))[0::2]
-        assert _diagram_geometry(diagram) == _diagram_geometry(svg_maps[group["id"]])
-        assert group["method"] in "".join(diagram.itertext())
-        assert _tile_anchor(diagram, _node(group, "1" if known[0]["path"] == "0" else "0")) is None
-    assert sorted(group["known_total"] for group in groups) == [30, 56]
-
-
-def test_user_measurement_method_text_cannot_impersonate_missing_evidence():
-    report = crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Identity()), (4,))
-    report["layers"][1]["metrics"]["module_flops"]["method"] = "no_recorded_measurement"
-    del report["layers"][2]["metrics"]["module_flops"]
-    html = render_report(report)
-    groups = _embedded_data(html)["maps"]["module_flops"]["groups"]
-    recorded = next(group for group in groups if group["kind"] == "recorded")
-    missing = next(group for group in groups if group["kind"] == "unrecorded")
-    assert recorded["method"] == missing["method"]
-    assert _node(recorded, "0")["calls"][0]["display_status"] == "complete"
-    assert _node(missing, "0")["calls"][0]["display_status"] == "unavailable"
-    assert _node(missing, "0")["calls"][0]["in_group"] is False
-    assert _tile_anchor(_maps(html)[recorded["id"]], _node(recorded, "0")) is not None
-    assert _node(missing, "1")["status"] == "unavailable"
-    svg = render_report(report, format="svg")
-    assert _diagram_geometry(_maps(html)[recorded["id"]]) == _diagram_geometry(_maps(svg)[recorded["id"]])

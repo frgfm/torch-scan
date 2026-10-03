@@ -7,6 +7,7 @@ import math
 import warnings
 from typing import Any, Callable, Tuple, cast
 
+import torch
 from torch import Tensor, nn
 from torch.nn import Module
 from torch.nn import functional as F
@@ -31,6 +32,11 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...]
     """
     if isinstance(module, (nn.Identity, nn.Flatten)):
         return 0
+    if any(
+        isinstance(value, Tensor) and (value.is_complex() or value.is_nested or value.layout != torch.strided)
+        for value in (inputs or ())
+    ):
+        raise NotImplementedError("Module FLOP formulas cover real dense strided tensors only.")
     if isinstance(module, nn.Linear):
         return flops_linear(module, inputs)
     if isinstance(module, nn.ReLU):
@@ -65,6 +71,8 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...]
         return flops_mha(module, inputs, out)
     if isinstance(module, nn.LayerNorm):
         return flops_layernorm(module, inputs)
+    if isinstance(module, nn.GroupNorm):
+        return flops_groupnorm(module, inputs)
     if isinstance(module, nn.Transformer):
         return flops_transformer(module, inputs)
     warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
@@ -75,7 +83,7 @@ def flops_linear(module: nn.Linear, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Linear`"""
     # batch size * out_chan * in_chan
     num_out_feats = module.out_features * math.prod(inputs[0].shape[:-1])
-    mm_flops = num_out_feats * (2 * module.in_features - 1)
+    mm_flops = num_out_feats * max(0, 2 * module.in_features - 1)
     bias_flops = num_out_feats if module.bias is not None else 0
 
     return mm_flops + bias_flops
@@ -119,69 +127,80 @@ def flops_tanh(_: nn.Tanh, inputs: Tuple[Tensor, ...]) -> int:
 
 def flops_dropout(module: nn.Dropout, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.Dropout`"""
-    if module.p > 0:
-        # Sample a random number for each input element
-        return inputs[0].numel()
+    if module.training and 0 < module.p < 1:
+        # Apply the mask and rescale. Random number generation is excluded.
+        return 2 * inputs[0].numel()
+    if module.training and module.p == 1:
+        return inputs[0].numel()  # Multiply by a zero mask, without rescaling.
     return 0
 
 
 def flops_convtransposend(module: _ConvTransposeNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
-    # Padding calculation: https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532
-    # Padding calculation costs eight operations per spatial dimension.
-    return 8 * len(module.kernel_size) + flops_convnd(module, inputs, out)
+    # Dense scatter convention, matching PyTorch's input-based MAC geometry.
+    # Shape arithmetic, padding/cropping, and output allocation are excluded.
+    products = inputs[0].numel() * (module.out_channels // module.groups) * math.prod(module.kernel_size)
+    return 2 * products + out.numel() * int(module.bias is not None)
 
 
-def flops_convnd(module: _ConvNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def flops_convnd(module: _ConvNd, _inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.conv._ConvNd`"""
     # Each grouped dot product uses two operations per term minus one, plus an optional bias.
-    terms = math.prod(module.kernel_size) * (inputs[0].shape[1] // module.groups)
+    terms = math.prod(module.kernel_size) * (module.in_channels // module.groups)
     return out.numel() * (2 * terms - 1 + int(module.bias is not None))
 
 
 def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.modules.batchnorm._BatchNorm`"""
+    if inputs[0].numel() == 0:
+        return 0  # The high-level wrapper skips normalization and running updates.
     # for each channel, add eps and running_var, sqrt it
     norm_ops = module.num_features * 2
     # For each element, sub running_mean, div by denom
     norm_ops += inputs[0].numel() * 2
     # For each element, mul by gamma, add beta
-    scale_ops = inputs[0].numel() * 2 if module.affine else 0
+    scale_ops = inputs[0].numel() * (int(module.weight is not None) + int(module.bias is not None))
     bn_flops = norm_ops + scale_ops
 
-    # Count tracking stats update ops
-    # cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/batchnorm.py#L94-L101
+    # Batch statistics are needed in training AND in eval without running stats.
+    if module.training or (module.running_mean is None and module.running_var is None):
+        # Mean: N ops; biased variance: subtract, square, reduce, divide = 3N.
+        bn_flops += 4 * inputs[0].numel()
+
+    # Count floating-point running-stat updates, excluding the integer batch counter.
     tracking_flops = 0
     if module.track_running_stats and module.training:
-        # exponential_average_factor
-        if module.momentum is None:
-            tracking_flops += 1
-        # running_mean: by channel, sum values and div by batch size
-        tracking_flops += inputs[0].numel()
-        # running_var: by channel, sub mean and square values, sum them, divide by batch size
-        tracking_flops += 3 * inputs[0].numel()
-        # Update both runnning stat: rescale previous value (mul by N), add it the new one, then div by (N + 1)
-        tracking_flops += 2 * module.num_features * 3
+        # Convert biased variance to unbiased (multiply/divide), then two
+        # exponential averages: two multiplies and one addition each.
+        tracking_flops += module.num_features * (
+            3 * int(module.running_mean is not None) + 5 * int(module.running_var is not None)
+        )
 
     return bn_flops + tracking_flops
 
 
+def _pool_kernel_volume(module: _MaxPoolNd | _AvgPoolNd) -> int:
+    kernel_size = cast(int | Tuple[int, ...] | list[int], module.kernel_size)
+    rank = 1
+    if isinstance(module, (nn.MaxPool2d, nn.AvgPool2d)):
+        rank = 2
+    elif isinstance(module, (nn.MaxPool3d, nn.AvgPool3d)):
+        rank = 3
+    if isinstance(kernel_size, int):
+        return kernel_size**rank
+    return kernel_size[0] ** rank if len(kernel_size) == 1 else math.prod(kernel_size)
+
+
 def flops_maxpool(module: _MaxPoolNd, _: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
-    kernel_size = module.kernel_size
-    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
-
     # for each spatial output element, check max element in kernel scope
-    return out.numel() * (k_size - 1)
+    return out.numel() * (_pool_kernel_volume(module) - 1)
 
 
-def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def flops_avgpool(module: _AvgPoolNd, _inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
-    kernel_size = cast(int | Tuple[int, ...], module.kernel_size)
-    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
-
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (k_size - 1 + inputs[0].ndim - 2)
+    return out.numel() * _pool_kernel_volume(module)
 
 
 def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
@@ -205,7 +224,18 @@ def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], ou
 def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.LayerNorm`"""
     numel = inputs[0].numel()
+    if math.prod(module.normalized_shape) == 0:
+        raise NotImplementedError("LayerNorm FLOPs require a nonempty normalized row.")
     rows = numel // math.prod(module.normalized_shape)
+    return 6 * numel + 2 * rows + numel * int(module.weight is not None) + numel * int(module.bias is not None)
+
+
+def flops_groupnorm(module: nn.GroupNorm, inputs: Tuple[Tensor, ...]) -> int:
+    """FLOPs estimation for `torch.nn.GroupNorm`."""
+    numel = inputs[0].numel()
+    if math.prod(inputs[0].shape[1:]) == 0:
+        raise NotImplementedError("GroupNorm FLOPs require a nonempty normalized group.")
+    rows = inputs[0].shape[0] * module.num_groups
     return 6 * numel + 2 * rows + numel * int(module.weight is not None) + numel * int(module.bias is not None)
 
 
@@ -221,22 +251,25 @@ def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Any, ...], out: Any =
     batch_size = q.shape[batch_dim]
     target_length = q.shape[sequence_dim]
     source_length = k.shape[sequence_dim]
+    if target_length == 0 or source_length == 0:
+        raise NotImplementedError("MultiheadAttention FLOPs require nonempty query and source sequences.")
     projection_bias = int(module.in_proj_bias is not None)
 
     tot_flops = sum(
         math.prod(tensor.shape[:-1]) * module.embed_dim * (2 * tensor.shape[-1] - 1 + projection_bias)
         for tensor in (q, k, v)
     )
-    # One reciprocal-square-root plus one scale multiplication per query element.
-    tot_flops += 1 + batch_size * module.num_heads * target_length * module.head_dim
+    # One scale multiplication per query element; Python constant arithmetic is excluded.
+    tot_flops += batch_size * module.num_heads * target_length * module.head_dim
     tot_flops += batch_size * module.num_heads * target_length * source_length * (2 * module.head_dim - 1)
 
     # Positional MHA slots 3 and 5 are key_padding_mask and attn_mask.
     visible_masks = int(len(inputs) > 3 and inputs[3] is not None) + int(len(inputs) > 5 and inputs[5] is not None)
     tot_flops += visible_masks * batch_size * module.num_heads * target_length * source_length
-    tot_flops += batch_size * module.num_heads * target_length * (3 * source_length - 1)
+    # Stable softmax: max (S-1), subtract S, exp S, sum (S-1), divide S.
+    tot_flops += batch_size * module.num_heads * target_length * (5 * source_length - 2)
     if module.training and module.dropout > 0:
-        tot_flops += batch_size * module.num_heads * target_length * source_length
+        tot_flops += (2 if module.dropout < 1 else 1) * batch_size * module.num_heads * target_length * source_length
     tot_flops += batch_size * module.num_heads * target_length * module.head_dim * (2 * source_length - 1)
     tot_flops += flops_linear(module.out_proj, (q,))
 
@@ -254,7 +287,9 @@ def flops_transformer_feedforward(
         raise NotImplementedError("Transformer FLOPs only support the default ReLU activation.")
 
     num_hidden = math.prod(inputs[0].shape[:-1]) * module.linear1.out_features
-    dropout_flops = num_hidden if module.dropout.training and module.dropout.p > 0 else 0
+    dropout_flops = (
+        (2 if module.dropout.p < 1 else 1) * num_hidden if module.dropout.training and module.dropout.p > 0 else 0
+    )
     return flops_linear(module.linear1, inputs) + num_hidden + dropout_flops + flops_linear(module.linear2, inputs)
 
 
@@ -304,6 +339,11 @@ def flops_transformer(module: nn.Transformer, inputs: Tuple[Any, ...]) -> int:
     """FLOPs estimation for `torch.nn.Transformer`"""
     if not isinstance(module.encoder, nn.TransformerEncoder) or not isinstance(module.decoder, nn.TransformerDecoder):
         raise NotImplementedError("Transformer FLOPs only support the native encoder and decoder stacks.")
+    if any(
+        stack.norm is not None and not isinstance(stack.norm, (nn.LayerNorm, nn.Identity))
+        for stack in (module.encoder, module.decoder)
+    ):
+        raise NotImplementedError("Transformer FLOPs only support LayerNorm, Identity, or no final normalization.")
 
     src_mask = inputs[2] if len(inputs) > 2 else None
     tgt_mask = inputs[3] if len(inputs) > 3 else None

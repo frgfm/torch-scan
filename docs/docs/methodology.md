@@ -77,3 +77,47 @@ and synchronization. Keep latency separate from theoretical operation counts.
 Follow the [reproducible reporting checklist](metrics.md#reproducible-reporting): retain the report, diagnostics,
 software versions, model revision, input metadata, and custom formulas. Workload measurements also need hardware and
 execution-state details. Target-device acceptance requires real checks on that device.
+
+## FLOP conventions
+
+`torchscan_flops_v1` keeps module/operator counts separate. Priority: caller override > native PyTorch > invocation-only
+fallback; no global mutation. N = elements, R = rows, C = channels, A = affine tensors present (0–2).
+Scalar arithmetic, exp/sqrt, comparison, and selection each cost one operation.
+
+| Work | Count / boundary |
+| --- | --- |
+| K-term dot, K>0 | Module: K multiplies + K-1 adds; native: 2K. Empty dots: zero. |
+| Bias/scaling | Module: one bias add/output. Native fused bias and alpha/beta scaling omitted; separate arithmetic counts. |
+| Grouped convolution | Outputs × `Cin/groups × kernel_volume` terms; dense padded work. |
+| Transposed convolution | `2 × input_elements × Cout/groups × kernel_volume`, plus module bias; cropped scatter products included. |
+| Fixed pooling, K values/window | Max: K-1; average: K. Nominal dense padding/ceil windows. |
+| Broadcast/reduction | Per output; sum: max(N-R,0); mean adds R divides. |
+| Stable/safe softmax | `5N-2R`: max, subtract, exp, sum, divide. Safe adds 2N comparisons/selections. |
+| LayerNorm/GroupNorm | `6N+2R+AN`: mean N, variance 3N, normalize 2N, eps/sqrt 2R, affine AN. |
+| Rows | LayerNorm: `N/prod(normalized_shape)`; GroupNorm: batch × groups. Empty rows/groups unsupported; zero batches supported. |
+| BatchNorm | Saved stats: `2N+2C+AN`; batch stats add 4N. Actual buffers select the path; passed mean/variance updates add 3C/5C. Empty modules: zero; empty native calls unsupported. |
+| Dropout | Eval/p=0: zero; training mask/rescale: 2N, or N at p=1. RNG excluded. |
+
+Transpose example: `(2,4,3)`, Cout=6, groups=2, kernel=3, stride=2, padding=output_padding=1:
+`24×3×3×2 + 72 biases = 504 module FLOPs`. Shape options add no scatter MACs.
+
+| Attention | Included work / limits |
+| --- | --- |
+| Batched MHA | Both layouts, unequal widths: projections/bias, Q scale, dense products, softmax, masks, dropout, optional head averaging. |
+| CPU SDPA fallback | Dense 4D, matching batch/heads and Q/K widths, equal K/V lengths, no dropout: native matrix work + score scale + softmax + masks. |
+| Masks/math | Each explicit/causal mask costs one operation/score; boolean conversion counts stored entries. Dense products unchanged. Math can scale Q/K separately and use safe softmax; explicit scale changes values only. |
+| Native fused attention | Matrix core only; ancillary gaps keep counts partial, including PyTorch 2.1 CPU. |
+
+Reduction dtype: `dtype` > `out.dtype` > input. Fallback integer/boolean arithmetic, views/copies/fills/allocation, and
+Python constants are excluded. Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
+stay incomplete; native complex counts remain partial. Mixed-call diagnostics and strict mode are preserved.
+
+Remaining gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused MHA/encoder, specialized attention,
+unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered activations/pooling.
+Transformer requires native stacks, ReLU, final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
+approximations. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
+
+`crawl_module`: eval/no_grad forward. `measure_flops`: supplied forward/backward work, without a backward multiplier.
+Run `python scripts/benchmark.py --json /tmp/torchscan-matrix.json`: CPU, seed=0, one thread, float32 `(1,3,32,32)`.
+Cells retain complete/partial (`>=`)/unavailable states and JSON diagnostics. Derivations: `tests/test_flops.py`;
+seven no-weight-download integration smokes: `tests/test_model_zoo.py`.

@@ -35,20 +35,20 @@ def test_module_flops_warning():
         (nn.Tanh(), (1, 8), (1, 8), 48),
         (nn.Sigmoid(), (1, 8), (1, 8), 32),
         # BN
-        (nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 144 + 32 + 32 * 3 + 48),
+        (nn.BatchNorm1d(8), (1, 8, 4), (1, 8, 4), 336),
         # Pooling
         (nn.MaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
-        (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32),
         (nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
         (nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
         (nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
         (nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
         # Dropout
-        (nn.Dropout(), (1, 8), (1, 8), 8),
+        (nn.Dropout(), (1, 8), (1, 8), 16),
         (nn.Dropout(p=0), (1, 8), (1, 8), 0),
         # Conv
         (nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 388800),
-        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 499408),
+        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 451616),
     ],
 )
 def test_module_flops(mod, input_shape, output_shape, expected_val):
@@ -66,7 +66,7 @@ def test_layernorm_flops(elementwise_affine, bias, expected):
 
 
 @pytest.mark.parametrize("batch_first", [False, True])
-@pytest.mark.parametrize(("bias", "self_expected", "cross_expected"), [(False, 1021, 1485), (True, 1117, 1613)])
+@pytest.mark.parametrize(("bias", "self_expected", "cross_expected"), [(False, 1080, 1592), (True, 1176, 1720)])
 def test_multihead_attention_flops(batch_first, bias, self_expected, cross_expected):
     mod = nn.MultiheadAttention(4, 2, dropout=0, bias=bias, batch_first=batch_first)
     shape = lambda length: (2, length, 4) if batch_first else (length, 2, 4)
@@ -98,9 +98,9 @@ def test_transformer_flops():
     src = torch.rand((1, 3, 4))
     tgt = torch.rand((1, 2, 4))
 
-    assert flops_transformer_encoderlayer(mod.encoder.layers[0], (src,)) == 1195
-    assert flops_transformer_decoderlayer(mod.decoder.layers[0], (tgt, src)) == 1270
-    assert modules.module_flops(mod, (src, tgt), mod(src, tgt)) == 2635
+    assert flops_transformer_encoderlayer(mod.encoder.layers[0], (src,)) == 1224
+    assert flops_transformer_decoderlayer(mod.decoder.layers[0], (tgt, src)) == 1300
+    assert modules.module_flops(mod, (src, tgt), mod(src, tgt)) == 2694
 
     masks = (
         torch.zeros((3, 3), dtype=torch.bool),
@@ -110,7 +110,7 @@ def test_transformer_flops():
         torch.zeros((1, 2), dtype=torch.bool),
         torch.zeros((1, 3), dtype=torch.bool),
     )
-    assert modules.module_flops(mod, (src, tgt, *masks), mod(src, tgt, *masks)) == 2711
+    assert modules.module_flops(mod, (src, tgt, *masks), mod(src, tgt, *masks)) == 2770
 
 
 def test_transformer_flops_rejects_unverified_options():
@@ -152,7 +152,7 @@ def test_module_macs_warning():
         (nn.Dropout(), (1, 8), (1, 8), 0),
         # Conv
         (nn.Conv2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 30, 30), 194400),
-        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 249704),
+        (nn.ConvTranspose2d(3, 8, 3), (1, 3, 32, 32), (1, 8, 34, 34), 221184),
     ],
 )
 def test_module_macs(mod, input_shape, output_shape, expected_val):

@@ -58,17 +58,15 @@ def macs_linear(module: nn.Linear, _: Tensor, out: Tensor) -> int:
     return module.in_features * math.prod(out.shape)
 
 
-def macs_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> int:
+def macs_convtransposend(module: _ConvTransposeNd, inp: Tensor, _out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
-    # Padding calculation: https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532
-    # Padding calculation costs four operations per spatial dimension.
-    return 4 * len(module.kernel_size) + macs_convnd(module, inp, out)
+    return inp.numel() * (module.out_channels // module.groups) * math.prod(module.kernel_size)
 
 
-def macs_convnd(module: _ConvNd, inp: Tensor, out: Tensor) -> int:
+def macs_convnd(module: _ConvNd, _inp: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.conv._ConvNd`"""
     # One multiply-accumulate per grouped kernel term and output; bias is included in the accumulation.
-    return out.numel() * (inp.shape[1] // module.groups) * math.prod(module.kernel_size)
+    return out.numel() * (module.in_channels // module.groups) * math.prod(module.kernel_size)
 
 
 def macs_bn(module: _BatchNorm, inp: Tensor, _: Tensor) -> int:

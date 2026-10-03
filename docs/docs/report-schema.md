@@ -81,15 +81,15 @@ Shared parameters are not duplicated in model totals merely because a module is 
 | Field | Meaning |
 | --- | --- |
 | `schema_version` | `1` for the v0.2 wire shape. |
-| `context` | `torch_version` and the counting `method`. |
+| `context` | `torch_version`, the counting `method`, and `counting_convention` for measured FLOPs. |
 | `total` | Complete or partial FLOP `MetricResult`. |
 | `by_module` | Best-effort known FLOPs keyed by PyTorch's upstream module labels when available. |
 | `by_operator` | Known FLOPs keyed by normalized operator packet such as `aten.mm`. |
 | `ignored_operators` | Explicit zero-FLOP metadata, movement, or allocation operators with call count and reason. |
-| `diagnostics` | `uncounted_operator` diagnostics and other method limitations. |
+| `diagnostics` | `uncounted_operator`, `unsupported_operator_formula`, `incomplete_operator_formula`, and other method limitations. |
 
-An ignored operator is distinct from an uncounted operator. Every observed non-ignored operator must have a formula
-for `total` to be complete.
+Every non-ignored call needs a supported formula for completeness. Fused or unsupported calls retain diagnostics,
+even when the same packet has counted work.
 
 `crawl_module` stores the complete report under `operator_flops` and the same `total` result under
 `totals.operator_flops`. Module hooks and the native operator counter observe the same forward call; module formulas

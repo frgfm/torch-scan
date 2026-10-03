@@ -194,6 +194,6 @@ def aggregate_info(info: AnalysisReport, max_depth: int) -> AnalysisReport:
         raise ValueError("max_depth must be non-negative.")
     if info["layers"] and not any(layer["depth"] == max_depth for layer in info["layers"]):
         raise ValueError("The `max_depth` argument cannot be higher than module depth.")
-    aggregated = deepcopy(info)
-    aggregated["layers"] = [layer for layer in aggregated["layers"] if layer["depth"] <= max_depth]
-    return aggregated
+    view = info.copy()
+    view["layers"] = [layer for layer in info["layers"] if layer["depth"] <= max_depth]
+    return deepcopy(view)

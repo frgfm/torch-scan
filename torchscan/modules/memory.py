@@ -13,6 +13,8 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
+from ._pooling import adaptive_kernel_size
+
 __all__ = ["module_dmas"]
 
 
@@ -80,73 +82,43 @@ def dmas_flatten(_: nn.Flatten, inp: Tensor, __: Tensor) -> int:
 
 def dmas_linear(module: nn.Linear, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Linear`"""
-    input_dma = inp.numel()
-    # Access weight and bias
-    ops_dma = num_params(module)
-    output_dma = out.numel()
-
-    return input_dma + ops_dma + output_dma
+    # Read the inputs, weight and bias; write the output.
+    return inp.numel() + num_params(module) + out.numel()
 
 
 def dmas_relu(module: Union[nn.ReLU, nn.ReLU6], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.ReLU`"""
-    input_dma = inp.numel()
-    output_dma = 0 if module.inplace else out.numel()
-
-    return input_dma + output_dma
+    return inp.numel() + (0 if module.inplace else out.numel())
 
 
 def dmas_act_single_param(module: Union[nn.ELU, nn.LeakyReLU], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for activations with single parameter"""
-    input_dma = inp.numel()
-    # Access alpha, slope or other
-    ops_dma = 1
-    output_dma = 0 if module.inplace else out.numel()
-
-    return input_dma + ops_dma + output_dma
+    # Include one access to alpha or slope.
+    return inp.numel() + 1 + (0 if module.inplace else out.numel())
 
 
 def dmas_sigmoid(_: nn.Sigmoid, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Sigmoid`"""
-    # Access for both exp
-    input_dma = inp.numel()
-    output_dma = out.numel()
-
-    return input_dma + output_dma
+    return inp.numel() + out.numel()
 
 
 def dmas_tanh(_: nn.Tanh, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Tanh`"""
-    # Access for both exp
-    input_dma = inp.numel() * 2
-    output_dma = out.numel()
-
-    return input_dma + output_dma
+    # Read the input for both exponentials.
+    return 2 * inp.numel() + out.numel()
 
 
 def dmas_dropout(module: nn.Dropout, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.Dropout`"""
-    input_dma = inp.numel()
-
-    # Access sampling probability
-    ops_dma = 1
-
-    output_dma = 0 if module.inplace else out.numel()
-
-    return input_dma + ops_dma + output_dma
+    # Include one access to the sampling probability.
+    return inp.numel() + 1 + (0 if module.inplace else out.numel())
 
 
 def dmas_convtransposend(module: _ConvTransposeNd, inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
-    # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
-    # Access stride, padding and kernel_size
-    in_padding = len(module.kernel_size) * 4
-    out_padding = len(module.kernel_size)
-
-    # The rest is like a classic convolution
-    conv_dmas = dmas_convnd(module, inp, out)
-
-    return in_padding + out_padding + conv_dmas
+    # Padding calculation: https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532
+    # Access stride, padding and kernel size, then count the convolution.
+    return 5 * len(module.kernel_size) + dmas_convnd(module, inp, out)
 
 
 def dmas_convnd(module: _ConvNd, _: Tensor, out: Tensor) -> int:
@@ -211,10 +183,7 @@ def dmas_pool(module: Union[_MaxPoolNd, _AvgPoolNd], inp: Tensor, out: Tensor) -
 def dmas_adaptive_pool(_: Union[_AdaptiveMaxPoolNd, _AdaptiveAvgPoolNd], inp: Tensor, out: Tensor) -> int:
     """DMAs estimation for adaptive spatial pooling modules"""
     # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(
-        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inp.shape[2:], out.shape[2:], strict=False)
-    )
+    kernel_size = adaptive_kernel_size(inp, out)
     # Each output element required K ** 2 memory accesses
     input_dma = math.prod(kernel_size) * out.numel()
 

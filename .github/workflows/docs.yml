@@ -26,13 +26,7 @@ jobs:
           persist-credentials: false
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-          architecture: x64
-      - uses: astral-sh/setup-uv@v10.0.1
-        with:
-          activate-environment: true
+      - uses: ./.github/actions/setup
       - name: Install dependencies
         run: make install-docs
       - name: Build documentation

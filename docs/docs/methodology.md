@@ -63,28 +63,17 @@ completeness claim.
 
 ## Peak memory
 
-`measure_peak_memory` invokes a zero-argument workload once:
-
-- CPU uses PyTorch profiler memory categories.
-- CUDA and supported MPS releases use public allocator statistics.
-
-The method does not include all Python, process, driver, device, or third-party memory. Accelerator results are
-process-global and can be affected by unrelated allocations. Compare only equivalent hardware and prepared workload
-state.
+`measure_peak_memory` invokes a zero-argument workload once. CPU uses profiler memory categories; supported
+accelerators use allocator statistics. These are PyTorch measurements, and concurrent allocations can affect them.
+See [Peak memory](metrics.md#peak-memory) for backend boundaries and comparison requirements.
 
 ## Latency
 
-Use [`torch.utils.benchmark.Timer`](https://docs.pytorch.org/docs/stable/benchmark_utils.html) for latency. The native
-PyTorch tool already supplies warmup, replicates, and synchronization. TorchScan deliberately does not convert
-theoretical operation counts into time.
+Use [`torch.utils.benchmark.Timer`](https://docs.pytorch.org/docs/stable/benchmark_utils.html) for warmup, replicates,
+and synchronization. Keep latency separate from theoretical operation counts.
 
 ## Minimum reproducibility record
 
-- Full JSON report and every diagnostic.
-- TorchScan, PyTorch, and Python versions from report context.
-- Model source revision and configuration.
-- Input metadata and non-sensitive call structure.
-- Custom formula code and rationale.
-- Hardware, warmup, allocator, model, gradient, autocast, and optimizer state for workload measurements.
-
-TorchScan does not claim camera, accelerator, production, or target-device acceptance without those real checks.
+Follow the [reproducible reporting checklist](metrics.md#reproducible-reporting): retain the report, diagnostics,
+software versions, model revision, input metadata, and custom formulas. Workload measurements also need hardware and
+execution-state details. Target-device acceptance requires real checks on that device.

@@ -24,6 +24,8 @@ from .utils import aggregate_info, format_info
 
 __all__ = ["crawl_module", "summary"]
 
+_MODULE_METHOD = "torchscan_module_formula"
+
 
 @cache
 def _package_version() -> str:
@@ -161,72 +163,48 @@ def _measure_module_metric(
             path=path,
             message=f"{type(error).__name__}: {error}",
         )
-        return metric_result(status="unavailable", unit=unit, scope="module_call", method="torchscan_module_formula")
+        return metric_result(status="unavailable", unit=unit, scope="module_call", method=_MODULE_METHOD)
 
-    unsupported = next((warning for warning in caught if "Module type not supported" in str(warning.message)), None)
-    if unsupported is not None:
-        _diagnostic(
-            diagnostics,
-            code="unsupported_module_metric",
-            metric=metric,
-            path=path,
-            message=str(unsupported.message),
-        )
-        return metric_result(
-            status="partial",
-            known_value=value,
-            unit=unit,
-            scope="module_call",
-            method="torchscan_module_formula",
-        )
     if caught:
+        unsupported = next((warning for warning in caught if "Module type not supported" in str(warning.message)), None)
         _diagnostic(
             diagnostics,
-            code="module_metric_warning",
+            code="unsupported_module_metric" if unsupported is not None else "module_metric_warning",
             metric=metric,
             path=path,
-            message="; ".join(str(warning.message) for warning in caught),
-        )
-        return metric_result(
-            status="partial",
-            known_value=value,
-            unit=unit,
-            scope="module_call",
-            method="torchscan_module_formula",
+            message=str(unsupported.message) if unsupported is not None else "; ".join(str(w.message) for w in caught),
         )
     return metric_result(
-        status="complete",
+        status="partial" if caught else "complete",
         value=value,
+        known_value=value,
         unit=unit,
         scope="module_call",
-        method="torchscan_module_formula",
+        method=_MODULE_METHOD,
     )
 
 
 def _aggregate_metric(layers: list[LayerReport], name: str, unit: str) -> MetricResult:
     results = [layer["metrics"][name] for layer in layers if name in layer["metrics"]]
     if not results:
-        return metric_result(status="unavailable", unit=unit, scope="forward", method="torchscan_module_formula")
+        return metric_result(status="unavailable", unit=unit, scope="forward", method=_MODULE_METHOD)
 
     known_values = [result["known_value"] for result in results if result["known_value"] is not None]
     known_total = sum(known_values)
     if all(result["status"] == "complete" for result in results):
-        return metric_result(
-            status="complete",
-            value=known_total,
-            unit=unit,
-            scope="forward",
-            method="torchscan_module_formula",
-        )
-    if known_values:
-        return metric_result(
-            status="partial",
-            known_value=known_total,
-            unit=unit,
-            scope="forward",
-            method="torchscan_module_formula",
-        )
-    return metric_result(status="unavailable", unit=unit, scope="forward", method="torchscan_module_formula")
+        status = "complete"
+    elif known_values:
+        status = "partial"
+    else:
+        status = "unavailable"
+    return metric_result(
+        status=status,
+        value=known_total,
+        known_value=known_total,
+        unit=unit,
+        scope="forward",
+        method=_MODULE_METHOD,
+    )
 
 
 def _model_defaults(module: Module) -> tuple[torch.device, torch.dtype]:
@@ -454,7 +432,7 @@ def crawl_module(
                     status="unavailable",
                     unit=unit,
                     scope="module_call",
-                    method="torchscan_module_formula",
+                    method=_MODULE_METHOD,
                 )
                 _diagnostic(
                     diagnostics,
@@ -511,22 +489,15 @@ def crawl_module(
                     path=layer["path"],
                     message="; ".join(str(warning.message) for warning in caught),
                 )
+        status = "unavailable" if receptive_values is None or caught else "complete"
         for index, name in enumerate(("receptive_field", "effective_stride", "effective_padding")):
-            if receptive_values is None or caught:
-                layer["metrics"][name] = metric_result(
-                    status="unavailable",
-                    unit="elements",
-                    scope="module_call",
-                    method="torchscan_module_formula",
-                )
-            else:
-                layer["metrics"][name] = metric_result(
-                    status="complete",
-                    value=receptive_values[index],
-                    unit="elements",
-                    scope="module_call",
-                    method="torchscan_module_formula",
-                )
+            layer["metrics"][name] = metric_result(
+                status=status,
+                value=receptive_values[index] if receptive_values is not None else None,
+                unit="elements",
+                scope="module_call",
+                method=_MODULE_METHOD,
+            )
 
     targets = [("", module)] if isinstance(module, nn.Transformer) else list(module.named_modules())
     flop_report: FlopReport

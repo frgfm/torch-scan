@@ -14,6 +14,8 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
+from ._pooling import adaptive_kernel_size
+
 __all__ = ["module_flops"]
 
 
@@ -124,31 +126,17 @@ def flops_dropout(module: nn.Dropout, inputs: Tuple[Tensor, ...]) -> int:
 
 
 def flops_convtransposend(module: _ConvTransposeNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
-    """FLOPs estimation for `torch.nn.modules.conv._ConvTranposeNd`"""
-    # Padding (# cf. https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532)
-    # Define min and max sizes
-    padding_flops = len(module.kernel_size) * 8
-
-    # Once padding is determined, the operations are almost identical to those of a convolution
-    conv_flops = flops_convnd(module, inputs, out)
-
-    return padding_flops + conv_flops
+    """FLOPs estimation for `torch.nn.modules.conv._ConvTransposeNd`"""
+    # Padding calculation: https://github.com/pytorch/pytorch/blob/master/torch/nn/modules/conv.py#L496-L532
+    # Padding calculation costs eight operations per spatial dimension.
+    return 8 * len(module.kernel_size) + flops_convnd(module, inputs, out)
 
 
 def flops_convnd(module: _ConvNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.conv._ConvNd`"""
-    # For each position, # mult = kernel size, # adds = kernel size - 1
-    window_flops_per_chan = 2 * math.prod(module.kernel_size) - 1
-    # Connections to input channels is controlled by the group parameter
-    effective_in_chan = inputs[0].shape[1] // module.groups
-    # N * flops + (N - 1) additions
-    window_flops = effective_in_chan * window_flops_per_chan + (effective_in_chan - 1)
-    conv_flops = out.numel() * window_flops
-
-    # Each output element gets a bias addition
-    bias_flops = out.numel() if module.bias is not None else 0
-
-    return conv_flops + bias_flops
+    # Each grouped dot product uses two operations per term minus one, plus an optional bias.
+    terms = math.prod(module.kernel_size) * (inputs[0].shape[1] // module.groups)
+    return out.numel() * (2 * terms - 1 + int(module.bias is not None))
 
 
 def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
@@ -199,10 +187,7 @@ def flops_avgpool(module: _AvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -
 def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
     # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(
-        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inputs[0].shape[2:], out.shape[2:], strict=False)
-    )
+    kernel_size = adaptive_kernel_size(inputs[0], out)
 
     # for each spatial output element, check max element in kernel scope
     return out.numel() * (math.prod(kernel_size) - 1)
@@ -211,10 +196,7 @@ def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], ou
 def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
     # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = tuple(
-        i_size // o_size if (i_size % o_size) == 0 else i_size - o_size * (i_size // o_size) + 1
-        for i_size, o_size in zip(inputs[0].shape[2:], out.shape[2:], strict=False)
-    )
+    kernel_size = adaptive_kernel_size(inputs[0], out)
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
     return out.numel() * (math.prod(kernel_size) - 1 + len(kernel_size))

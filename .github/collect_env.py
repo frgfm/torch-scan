@@ -9,8 +9,6 @@ This script outputs relevant system environment info
 Run it with `python collect_env.py`.
 """
 
-from __future__ import absolute_import, division, print_function, unicode_literals
-
 import locale
 import os
 import re
@@ -33,8 +31,6 @@ try:
 except (ImportError, NameError, AttributeError, OSError):
     TORCH_AVAILABLE = False
 
-PY3 = sys.version_info >= (3, 0)
-
 
 # System Environment Information
 class SystemEnv(NamedTuple):
@@ -54,10 +50,9 @@ def run(command):
     p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     output, err = p.communicate()
     rc = p.returncode
-    if PY3:
-        enc = locale.getpreferredencoding()
-        output = output.decode(enc)
-        err = err.decode(enc)
+    enc = locale.getpreferredencoding()
+    output = output.decode(enc)
+    err = err.decode(enc)
     return rc, output.strip(), err.strip()
 
 

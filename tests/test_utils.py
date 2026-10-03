@@ -55,3 +55,17 @@ def test_format_info_handles_nested_outputs_and_unavailable_totals():
     assert "Module-formula forward FLOPs: unavailable" in formatted
     with pytest.raises(ValueError, match="non-negative"):
         utils.aggregate_info(report, -1)
+
+
+def test_depth_limited_report_preserves_totals_and_detaches_nested_values():
+    report = crawl_module(nn.Sequential(nn.Linear(4, 2), nn.ReLU()), (4,))
+    view = utils.aggregate_info(report, 0)
+
+    assert [layer["path"] for layer in view["layers"]] == [""]
+    assert view["totals"] == report["totals"]
+    assert view["operator_flops"] == report["operator_flops"]
+    assert view["totals"]["operator_flops"] is view["operator_flops"]["total"]
+    view["layers"][0]["output"]["shape"][0] = 9
+    view["totals"]["parameters"]["value"] = -1
+    assert report["layers"][0]["output"]["shape"] == [1, 2]
+    assert report["totals"]["parameters"]["value"] == 10

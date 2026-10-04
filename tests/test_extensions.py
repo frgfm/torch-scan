@@ -749,7 +749,9 @@ def test_nested_tensor_context_keeps_actual_objects_without_rectangular_metadata
     assert json.loads(json.dumps(report)) == report
 
 
-def test_registered_atomic_composite_does_not_add_inclusive_fallback_to_children():
+def test_registered_atomic_composite_does_not_add_inclusive_fallback_to_children(monkeypatch):
+    # Test the legacy atomic fallback separately from registered native handlers.
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", dict)
     model = nn.Transformer(d_model=4, nhead=2, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=8, dropout=0)
     report = _analyze(model, _handler({}), args=(torch.ones(3, 1, 4), torch.ones(2, 1, 4)))
     assert len(report["layers"]) > 1
@@ -948,7 +950,8 @@ def test_mapping_access_failures_are_diagnostic_and_restore_state(failure):
 
 
 @pytest.mark.parametrize("registered_type", [nn.Linear, nn.Embedding])
-def test_atomic_root_descendant_registration_expands_only_observed_calls(registered_type):
+def test_atomic_root_descendant_registration_expands_only_observed_calls(registered_type, monkeypatch):
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", dict)
     model = nn.Transformer(d_model=4, nhead=2, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=8, dropout=0)
     model.unused = nn.Embedding(3, 4)
     args = (torch.ones(3, 1, 4), torch.ones(2, 1, 4))

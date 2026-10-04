@@ -19,6 +19,7 @@ from .report import Diagnostic, MetricResult, metric_result
 __all__ = ["FlopReport", "measure_flops"]
 
 _METHOD = "torch.utils.flop_counter.FlopCounterMode"
+_NO_DECOMPOSITION = object()
 
 
 class IgnoredOperator(TypedDict):
@@ -150,24 +151,38 @@ class _OperatorRecorder(TorchDispatchMode):
             self.floating[packet] = True  # Transcendentals also promote integer inputs.
         if packet in {torch.ops.aten.masked_fill, torch.ops.aten.masked_fill_}:
             self.floating[packet] = args[0].is_floating_point() or args[0].is_complex()
-        if packet in self.guarded_operators and any(
-            isinstance(value, torch.Tensor) and (value.is_nested or value.layout != torch.strided) for value in leaves
-        ):
-            self.diagnostics.append({
-                "code": "unsupported_operator_formula",
-                "severity": "warning",
-                "metric": "flops",
-                "operator": _operator_key(packet),
-                "message": "Shape FLOP formulas require dense strided tensors; sparse and nested layouts are unsupported.",
-            })
-            # PyTorch 2.1 extracts shapes before calling formulas. Bypass this
-            # invocation's packet before extraction; restore it for later calls.
-            # Modern overload aliases still prevent unwanted decomposition.
-            formula = self.registry.pop(packet)
+        nested = any(isinstance(value, torch.Tensor) and value.is_nested for value in leaves)
+        unsupported_layout = nested or any(
+            isinstance(value, torch.Tensor) and value.layout != torch.strided for value in leaves
+        )
+        suppress_formula = packet in self.guarded_operators and unsupported_layout
+        unregistered_nested = nested and packet not in self.registry
+        if suppress_formula or unregistered_nested:
+            if suppress_formula or _operator_key(packet) not in _IGNORED_OPERATOR_REASONS:
+                self.diagnostics.append({
+                    "code": "unsupported_operator_formula",
+                    "severity": "warning",
+                    "metric": "flops",
+                    "operator": _operator_key(packet),
+                    "message": "Shape FLOP formulas require dense strided tensors; sparse and nested layouts are unsupported.",
+                })
+            # PyTorch 2.1 extracts shapes before calling formulas. Temporarily
+            # remove the packet formula before extraction. Modern counters also
+            # decompose unregistered overloads, which can query unsupported
+            # nested sizes even when the actual operator kernel works. An
+            # overload-only marker prevents decomposition without registering
+            # a packet count. Caller overrides retain their own raw/shape policy.
+            formula = self.registry.pop(packet) if suppress_formula else None
+            mark_overload = func is not packet and func not in self.registry
+            if mark_overload:
+                self.registry[func] = _NO_DECOMPOSITION
             try:
                 return func(*args, **(kwargs or {}))
             finally:
-                self.registry[packet] = formula
+                if mark_overload:
+                    self.registry.pop(func)
+                if suppress_formula:
+                    self.registry[packet] = formula
         return func(*args, **(kwargs or {}))
 
 

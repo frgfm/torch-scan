@@ -92,6 +92,10 @@ jobs:
           tests/test_flops.py
           tests/test_inputs.py
           tests/test_report.py
+          tests/test_transformer_formulas.py
+          tests/test_transformers.py
+          tests/test_token_dependencies.py
+          tests/test_token_consumers.py
 
   model-smoke:
     runs-on: ubuntu-latest

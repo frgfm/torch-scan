@@ -303,7 +303,8 @@ def test_crawl_module_transformer_formula(batch_first):
 
     report = crawler.crawl_module(mod, args=(src, tgt))
 
-    assert len(report["layers"]) == 1
+    assert report["layers"][0]["path"] == ""
+    assert all("module_flops" not in layer["metrics"] for layer in report["layers"][1:])
     assert report["layers"][0]["metrics"]["module_flops"]["value"] == 2694
 
 

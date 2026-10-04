@@ -78,6 +78,35 @@ Each layer record contains:
 
 Shared parameters are not duplicated in model totals merely because a module is called more than once.
 
+### Token dependencies
+
+Native attention and Transformer calls can additionally contain `token_dependencies`, separate from `metrics`.
+This optional additive field keeps schema version `1` compatible with reports that omit it. It describes potential
+dependencies of the primary output tokens on inputs of **that module call**, under its stated assumptions. It does
+not reconstruct an arbitrary enclosing model graph or describe returned attention-weight dependencies.
+
+The object contains `status` (`complete` or `unavailable`), `scope`, `method`, and an `assumptions` list. A complete
+object additionally has `output` with `sequence_axis` and `length`, and `sources`. Each source specifies `arguments`
+(grouping identical argument tensors), its `sequence_axis` and `length`, and a compact `relation`:
+
+| `relation.kind` | Dependency of output position `i` |
+| --- | --- |
+| `all` | Every position on that input token axis, optionally restricted to positions below `limit`. |
+| `same_position` | Position `i` on that input token axis. |
+| `prefix` | Positions `0` through `min(i, limit - 1)`; `limit` defaults to the input token length. |
+| `none` | No token dependency. |
+
+Optional `limit` caps the number of covered source tokens for `all` or `prefix`. Optional `first_position` means
+earlier outputs have no dependency on that source. For example, a causal
+cross-attention row with one visible source token has no query/key dependency through its softmax, while its value
+dependency remains. These are structural relations under generic finite parameters, rather than a claim that every
+allowed derivative is nonzero for a particular set of weights.
+
+Unsupported masks or configurations produce an unavailable token object and a diagnostic. No upper-bound relation
+is presented as a partial `known_value`. Scalar `receptive_field`, `effective_stride`, and `effective_padding` remain
+unavailable with method `not_applicable` when token dependencies apply. Their unavailability alone is not a strict
+analysis failure. Structure mode omits token analysis.
+
 Custom handler rows may also contain optional ownership metadata:
 
 | Field | Meaning |
@@ -163,6 +192,10 @@ Layer calls match by full path plus call index. Added and removed entries contai
 changed entries contain the identity and only changed metrics. Each metric diff includes `status`, `delta`, `before`,
 and `after`. `delta` is numeric only when both inputs are complete. Partial, unavailable, or missing metrics produce a
 `null` delta and propagate incomplete state.
+
+Added and removed layer snapshots preserve optional `token_dependencies`. A changed layer can also contain
+`token_dependencies: {"before": ..., "after": ...}` even when its numeric metrics are unchanged. Relations are
+compared structurally and have no numeric delta.
 
 ## Compatibility rule
 

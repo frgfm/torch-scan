@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from typing import Any
 
-from .report import AnalysisReport, LayerReport, MetricResult
+from .report import AnalysisReport, LayerReport, MetricResult, TokenDependency
 
 
 def format_name(name: str, depth: int = 0) -> str:
@@ -72,6 +72,59 @@ def _metric_value(result: MetricResult | None) -> int | float | None:
     return result["value"] if result["status"] == "complete" else result["known_value"]
 
 
+def _token_dependency_text(dependencies: TokenDependency) -> str:
+    """Describe structured token relations without converting them to a scalar."""
+    assumptions = " ".join(dependencies.get("assumptions", []))
+    if dependencies["status"] != "complete":
+        return f"Module-local token dependencies: unavailable. {assumptions}".rstrip()
+    output = dependencies["output"]
+    relations = []
+    for source in dependencies["sources"]:
+        relation = source["relation"]
+        kind = relation["kind"]
+        if kind == "all":
+            limit = relation.get("limit", source["length"])
+            description = (
+                f"first {limit} source tokens" if limit < source["length"] else f"all {source['length']} source tokens"
+            )
+        elif kind == "same_position":
+            description = "same position"
+        elif kind == "prefix":
+            description = "prefix through the output position (inclusive)"
+            if "limit" in relation:
+                description += f", at most {relation['limit']} tokens"
+        else:
+            description = "no token dependency"
+        if relation.get("first_position", 0):
+            description += f", starting at output position {relation['first_position']}"
+        relations.append(
+            f"{'/'.join(source['arguments'])}: {description} (token axis {source['sequence_axis']}, length {source['length']})"
+        )
+    description = (
+        "Module-local token dependencies: output token axis "
+        f"{output['sequence_axis']}, length {output['length']}; "
+        + ("; ".join(relations) if relations else "no input token dependencies")
+        + "."
+    )
+    return f"{description} {assumptions}".rstrip()
+
+
+def _token_receptive_text(dependencies: TokenDependency) -> str:
+    if dependencies["status"] != "complete":
+        return "?"
+    kinds = {source["relation"]["kind"] for source in dependencies["sources"]} - {"none"}
+    if "prefix" in kinds:
+        return "prefix + source" if "all" in kinds else "prefix"
+    if "all" in kinds:
+        if any(
+            source["relation"]["kind"] == "all" and source["relation"].get("limit", source["length"]) < source["length"]
+            for source in dependencies["sources"]
+        ):
+            return "token subset"
+        return "local + source" if "same_position" in kinds else "all tokens"
+    return "token-local" if kinds else "no dependency"
+
+
 def _receptive_text(result: MetricResult | None) -> str:
     value = _metric_value(result)
     if value is None:
@@ -106,11 +159,23 @@ def format_line_str(
         format_s("-" if trainable + frozen == 0 else str(trainable > 0), col_w[4], col_w[4]),
     ]
     if receptive_field:
-        line_str.append(format_s(_receptive_text(layer["metrics"].get("receptive_field")), col_w[5]))
+        dependencies = layer.get("token_dependencies")
+        receptive_text = (
+            _token_receptive_text(dependencies)
+            if dependencies is not None
+            else _receptive_text(layer["metrics"].get("receptive_field"))
+        )
+        line_str.append(format_s(receptive_text, col_w[5]))
         if effective_rf_stats:
             line_str.extend((
-                format_s(_receptive_text(layer["metrics"].get("effective_stride")), col_w[6]),
-                format_s(_receptive_text(layer["metrics"].get("effective_padding")), col_w[7]),
+                format_s(
+                    "?" if dependencies is not None else _receptive_text(layer["metrics"].get("effective_stride")),
+                    col_w[6],
+                ),
+                format_s(
+                    "?" if dependencies is not None else _receptive_text(layer["metrics"].get("effective_padding")),
+                    col_w[7],
+                ),
             ))
     return line_str
 
@@ -191,6 +256,11 @@ def format_info(
         lines.append(_format_total("Operator forward FLOPs", totals["operator_flops"]))
     if module_info["diagnostics"]:
         lines.append(f"Diagnostics: {len(module_info['diagnostics'])} (inspect report['diagnostics'])")
+    if receptive_field and any("token_dependencies" in layer for layer in module_info["layers"]):
+        lines.append(
+            "Token dependencies are module-local; spatial receptive-field, stride and padding do not apply. "
+            "They are not graph-wide effective receptive fields."
+        )
     lines.append(thin_line)
     return "\n".join(lines)
 

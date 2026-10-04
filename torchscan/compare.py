@@ -5,9 +5,9 @@
 
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
-from .report import AnalysisReport, LayerReport, MetricResult, MetricStatus
+from .report import AnalysisReport, LayerReport, MetricResult, MetricStatus, TokenDependency
 
 __all__ = ["ReportDiff", "compare_reports"]
 
@@ -25,12 +25,19 @@ class _LayerSnapshot(TypedDict):
     path: str
     call_index: int
     metrics: dict[str, MetricResult]
+    token_dependencies: NotRequired[TokenDependency]
+
+
+class _TokenDependencyDiff(TypedDict):
+    before: TokenDependency | None
+    after: TokenDependency | None
 
 
 class _LayerDiff(TypedDict):
     path: str
     call_index: int
     metrics: dict[str, _MetricDiff]
+    token_dependencies: NotRequired[_TokenDependencyDiff]
 
 
 class _LayerChanges(TypedDict):
@@ -91,18 +98,23 @@ def _layer_calls(report: AnalysisReport, name: str) -> dict[tuple[str, int], Lay
 
 
 def _snapshot(layer: LayerReport) -> _LayerSnapshot:
-    return {
+    snapshot: _LayerSnapshot = {
         "path": layer["path"],
         "call_index": layer["call_index"],
         "metrics": deepcopy(layer["metrics"]),
     }
+    if "token_dependencies" in layer:
+        snapshot["token_dependencies"] = deepcopy(layer["token_dependencies"])
+    return snapshot
 
 
 def compare_reports(before: AnalysisReport, after: AnalysisReport) -> ReportDiff:
-    """Compare totals and layer-call metrics from two reports.
+    """Compare totals, layer-call metrics and optional token dependencies from two reports.
 
     Layers are matched by their full path and call index. Numeric deltas are only
     produced when both metric results are complete; incomplete states propagate.
+    Token dependencies are copied as structured before/after evidence, without
+    numeric deltas. Older schema-v1 reports may omit this optional information.
 
     Args:
         before: Earlier analysis report.
@@ -132,8 +144,16 @@ def compare_reports(before: AnalysisReport, after: AnalysisReport) -> ReportDiff
         metric_differences = _diff_metrics(
             before_layers[key]["metrics"], after_layers[key]["metrics"], changed_only=True
         )
-        if metric_differences:
-            changed.append({"path": key[0], "call_index": key[1], "metrics": metric_differences})
+        before_dependencies = before_layers[key].get("token_dependencies")
+        after_dependencies = after_layers[key].get("token_dependencies")
+        if metric_differences or before_dependencies != after_dependencies:
+            layer_difference: _LayerDiff = {"path": key[0], "call_index": key[1], "metrics": metric_differences}
+            if before_dependencies != after_dependencies:
+                layer_difference["token_dependencies"] = {
+                    "before": deepcopy(before_dependencies),
+                    "after": deepcopy(after_dependencies),
+                }
+            changed.append(layer_difference)
 
     return {
         "schema_version": before_version,

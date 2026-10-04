@@ -86,6 +86,7 @@ nav:
       - Custom module extensions: extensions.md
       - Understanding results: metrics.md
       - Methodology: methodology.md
+      - Native Transformers: transformers.md
       - Report schema: report-schema.md
       - Offline visual reports: visual-report.md
   - Package reference:

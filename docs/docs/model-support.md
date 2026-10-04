@@ -84,6 +84,16 @@ in diagnostics and make the operator result partial.
 Operator FLOPs do not make MAC, DMA, or receptive-field module formulas complete. TorchScan never merges the two FLOP
 methods into one total.
 
+### Native attention and Transformer stacks
+
+Exact native `MultiheadAttention`, encoder/decoder layers and stacks, and `Transformer` support independent MACs,
+logical DMAs, and module-local token dependencies for documented dense evaluation configurations. Pass all query,
+key/value, memory, masks, and relevant options through `args`/`kwargs`, including when native modules are wrapped in
+custom containers. Both batch layouts and unequal attention sequence lengths are supported. Native subtree formulas
+prevent double-counting and cover fused paths that bypass child hooks. See [Native Transformer estimates](transformers.md)
+for complete boundaries and a copyable example. Arbitrary custom/einops attention graphs remain outside this native
+support; recognized operator FLOPs alone do not supply their MAC/DMA or dependency estimates.
+
 ## Custom formulas
 
 Supply custom operator formulas through `custom_mapping` on `crawl_module`, `summary`, or standalone `measure_flops`.

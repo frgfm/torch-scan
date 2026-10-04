@@ -30,9 +30,12 @@ Module metrics use TorchScan formulas for recognized module families:
 
 - FLOPs count formula-defined arithmetic for the forward pass.
 - MACs count multiply-accumulate work for supported modules.
-- DMAs estimate formula-defined tensor and parameter data movement.
+- DMAs estimate formula-defined logical element reads and writes, including parameters and intermediates.
 
 These are theoretical counts, not FLOP/s, memory bandwidth, or latency. Diagnostics identify unsupported module work.
+Native Transformer MACs are independently derived from matrix dimensions, and their DMAs describe a staged logical
+algorithm rather than cache or fused-kernel traffic. See [Native Transformer estimates](transformers.md) for counts,
+mask handling, returned attention weights, and supported boundaries.
 
 ## Operator FLOPs
 
@@ -48,6 +51,12 @@ their method labels; do not average, add, or substitute one silently for the oth
 Receptive-field values follow module execution order. Sequential convolutional paths can be described, including
 dilation, but hook order does not reconstruct arbitrary branch topology. Residual and other skip-connected models can
 therefore yield partial or unavailable results.
+
+Native attention and Transformer stacks instead provide optional module-local `token_dependencies` records. These
+distinguish query/target and key-value/source axes and represent all-token or position-dependent causal dependencies.
+Feature-only normalization and feed-forward operations are token-local. These records do not claim graph-wide
+effective receptive fields; legacy spatial receptive-field, stride, and padding fields are unavailable. See
+[token dependencies](transformers.md#module-local-token-dependencies) for relation semantics and mask limitations.
 
 ## Peak memory
 

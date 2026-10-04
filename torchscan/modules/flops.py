@@ -73,6 +73,14 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...]
         return flops_layernorm(module, inputs)
     if isinstance(module, nn.GroupNorm):
         return flops_groupnorm(module, inputs)
+    if type(module) is nn.TransformerEncoderLayer:
+        return flops_transformer_encoderlayer(module, inputs)
+    if type(module) is nn.TransformerDecoderLayer:
+        return flops_transformer_decoderlayer(module, inputs)
+    if type(module) is nn.TransformerEncoder:
+        return flops_transformer_encoder(module, inputs)
+    if type(module) is nn.TransformerDecoder:
+        return flops_transformer_decoder(module, inputs)
     if isinstance(module, nn.Transformer):
         return flops_transformer(module, inputs)
     warnings.warn(f"Module type not supported: {module.__class__.__name__}", stacklevel=1)
@@ -371,3 +379,27 @@ def flops_transformer(module: nn.Transformer, inputs: Tuple[Any, ...]) -> int:
         decoder_flops += flops_layernorm(module.decoder.norm, (inputs[1],))
 
     return encoder_flops + decoder_flops
+
+
+def flops_transformer_encoder(module: nn.TransformerEncoder, inputs: Tuple[Any, ...]) -> int:
+    """Apply the existing layer FLOP convention to a native encoder stack."""
+    if any(type(layer) is not nn.TransformerEncoderLayer for layer in module.layers):
+        raise NotImplementedError("Transformer FLOPs require native encoder layers.")
+    if module.norm is not None and type(module.norm) not in (nn.LayerNorm, nn.Identity):
+        raise NotImplementedError("Transformer FLOPs require LayerNorm, Identity, or no final normalization.")
+    result = sum(flops_transformer_encoderlayer(layer, inputs) for layer in module.layers)
+    if isinstance(module.norm, nn.LayerNorm):
+        result += flops_layernorm(module.norm, (inputs[0],))
+    return result
+
+
+def flops_transformer_decoder(module: nn.TransformerDecoder, inputs: Tuple[Any, ...]) -> int:
+    """Apply the existing layer FLOP convention to a native decoder stack."""
+    if any(type(layer) is not nn.TransformerDecoderLayer for layer in module.layers):
+        raise NotImplementedError("Transformer FLOPs require native decoder layers.")
+    if module.norm is not None and type(module.norm) not in (nn.LayerNorm, nn.Identity):
+        raise NotImplementedError("Transformer FLOPs require LayerNorm, Identity, or no final normalization.")
+    result = sum(flops_transformer_decoderlayer(layer, inputs) for layer in module.layers)
+    if isinstance(module.norm, nn.LayerNorm):
+        result += flops_layernorm(module.norm, (inputs[0],))
+    return result

@@ -226,11 +226,17 @@ guarantee strict success: inspect the separate operator report too.
   are counted independently. A successfully returned `None` remains a complete callback output.
 - `mode="structure"` runs the forward pass for structural reporting but executes neither module handlers nor custom
   operator formulas. Compute metrics remain explicitly unrequested.
+- Operator callbacks follow the installed PyTorch counter's contract. PyTorch 2.1 accepts shape callbacks only;
+  native raw-tensor callbacks, including callbacks for nested tensors, require a newer counter.
 - These are theoretical formulas for one observed call. They do not establish latency, hardware traffic, autograd
   cost, or correctness for unseen shapes and branches. Only declare complete coverage you can justify.
 - Handlers run only for observed module calls. Functional operations and fused kernels may use child parameters
-  without invoking a child's `forward`; a child handler cannot intercept that work. An observed descendant with a
-  matching registration opens an otherwise atomic legacy root, such as `nn.Transformer`. The inclusive root formula is
+  without invoking a child's `forward`; a child handler cannot intercept that work. Native attention and Transformer
+  handlers own their documented estimates across their subtree, while observed child calls remain in the structure.
+  Register the enclosing model and declare ownership for the metrics whose formulas include its children. See
+  [Native Transformer estimates](transformers.md) for complete-call fallback boundaries and token dependencies.
+- An observed descendant with a matching registration opens an otherwise atomic legacy root when the root has no
+  registered enclosing handler. The inclusive root formula is
   excluded to prevent double counting. Missing root work produces `expanded_atomic_boundary` diagnostics and partial
   totals with descendant counts as lower bounds. Register the root too to supply its own or inclusive estimates.
   Without a matching caller registration, the original atomic boundary remains.

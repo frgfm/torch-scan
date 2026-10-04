@@ -14,6 +14,7 @@ from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 from ._pooling import adaptive_kernel_size
+from ._transformer import _norm_macs
 
 __all__ = ["module_macs"]
 
@@ -30,6 +31,10 @@ def module_macs(module: Module, inp: Tensor, out: Tensor) -> int:
     """
     if isinstance(module, nn.Linear):
         return macs_linear(module, inp, out)
+    if type(module) is nn.LayerNorm:
+        if math.prod(module.normalized_shape) == 0:
+            raise NotImplementedError("LayerNorm MACs require a nonempty normalized row.")
+        return _norm_macs(module, inp)
     if isinstance(module, (nn.Identity, nn.ReLU, nn.ELU, nn.LeakyReLU, nn.ReLU6, nn.Tanh, nn.Sigmoid, nn.Flatten)):
         return 0
     if isinstance(module, _ConvTransposeNd):

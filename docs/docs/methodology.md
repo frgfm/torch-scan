@@ -25,6 +25,12 @@ Supported module formulas calculate theoretical FLOPs, MACs, DMAs, and receptive
 the affected metric state instead of contributing zero. Formula definitions and their tested boundaries live in the
 package source; diagnostics expose unsupported paths.
 
+Native attention/Transformer formulas use complete forward arguments and own compute for their subtree, preventing
+parent/child double-counting when fast paths bypass child hooks. Parameter accounting remains independent. Their
+MACs come from matrix dimensions, DMAs count documented logical stage reads/writes, and receptive-field information
+uses module-local token relations rather than spatial scalars. See [Native Transformer estimates](transformers.md)
+for independent derivations, tiny examples, normalization assumptions, and mask boundaries.
+
 Per-analysis `custom_modules` handlers can supply estimates for custom leaves and composite modules/models. They
 receive complete actual calls and override supplied fields independently. Inclusive parent formulas declare subtree
 ownership per metric; only the owner contributes that metric to totals, while child structure and parameter counts
@@ -122,10 +128,16 @@ stay incomplete without explicit caller overrides; native complex counts remain 
 complex multiply and two per complex add, with separate MAC and logical DMA conventions. Such overrides are scoped to
 one analysis and are the caller's responsibility. Mixed-call diagnostics and strict mode are preserved.
 
-Remaining gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused MHA/encoder, specialized attention,
+Remaining FLOP gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused operator MHA/encoder, specialized attention,
 unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered activations/pooling.
 Transformer requires native stacks, ReLU, final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
 approximations. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
+
+Native Transformer MAC/DMA boundaries include ReLU/GELU and dense masks, while token dependencies support the
+documented canonical mask patterns. Fused module execution uses subtree formulas without claiming a fused hardware
+memory model. Custom/einops model graphs still need supported module formulas or independently justified callbacks
+through the invocation-scoped [`custom_modules` extension](extensions.md) shared with Issue 41. Token relations
+remain native-module information; recognizing an operator does not complete the other module metrics.
 
 `crawl_module`: eval/no_grad forward. `measure_flops`: supplied forward/backward work, without a backward multiplier.
 Run `python scripts/benchmark.py --json /tmp/torchscan-matrix.json`: CPU, seed=0, one thread, float32 `(1,3,32,32)`.

@@ -176,27 +176,28 @@ def _handler_metrics(
         )
 
     try:
-        estimates = callback(call)
+        estimates = cast(Mapping[str, Any], callback(call))
+        estimate_names = set(estimates) if isinstance(estimates, Mapping) else None
     except Exception as error:  # ruff: ignore[blind-except] BLE001  # User callbacks are an analysis boundary.
         for name in sorted(requested):
             diagnose("custom_handler_error", name, f"{identity}: {type(error).__name__}: {error}")
         return {name: unavailable(name) for name in requested}
-    if not isinstance(estimates, Mapping) or any(name not in _METRIC_UNITS for name in estimates):
+    if estimate_names is None or not estimate_names <= _METRIC_UNITS.keys():
         for name in sorted(requested):
             diagnose("custom_handler_invalid", name, "The handler must return a mapping of supported metric names.")
         return {name: unavailable(name) for name in requested}
 
     results: dict[str, MetricResult] = {}
-    for name in sorted(requested & (estimates.keys() | handler.subtree_metrics)):
+    for name in sorted(requested & (estimate_names | handler.subtree_metrics)):
         try:
             result = _custom_result(
-                estimates.get(name),
+                estimates[name] if name in estimate_names else None,
                 unit=_METRIC_UNITS[name],
                 scope="subtree" if name in handler.subtree_metrics else "module_call",
                 method=method,
             )
-        except (TypeError, ValueError, OverflowError) as error:
-            diagnose("custom_metric_invalid", name, f"{identity}: {error}")
+        except Exception as error:  # ruff: ignore[blind-except] BLE001  # Mapping access can execute user code.
+            diagnose("custom_metric_invalid", name, f"{identity}: {type(error).__name__}: {error}")
             results[name] = unavailable(name)
             continue
         results[name] = result

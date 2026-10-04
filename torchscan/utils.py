@@ -3,8 +3,8 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
+from collections.abc import Sequence
 from copy import deepcopy
-from itertools import starmap
 from typing import Any
 
 from .report import AnalysisReport, LayerReport, MetricResult
@@ -72,9 +72,18 @@ def _metric_value(result: MetricResult | None) -> int | float | None:
     return result["value"] if result["status"] == "complete" else result["known_value"]
 
 
+def _receptive_text(result: MetricResult | None) -> str:
+    value = _metric_value(result)
+    if value is None:
+        return "?"
+    if result is not None and result["status"] == "partial":
+        return f">={value}"
+    return f"{value:.0f}"
+
+
 def format_line_str(
     layer: LayerReport,
-    col_w: list[int | None] | None = None,
+    col_w: Sequence[int | None] | None = None,
     wrap_mode: str = "mid",
     receptive_field: bool = False,
     effective_rf_stats: bool = False,
@@ -97,14 +106,11 @@ def format_line_str(
         format_s("-" if trainable + frozen == 0 else str(trainable > 0), col_w[4], col_w[4]),
     ]
     if receptive_field:
-        receptive = _metric_value(layer["metrics"].get("receptive_field"))
-        line_str.append(format_s("?" if receptive is None else f"{receptive:.0f}", col_w[5], col_w[5]))
+        line_str.append(format_s(_receptive_text(layer["metrics"].get("receptive_field")), col_w[5]))
         if effective_rf_stats:
-            stride = _metric_value(layer["metrics"].get("effective_stride"))
-            padding = _metric_value(layer["metrics"].get("effective_padding"))
             line_str.extend((
-                format_s("?" if stride is None else f"{stride:.0f}", col_w[6], col_w[6]),
-                format_s("?" if padding is None else f"{padding:.0f}", col_w[7], col_w[7]),
+                format_s(_receptive_text(layer["metrics"].get("effective_stride")), col_w[6]),
+                format_s(_receptive_text(layer["metrics"].get("effective_padding")), col_w[7]),
             ))
     return line_str
 
@@ -147,7 +153,8 @@ def format_info(
                 strict=True,
             )
         ]
-    col_w = list(starmap(min, zip(col_w, max_w, strict=True)))
+    # Clipping a numeric exponent can turn a lower bound into an overestimate.
+    col_w = [min(width, max_w[index]) if index < 5 else width for index, width in enumerate(col_w)]
     if not receptive_field:
         col_w, headers = col_w[:5], headers[:5]
     elif not effective_rf_stats:

@@ -143,6 +143,86 @@ def test_invalid_ownership_evidence_is_rejected(covered_report, invalid):
         render_report(covered_report)
 
 
+@pytest.fixture
+def shared_outside_report():
+    class Owner(nn.Sequential):
+        pass
+
+    class SharedOutside(nn.Module):
+        def __init__(self, include):
+            super().__init__()
+            self.owner = Owner(nn.Sequential(nn.Identity()))
+            self.outside = self.owner[0][0]
+            self.zzother = nn.Identity()
+            self.include = include
+
+        def forward(self, inputs):
+            owned = self.owner(inputs)
+            return self.zzother(self.outside(owned) if self.include else owned)
+
+    def collect(status, count, *, include=True, inclusive=100):
+        estimate = metric_result(
+            status=status, value=count, known_value=count, unit="FLOPs", scope="module_call", method="outside"
+        )
+
+        def a_outside(_call):
+            return {"module_flops": estimate}
+
+        def zz_owner(_call):
+            return {"module_flops": inclusive}
+
+        return crawl_module(
+            SharedOutside(include),
+            (4,),
+            custom_modules={
+                Owner: ModuleHandler(zz_owner, frozenset({"module_flops"})),
+                nn.Identity: ModuleHandler(a_outside),
+            },
+        )
+
+    return collect
+
+
+@pytest.mark.parametrize(("status", "count"), [("complete", 0), ("complete", 5), ("partial", 5), ("unavailable", None)])
+def test_covered_container_keeps_shared_descendant_contributions_visible(shared_outside_report, status, count):
+    report = shared_outside_report(status, count)
+    html = render_report(report, before=report)
+    group = next(
+        group
+        for group in _embedded(Document(html).root)["maps"]["module_flops"]["groups"]
+        if group["method"].endswith(":outside")
+    )
+    node = _node(group, "owner.0")
+    assert node["direct_kind"] == "covered"
+    assert node["coverage"] is not None
+    assert node["has_contributions"]
+    assert node["before_has_contributions"]
+    assert node["display_status"] == node["subtotal"]["status"] == status
+    assert node["known"] == count
+    assert node["display"].startswith(status)
+    assert node["before_display"].startswith(status)
+    for source in (html, render_report(report, format="svg")):
+        description = _tile_anchor(_maps(source)[group["id"]], node).attrib["aria-label"]
+        assert f"Derived subtree subtotal: {status}" in description
+        assert "Own calls covered: included in owner" in description
+
+
+def test_svg_comparison_keeps_coverage_independent_between_snapshots(shared_outside_report):
+    contributed = shared_outside_report("complete", 0, inclusive=0)
+    covered = shared_outside_report("complete", 0, include=False, inclusive=0)
+    for before, after in ((contributed, covered), (covered, contributed)):
+        svg = ET.fromstring(render_report(after, before=before, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
+        inspector = next(element for element in svg.iter() if element.attrib.get("id", "").startswith("inspector-"))
+        text = " ".join(" ".join(inspector.itertext()).split())
+        complete = "complete · 0 FLOPs"
+        included = "covered · included in owner"
+        assert f"Before subtree: {complete if before is contributed else included}" in text
+        assert f"After subtree: {complete if after is contributed else included}" in text
+        assert "unavailable" not in text
+        label = "Derived descendant subtotal" if after is contributed else "Covered by inclusive ancestor estimate"
+        assert label in text
+
+
 def test_real_report_html_hierarchy_ranking_methods_and_offline_controls(report):
     root = _document(report)
     assert "not a computational graph" in root.text()

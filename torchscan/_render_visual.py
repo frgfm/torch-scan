@@ -166,16 +166,18 @@ def _node_description(node: dict[str, Any], group: dict[str, Any]) -> str:
         "uniquely attributed storage" if node["direct_kind"] == "attributed" else "recorded additive call contribution"
     )
     description = f"{node['path'] or '(root)'} · {node['type']} · {len(node['calls'])} observed calls. "
+    if node["has_contributions"] or node.get("coverage") is None:
+        description += f"Derived subtree subtotal: {_measurement(node['subtotal'])}. "
     description += (
-        f"Covered: {node['coverage']}. No separate additive contribution. "
+        f"Own calls covered: {node['coverage']}. No separate additive contribution. "
         if node.get("coverage") is not None
-        else f"Derived subtree subtotal: {_measurement(node['subtotal'])}. Own {kind}: {_measurement(node['direct'])}. "
+        else f"Own {kind}: {_measurement(node['direct'])}. "
     )
     description += f"Method: {group['method']}; scope: {group['scope']}."
     if group.get("comparison"):
         if node["change"] in ("added", "removed"):
             description += f" Module {node['change']} in after report."
-        description += f" Before: {_measurement(node['before_subtotal'])}."
+        description += f" Before: {node['before_display']}."
         if node["delta"] is None:
             description += " Delta unknown: " + str(node["delta_reason"])
         else:
@@ -387,6 +389,7 @@ def _inspector(
         )
     )
     cursor += 39
+    covered_only = node["coverage"] is not None and not node["has_contributions"]
     output.append(
         _text(
             left,
@@ -396,24 +399,26 @@ def _inspector(
             else "Own unique attribution"
             if node["direct_kind"] == "attributed"
             else "Covered by inclusive ancestor estimate"
-            if node["direct_kind"] == "covered"
+            if covered_only
             else "Derived descendant subtotal",
             size=12,
             color=_MUTED,
         )
     )
-    measured = node["direct"] if node["direct_kind"] != "structural" else node["subtotal"]
+    measured = node["direct"] if node["direct_kind"] in ("recorded", "attributed") else node["subtotal"]
     cursor = _paragraph(
         output,
         left,
         cursor + 29,
-        node["coverage"] or node["before_coverage"] if node["direct_kind"] == "covered" else _measurement(measured),
+        node["coverage"] or node["before_coverage"] if covered_only else _measurement(measured),
         width=30,
         size=19,
         leading=25,
         color=_GREEN if measured and measured["status"] == "complete" else _AMBER,
         weight=650,
     )
+    if node["coverage"] is not None and node["has_contributions"]:
+        cursor = _paragraph(output, left, cursor + 9, f"Own calls: {node['coverage']}", width=43)
     cursor = _paragraph(
         output,
         left,
@@ -426,7 +431,7 @@ def _inspector(
             output,
             left,
             cursor + 9,
-            f"Before subtree: {_measurement(node['before_subtotal'])}. After subtree: {_measurement(node['subtotal'])}.",
+            f"Before subtree: {node['before_display']}. After subtree: {node['display']}.",
             width=43,
         )
         delta = (

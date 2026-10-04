@@ -229,9 +229,13 @@ guarantee strict success: inspect the separate operator report too.
 - These are theoretical formulas for one observed call. They do not establish latency, hardware traffic, autograd
   cost, or correctness for unseen shapes and branches. Only declare complete coverage you can justify.
 - Handlers run only for observed module calls. Functional operations and fused kernels may use child parameters
-  without invoking a child's `forward`; a child handler cannot intercept that work. Existing atomic built-in paths,
-  including an unregistered root `nn.Transformer`, also retain their original inclusive analysis boundary. Register
-  the enclosing model and declare ownership for the metrics whose formulas include its children.
+  without invoking a child's `forward`; a child handler cannot intercept that work. An observed descendant with a
+  matching registration opens an otherwise atomic legacy root, such as `nn.Transformer`. The inclusive root formula is
+  excluded to prevent double counting. Missing root work produces `expanded_atomic_boundary` diagnostics and partial
+  totals with descendant counts as lower bounds. Register the root too to supply its own or inclusive estimates.
+  Without a matching caller registration, the original atomic boundary remains.
+- Atomic implementations can use child parameters without invoking their modules. Parameter totals stay unique,
+  but storage can be attributed to the enclosing atomic row instead of its child rows.
 - Third-party complex-model packages are optional. Register their module classes in your application or experiment;
   TorchScan does not import or install them.
 

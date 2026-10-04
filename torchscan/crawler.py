@@ -334,6 +334,7 @@ def crawl_module(
     signatures: dict[Callable[..., Any], inspect.Signature | None] = {}
     active_calls: list[int] = []
     metric_diagnostics: list[tuple[int, Diagnostic]] = []
+    grouped_diagnostics: dict[int, tuple[str, ...]] = {}
 
     def is_metric_leaf(current: Module) -> bool:
         return (
@@ -341,6 +342,18 @@ def crawl_module(
             or isinstance(current, nn.MultiheadAttention)
             or (current is module and isinstance(module, nn.Transformer))
         )
+
+    def own_descendant_metrics(layer_index: int, names: Iterable[str]) -> None:
+        layer = layers[layer_index]
+        owner = {"path": layer["path"], "call_index": layer["call_index"]}
+        for name in names:
+            layer.setdefault("metric_ownership", {})[name] = "subtree"
+            if name in layer["metrics"]:
+                layer["metrics"][name]["scope"] = "subtree"
+            for descendant in layers[layer_index + 1 :]:
+                descendant["metrics"].pop(name, None)
+                descendant.get("metric_ownership", {}).pop(name, None)
+                descendant.setdefault("metric_owners", {})[name] = owner
 
     def register(current: Module, path: str) -> None:
         forward_signature: inspect.Signature | None = None
@@ -448,6 +461,29 @@ def crawl_module(
             if mode == "structure" or (not metric_leaf and handler is None):
                 return
 
+            if (
+                hooked is module
+                and atomic_custom_paths
+                and any(descendant["path"] in atomic_custom_paths for descendant in layers[layer_index + 1 :])
+            ):
+                # Descendant estimates replace the old inclusive boundary;
+                # their sum cannot account for unknown root-local work.
+                for name in ("module_flops", "macs", "dmas"):
+                    layer["metrics"][name] = metric_result(
+                        status="unavailable",
+                        unit=_METRIC_UNITS[name],
+                        scope="module_call",
+                        method="expanded_atomic_boundary",
+                    )
+                    _diagnostic(
+                        diagnostics,
+                        code="expanded_atomic_boundary",
+                        metric=name,
+                        path=path,
+                        message="Custom descendant estimates expand the atomic model boundary; root-local work is unestimated.",
+                    )
+                return
+
             ordered_inputs = _ordered_inputs(forward_signature, hook_args, hook_kwargs)
             # Formula work must not appear in the operator report. Suspend dispatch
             # only while calculating metadata-based estimates, then release all
@@ -487,12 +523,7 @@ def crawl_module(
                     # Caller fields are only known after forward. If an inclusive
                     # built-in supplies an omitted field, discard earlier child
                     # estimates for that field; never retain child activations.
-                    for name in estimates.keys() & builtin_handler.subtree_metrics:
-                        owner = {"path": path, "call_index": layer["call_index"]}
-                        for descendant in layers[layer_index + 1 :]:
-                            descendant["metrics"].pop(name, None)
-                            descendant.get("metric_ownership", {}).pop(name, None)
-                            descendant.setdefault("metric_owners", {})[name] = owner
+                    own_descendant_metrics(layer_index, estimates.keys() & builtin_handler.subtree_metrics)
                     requested -= estimates.keys()
                 if metric_leaf and requested:
                     populate_metrics(
@@ -505,6 +536,10 @@ def crawl_module(
                         requested,
                         call_diagnostics,
                     )
+            if hooked is module and atomic_custom_paths:
+                # A matching registration may never execute. Keep the legacy
+                # inclusive root formula and remove duplicate child estimates.
+                own_descendant_metrics(layer_index, _METRIC_UNITS)
             metric_diagnostics.extend((layer_index, diagnostic) for diagnostic in call_diagnostics)
 
         def cleanup_hook(hooked: Module, _hook_args: tuple[Any, ...], _output: Any) -> None:
@@ -582,8 +617,12 @@ def crawl_module(
                 layer["metrics"][metric] = _measure_module_metric(
                     metric, _METRIC_UNITS[metric], layer["path"], call_diagnostics, measure
                 )
-        if not requested & {"receptive_field", "effective_stride", "effective_padding"}:
+        receptive_metrics = tuple(
+            name for name in ("receptive_field", "effective_stride", "effective_padding") if name in requested
+        )
+        if not receptive_metrics:
             return
+        failure: tuple[str, str] | None = None
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
@@ -591,23 +630,22 @@ def crawl_module(
         except Exception as error:  # ruff: ignore[blind-except] BLE001  # Optional report metric.
             caught = []
             receptive_values: tuple[float, float, float] | None = None
-            _diagnostic(
-                call_diagnostics,
-                code="module_metric_error",
-                metric="receptive_field",
-                path=layer["path"],
-                message=f"{type(error).__name__}: {error}",
-            )
+            failure = ("module_metric_error", f"{type(error).__name__}: {error}")
         else:
             receptive_values = (receptive_field, stride, padding)
             if caught:
-                _diagnostic(
-                    call_diagnostics,
-                    code="unsupported_module_metric",
-                    metric="receptive_field",
-                    path=layer["path"],
-                    message="; ".join(str(warning.message) for warning in caught),
-                )
+                failure = ("unsupported_module_metric", "; ".join(str(warning.message) for warning in caught))
+        if failure is not None:
+            _diagnostic(
+                call_diagnostics,
+                code=failure[0],
+                metric=receptive_metrics[0],
+                path=layer["path"],
+                message=failure[1],
+            )
+            # Keep the legacy single diagnostic, but remember exactly which
+            # omitted fields failed if inclusive ownership later covers some.
+            grouped_diagnostics[id(call_diagnostics[-1])] = receptive_metrics
         status = "unavailable" if receptive_values is None or caught else "complete"
         for index, name in enumerate(("receptive_field", "effective_stride", "effective_padding")):
             if name not in requested:
@@ -625,7 +663,16 @@ def crawl_module(
         and _resolve_handler(module, custom_handlers) is None
         and _resolve_handler(module, builtin_handlers) is None
     )
-    targets = [("", module)] if legacy_atomic else list(module.named_modules())
+    atomic_custom_paths = (
+        {
+            path
+            for path, child in module.named_modules()
+            if path and _resolve_handler(child, custom_handlers) is not None
+        }
+        if legacy_atomic
+        else set()
+    )
+    targets = [("", module)] if legacy_atomic and not atomic_custom_paths else list(module.named_modules())
     flop_report: FlopReport
     try:
         module.eval()
@@ -665,24 +712,10 @@ def crawl_module(
     model_tensors = [*parameters, *buffers]
     for layer_index, diagnostic in metric_diagnostics:
         layer = layers[layer_index]
-        if diagnostic["metric"] not in layer.get("metric_owners", {}):
-            diagnostics.append(diagnostic)
-        elif diagnostic["metric"] == "receptive_field" and diagnostic["code"] in {
-            "unsupported_module_metric",
-            "module_metric_error",
-        }:
-            # The legacy RF formula returns a group of three fields. Covering
-            # its extent alone must not hide failed, unowned stride/padding.
-            affected = next(
-                (
-                    name
-                    for name in ("effective_stride", "effective_padding")
-                    if name in layer["metrics"] and layer["metrics"][name]["status"] != "complete"
-                ),
-                None,
-            )
-            if affected is not None:
-                diagnostics.append({**diagnostic, "metric": affected})
+        affected_metrics = grouped_diagnostics.get(id(diagnostic), (diagnostic["metric"],))
+        affected = next((name for name in affected_metrics if name not in layer.get("metric_owners", {})), None)
+        if affected is not None:
+            diagnostics.append(diagnostic if affected == diagnostic["metric"] else {**diagnostic, "metric": affected})
     diagnostics.extend(flop_report["diagnostics"])
 
     report: AnalysisReport = {

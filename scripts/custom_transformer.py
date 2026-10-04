@@ -84,7 +84,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", type=Path, help="Save the full report, including diagnostics.")
     options = parser.parse_args()
-    torch.manual_seed(0)
     model = CustomTransformer()
     report = crawl_module(
         model,

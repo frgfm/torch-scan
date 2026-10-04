@@ -89,6 +89,7 @@ jobs:
           pytest
           tests/test_compare.py
           tests/test_crawler.py
+          tests/test_custom_transformer.py
           tests/test_flops.py
           tests/test_inputs.py
           tests/test_report.py

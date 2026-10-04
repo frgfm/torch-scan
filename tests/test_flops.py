@@ -660,9 +660,11 @@ def test_unregistered_nested_linear_executes_kernel_and_preserves_dense_counts(u
 
 
 def test_nested_linear_caller_raw_override_has_priority_and_registry_is_scoped():
+    before = FlopCounterMode(display=False)
+    if not hasattr(before, "flop_registry"):
+        pytest.skip("This PyTorch counter supports shape callbacks only, without native raw tensor callbacks.")
     nested = torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(1, 3)])
     weight = torch.ones(2, 3)
-    before = FlopCounterMode(display=False)
     registry = dict(getattr(before, "flop_registry", getattr(before, "flop_mapping", {})))
     calls = 0
 

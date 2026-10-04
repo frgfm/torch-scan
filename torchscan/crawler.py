@@ -29,7 +29,7 @@ from .extensions import (
 from .flops import FlopReport, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
 from .modules._token_dependencies import module_token_dependencies
-from .modules._transformer import dmas_attention, macs_attention, validate_native_call
+from .modules._transformer import dmas_attention, macs_attention, validate_native_attention, validate_native_call
 from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
 from .utils import aggregate_info, format_info
 
@@ -63,7 +63,10 @@ def _native_module_estimates(
     """Adapt native formulas to the shared complete-call handler contract."""
     requested = set(_METRIC_UNITS) if requested is None else requested
     diagnostics = [] if diagnostics is None else diagnostics
-    inputs = _ordered_inputs(inspect.signature(call.module.forward), call.args, call.kwargs)
+    signature = None
+    with suppress(TypeError, ValueError):
+        signature = inspect.signature(call.module.forward)
+    inputs = _ordered_inputs(signature, call.args, call.kwargs)
 
     def flops() -> int:
         if any(
@@ -71,10 +74,12 @@ def _native_module_estimates(
             for parameter in call.module.parameters()
         ):
             raise NotImplementedError("Native Transformer FLOPs require dense real floating-point parameters.")
-        # Preserve the legacy MHA FLOP convention, including zero batches. Native
-        # composites additionally exclude packing and modified child algorithms:
-        # their dense FLOPs would otherwise be an upper bound, not counted work.
-        if type(call.module) is not nn.MultiheadAttention:
+        # Preserve the legacy MHA input/option FLOP convention, including zero
+        # batches, while validating the native algorithm and parameter shapes.
+        # Composite dense estimates also exclude packing and modified children.
+        if type(call.module) is nn.MultiheadAttention:
+            validate_native_attention(call.module)
+        else:
             validate_native_call(call.module, inputs, call.output)
         return module_flops(call.module, inputs, call.output)
 
@@ -107,8 +112,8 @@ def _native_module_estimates(
 
 
 def _native_token_report(call: ModuleCall, layer: LayerReport, diagnostics: list[Diagnostic]) -> None:
-    inputs = _ordered_inputs(inspect.signature(call.module.forward), call.args, call.kwargs)
     try:
+        inputs = _ordered_inputs(inspect.signature(call.module.forward), call.args, call.kwargs)
         if _first_tensor(call.output) is None:
             raise NotImplementedError("The native call did not return an activation tensor.")
         layer["token_dependencies"] = module_token_dependencies(call.module, inputs, call.output)

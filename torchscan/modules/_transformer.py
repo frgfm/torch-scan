@@ -88,9 +88,20 @@ def _parameter(value: Any, shape: tuple[int, ...]) -> None:
         raise NotImplementedError("Transformer parameters must be real dense floating tensors with native shapes.")
 
 
-def _attention_spec(module: nn.MultiheadAttention, inputs: tuple[Any, ...]) -> AttentionSpec:
+def _validate_native_forward(module: nn.Module) -> None:
+    forward = module.forward
+    if (
+        getattr(forward, "__self__", None) is not module
+        or getattr(forward, "__func__", None) is not type(module).forward
+    ):
+        raise NotImplementedError("Transformer estimates require unchanged native forward implementations.")
+
+
+def validate_native_attention(module: nn.MultiheadAttention) -> None:
+    """Validate native attention operands independently of input-shape boundaries."""
     if type(module) is not nn.MultiheadAttention:
         raise NotImplementedError("Transformer estimates require the exact native MultiheadAttention type.")
+    _validate_native_forward(module)
     if module.training:
         raise NotImplementedError("Transformer MAC/DMA estimates describe evaluation calls only.")
     if module.bias_k is not None or module.bias_v is not None or module.add_zero_attn:
@@ -98,6 +109,10 @@ def _attention_spec(module: nn.MultiheadAttention, inputs: tuple[Any, ...]) -> A
     if type(module.out_proj) not in (nn.Linear, nn.modules.linear.NonDynamicallyQuantizableLinear):
         raise NotImplementedError("Transformer attention requires a native Linear output projection.")
     embed = module.embed_dim
+    if module.num_heads <= 0 or embed % module.num_heads or module.head_dim != embed // module.num_heads:
+        raise NotImplementedError("Transformer attention head metadata must match native dimensions.")
+    if module.out_proj.in_features != embed or module.out_proj.out_features != embed:
+        raise NotImplementedError("Transformer output-projection metadata must match native shapes.")
     _parameter(module.out_proj.weight, (embed, embed))
     if module.out_proj.bias is not None:
         _parameter(module.out_proj.bias, (embed,))
@@ -109,6 +124,10 @@ def _attention_spec(module: nn.MultiheadAttention, inputs: tuple[Any, ...]) -> A
         _parameter(module.v_proj_weight, (embed, module.vdim))
     if module.in_proj_bias is not None:
         _parameter(module.in_proj_bias, (3 * embed,))
+
+
+def _attention_spec(module: nn.MultiheadAttention, inputs: tuple[Any, ...]) -> AttentionSpec:
+    validate_native_attention(module)
     if len(inputs) < 3:
         raise NotImplementedError("MultiheadAttention estimates require complete query, key, and value arguments.")
     query, key, value = (_dense_tensor(item) for item in inputs[:3])
@@ -158,11 +177,15 @@ def _attention_spec(module: nn.MultiheadAttention, inputs: tuple[Any, ...]) -> A
 
 
 def _validate_norm(norm: nn.Module | None, embed: int, *, final: bool = False) -> None:
-    if norm is None or type(norm) is nn.Identity:
+    if norm is None:
+        return
+    if type(norm) is nn.Identity:
+        _validate_native_forward(norm)
         return
     if type(norm) is not nn.LayerNorm or tuple(norm.normalized_shape) != (embed,):
         context = "final normalization" if final else "normalization"
         raise NotImplementedError(f"Transformer {context} must be token-local native LayerNorm, Identity, or None.")
+    _validate_native_forward(norm)
     for parameter in (norm.weight, norm.bias):
         if parameter is not None:
             _parameter(parameter, (embed,))
@@ -171,6 +194,7 @@ def _validate_norm(norm: nn.Module | None, embed: int, *, final: bool = False) -
 def _validate_layer(module: nn.TransformerEncoderLayer | nn.TransformerDecoderLayer) -> None:
     if type(module) not in (nn.TransformerEncoderLayer, nn.TransformerDecoderLayer):
         raise NotImplementedError("Transformer estimates require exact native encoder/decoder layer types.")
+    _validate_native_forward(module)
     if module.training:
         raise NotImplementedError("Transformer MAC/DMA estimates describe evaluation calls only.")
     if type(module.self_attn) is not nn.MultiheadAttention:
@@ -194,6 +218,7 @@ def _validate_layer(module: nn.TransformerEncoderLayer | nn.TransformerDecoderLa
     ):
         raise NotImplementedError("Transformer estimates require native feed-forward Linear layers and ReLU or GELU.")
     for linear in (module.linear1, module.linear2):
+        _validate_native_forward(linear)
         _parameter(linear.weight, (linear.out_features, linear.in_features))
         if linear.bias is not None:
             _parameter(linear.bias, (linear.out_features,))
@@ -207,6 +232,8 @@ def _validate_layer(module: nn.TransformerEncoderLayer | nn.TransformerDecoderLa
         dropouts.append(module.dropout3)
     if any(type(dropout) is not nn.Dropout or dropout.training for dropout in dropouts):
         raise NotImplementedError("Transformer estimates require native evaluation-mode dropout stages.")
+    for dropout in dropouts:
+        _validate_native_forward(dropout)
 
 
 def _encoder_layer_inputs(inputs: tuple[Any, ...]) -> tuple[Any, ...]:
@@ -253,6 +280,7 @@ def _decoder_layer_inputs(inputs: tuple[Any, ...]) -> tuple[tuple[Any, ...], tup
 def _validate_encoder(module: nn.TransformerEncoder, inputs: tuple[Any, ...]) -> None:
     if type(module) is not nn.TransformerEncoder or len(module.layers) == 0:
         raise NotImplementedError("Transformer estimates require a nonempty exact native encoder stack.")
+    _validate_native_forward(module)
     if module.training:
         raise NotImplementedError("Transformer MAC/DMA estimates describe evaluation calls only.")
     if getattr(module, "use_nested_tensor", False) and _slot(inputs, 2) is not None:
@@ -266,6 +294,7 @@ def _validate_encoder(module: nn.TransformerEncoder, inputs: tuple[Any, ...]) ->
 def _validate_decoder(module: nn.TransformerDecoder) -> None:
     if type(module) is not nn.TransformerDecoder or len(module.layers) == 0:
         raise NotImplementedError("Transformer estimates require a nonempty exact native decoder stack.")
+    _validate_native_forward(module)
     if module.training:
         raise NotImplementedError("Transformer MAC/DMA estimates describe evaluation calls only.")
     _validate_stack_layers(module.layers, nn.TransformerDecoderLayer)
@@ -330,7 +359,7 @@ def _norm_dmas(norm: nn.Module | None, tensor: Tensor) -> int:
         return 0
     elements = tensor.numel()
     rows = elements // math.prod(norm.normalized_shape)
-    parameters = sum(parameter.numel() for parameter in norm.parameters())
+    parameters = sum(parameter.numel() for parameter in (norm.weight, norm.bias) if parameter is not None)
     # Mean: N+R. Variance: N+R+R. Normalize: N+2R+1+N.
     # Affine, when present: N+parameters+N. Statistics are logical intermediates.
     affine = norm.weight is not None or norm.bias is not None
@@ -348,7 +377,10 @@ def _feedforward_macs(module: nn.TransformerEncoderLayer | nn.TransformerDecoder
 def _feedforward_dmas(module: nn.TransformerEncoderLayer | nn.TransformerDecoderLayer, tensor: Tensor) -> int:
     hidden = math.prod(tensor.shape[:-1]) * module.linear1.out_features
     parameters = sum(
-        parameter.numel() for linear in (module.linear1, module.linear2) for parameter in linear.parameters()
+        parameter.numel()
+        for linear in (module.linear1, module.linear2)
+        for parameter in (linear.weight, linear.bias)
+        if parameter is not None
     )
     # Two linears read/write N+hidden each; ReLU/GELU reads and writes hidden.
     return 2 * tensor.numel() + 4 * hidden + parameters
@@ -397,6 +429,7 @@ def _transformer_count(module: nn.Module, inputs: tuple[Any, ...], *, dmas: bool
         return _stack_count(module, inputs, dmas=dmas)
     if type(module) is not nn.Transformer:
         raise NotImplementedError("Transformer estimates require exact native PyTorch Transformer module types.")
+    _validate_native_forward(module)
     if module.training:
         raise NotImplementedError("Transformer MAC/DMA estimates describe evaluation calls only.")
     src, tgt = _slot(inputs, 0), _slot(inputs, 1)

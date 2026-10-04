@@ -358,12 +358,15 @@ def test_normalization_counts_variance_and_affine_mac_terms(affine, bias, macs, 
 @pytest.mark.parametrize("option", ["no_bias", "no_affine", "gelu"])
 def test_native_layer_bias_normalization_and_activation_options(kind, option):
     layer_type = nn.TransformerEncoderLayer if kind == "encoder" else nn.TransformerDecoderLayer
+    # PyTorch 2.1's batch-first encoder fusion fails with missing bias/affine
+    # operands. Use its valid unfused layout without changing library execution.
+    batch_first = kind != "encoder" or getattr(torch.backends, "mha", None) is not None
     module = layer_type(
         4,
         2,
         dim_feedforward=8,
         dropout=0,
-        batch_first=True,
+        batch_first=batch_first,
         bias=option != "no_bias",
         activation="gelu" if option == "gelu" else "relu",
     )
@@ -372,7 +375,7 @@ def test_native_layer_bias_normalization_and_activation_options(kind, option):
         module.norm2 = nn.LayerNorm(4, elementwise_affine=False)
         if kind == "decoder":
             module.norm3 = nn.LayerNorm(4, elementwise_affine=False)
-    source, target = _tokens(3), _tokens(2)
+    source, target = _tokens(3, batch_first=batch_first), _tokens(2, batch_first=batch_first)
     report = crawl_module(module, args=(source,) if kind == "encoder" else (target, source))
 
     expected = {
@@ -611,3 +614,130 @@ def test_token_dependency_report_is_additive_and_consumers_keep_it():
     copied_owner = next(layer for layer in view["layers"] if layer["path"] == "block")
     assert copied_owner["token_dependencies"] == owner["token_dependencies"]
     assert copied_owner["token_dependencies"] is not owner["token_dependencies"]
+
+
+@pytest.mark.parametrize("kind", ["attention", "encoder_layer", "decoder_layer", "encoder", "decoder", "transformer"])
+def test_replaced_native_forward_requires_explicit_estimates(kind):
+    source, target = _tokens(3), _tokens(2)
+    encoder_layer = nn.TransformerEncoderLayer(4, 2, 8, dropout=0, batch_first=True)
+    decoder_layer = nn.TransformerDecoderLayer(4, 2, 8, dropout=0, batch_first=True)
+    if kind == "attention":
+        module, args = nn.MultiheadAttention(4, 2, batch_first=True), (source, source, source)
+        module.forward = lambda query, _key, _value: (query, None)
+    elif kind == "encoder_layer":
+        module, args = encoder_layer, (source,)
+        module.forward = lambda src: src
+    elif kind == "decoder_layer":
+        module, args = decoder_layer, (target, source)
+        module.forward = lambda tgt, _memory: tgt
+    elif kind == "encoder":
+        module, args = nn.TransformerEncoder(encoder_layer, 1, enable_nested_tensor=False), (source,)
+        module.forward = lambda src: src
+    elif kind == "decoder":
+        module, args = nn.TransformerDecoder(decoder_layer, 1), (target, source)
+        module.forward = lambda tgt, _memory: tgt
+    else:
+        module = nn.Transformer(4, 2, 1, 1, 8, dropout=0, batch_first=True)
+        args = source, target
+        module.forward = lambda _src, tgt: tgt
+
+    report = crawl_module(module, args=args)
+    for name in ("module_flops", "macs", "dmas"):
+        assert report["totals"][name]["status"] == "unavailable"
+        assert report["totals"][name]["known_value"] is None
+        assert any(item["metric"] == name and "native forward" in item["message"] for item in report["diagnostics"])
+    assert report["layers"][0]["token_dependencies"]["status"] == "unavailable"
+    assert _value(report, "operator_flops") == 0
+    _assert_parameter_accounting(report, module)
+
+    explicit = {
+        "module_flops": 0,
+        "macs": 0,
+        "dmas": 0,
+        "receptive_field": 1,
+        "effective_stride": 1,
+        "effective_padding": 0,
+    }
+    custom_report = crawl_module(
+        module,
+        args=args,
+        custom_modules={type(module): ModuleHandler(lambda _call: explicit, subtree_metrics=frozenset(explicit))},
+        strict=True,
+    )
+    assert all(_value(custom_report, name) == 0 for name in ("module_flops", "macs", "dmas"))
+    assert "token_dependencies" not in custom_report["layers"][0]
+    _assert_parameter_accounting(custom_report, module)
+
+
+@pytest.mark.parametrize("stage", ["self_attn", "linear1", "norm1", "dropout"])
+def test_replaced_invoked_native_stage_forward_is_unavailable(stage):
+    module = nn.TransformerEncoderLayer(4, 2, 8, dropout=0, batch_first=True)
+    native_forward = getattr(module, stage).forward
+    getattr(module, stage).forward = lambda *args, **kwargs: native_forward(*args, **kwargs)
+    report = crawl_module(module, args=(_tokens(3),))
+
+    for name in ("module_flops", "macs", "dmas"):
+        assert report["totals"][name]["status"] == "unavailable"
+        assert report["totals"][name]["known_value"] is None
+    assert report["layers"][0]["token_dependencies"]["status"] == "unavailable"
+    assert any("native forward" in item["message"] for item in report["diagnostics"])
+    _assert_parameter_accounting(report, module)
+
+
+def test_uninspectable_replaced_native_forward_returns_diagnostics():
+    module = nn.TransformerEncoderLayer(4, 2, 8, batch_first=True)
+    module.forward = torch.clone  # A valid tensor call without an inspectable Python signature.
+    report = crawl_module(module, args=(_tokens(3),))
+
+    assert all(report["totals"][name]["status"] == "unavailable" for name in ("module_flops", "macs", "dmas"))
+    assert report["layers"][0]["token_dependencies"]["status"] == "unavailable"
+    assert any("native forward" in item["message"] for item in report["diagnostics"])
+    _assert_parameter_accounting(report, module)
+
+
+@pytest.mark.parametrize("modification", ["weight_shape", "input_metadata", "output_metadata", "head_metadata"])
+def test_malformed_native_attention_operands_never_receive_complete_flops(modification):
+    module = nn.MultiheadAttention(4, 2, batch_first=True, bias=False)
+    if modification == "weight_shape":
+        module.out_proj.weight = nn.Parameter(torch.randn(6, 4))
+    elif modification == "input_metadata":
+        module.out_proj.in_features = 6
+    elif modification == "output_metadata":
+        module.out_proj.out_features = 6
+    else:
+        module.head_dim = 1
+    query, memory = _tokens(2), _tokens(3)
+    report = crawl_module(module, args=(query, memory, memory), kwargs={"need_weights": False})
+
+    # Native kernels read the actual projection matrix, so these forwards can
+    # succeed even though module metadata cannot justify a native formula.
+    for name in ("module_flops", "macs", "dmas"):
+        assert report["totals"][name]["status"] == "unavailable"
+        assert report["totals"][name]["known_value"] is None
+        assert any(item["metric"] == name for item in report["diagnostics"])
+    assert report["layers"][0]["token_dependencies"]["status"] == "unavailable"
+    _assert_parameter_accounting(report, module)
+
+
+def test_attention_ignores_output_projection_forward_that_native_kernel_does_not_call():
+    module = nn.MultiheadAttention(4, 2, dropout=0, batch_first=True)
+    module.out_proj.forward = lambda _input: (_ for _ in ()).throw(AssertionError("not a native stage call"))
+    query, memory = _tokens(2), _tokens(3)
+    report = crawl_module(module, args=(query, memory, memory), kwargs={"need_weights": False})
+
+    assert _value(report, "module_flops") == 456
+    assert _value(report, "macs") == 208
+    assert _value(report, "dmas") == 352
+    assert report["layers"][0]["token_dependencies"]["status"] == "complete"
+    _assert_parameter_accounting(report, module)
+
+
+def test_attention_zero_batch_retains_legacy_flops_after_native_operand_validation():
+    module = nn.MultiheadAttention(4, 2, batch_first=True)
+    query, memory = _tokens(2, batch_size=0), _tokens(3, batch_size=0)
+    report = crawl_module(module, args=(query, memory, memory), kwargs={"need_weights": False})
+
+    assert _value(report, "module_flops") == 0
+    assert report["totals"]["macs"]["status"] == "unavailable"
+    assert report["totals"]["dmas"]["status"] == "unavailable"
+    _assert_parameter_accounting(report, module)

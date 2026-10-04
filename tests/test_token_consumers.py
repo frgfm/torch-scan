@@ -2,6 +2,9 @@ import copy
 import json
 import re
 
+# Only parse XML emitted by the renderer, never caller-supplied XML.
+from xml.etree import ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import]
+
 import pytest
 import torch
 from torch import nn
@@ -150,6 +153,42 @@ def test_html_describes_limited_all_relation_and_metadata_only_comparison(report
     assert "Module-local token dependencies changed." in html
     assert "Before token dependencies" in html
     assert "After token dependencies" in html
+
+
+def test_native_causal_attention_svg_shows_visible_token_dependencies():
+    module = nn.MultiheadAttention(4, 2, batch_first=True)
+    tokens = torch.ones(1, 3, 4)
+    report = crawl_module(
+        module,
+        args=(tokens, tokens, tokens),
+        kwargs={
+            "need_weights": False,
+            "attn_mask": torch.ones(3, 3, dtype=torch.bool).triu(1),
+            "is_causal": True,
+        },
+    )
+    older = copy.deepcopy(report)
+    del older["layers"][0]["token_dependencies"]
+    report["layers"][0]["token_dependencies"]["assumptions"].append("<img src=x onerror=alert(1)>")
+    expected = copy.deepcopy(report)
+
+    svg = render_report(report, format="svg", metric="macs")
+    root = ET.fromstring(svg)  # ruff: ignore[suspicious-xml-element-tree-usage]
+    visible = " ".join("".join(node.itertext()) for node in root.findall(".//{http://www.w3.org/2000/svg}text"))
+    older_root = ET.fromstring(  # ruff: ignore[suspicious-xml-element-tree-usage]
+        render_report(older, format="svg", metric="macs")
+    )
+    older_visible = " ".join(
+        "".join(node.itertext()) for node in older_root.findall(".//{http://www.w3.org/2000/svg}text")
+    )
+
+    assert "Module-local token dependencies" in visible
+    assert "query/key/value: prefix through the output position (inclusive)" in visible
+    assert "not graph-wide effective receptive fields" in visible
+    assert "<img src=x onerror=alert(1)>" not in svg
+    assert not root.findall(".//{http://www.w3.org/2000/svg}img")
+    assert "Module-local token dependencies" not in older_visible
+    assert report == expected
 
 
 def test_native_transformer_html_combines_token_dependencies_and_metric_ownership():

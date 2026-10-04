@@ -226,6 +226,8 @@ guarantee strict success: inspect the separate operator report too.
   are counted independently. A successfully returned `None` remains a complete callback output.
 - `mode="structure"` runs the forward pass for structural reporting but executes neither module handlers nor custom
   operator formulas. Compute metrics remain explicitly unrequested.
+- Operator callbacks follow the installed PyTorch counter's contract. PyTorch 2.1 accepts shape callbacks only;
+  native raw-tensor callbacks, including callbacks for nested tensors, require a newer counter.
 - These are theoretical formulas for one observed call. They do not establish latency, hardware traffic, autograd
   cost, or correctness for unseen shapes and branches. Only declare complete coverage you can justify.
 - Handlers run only for observed module calls. Functional operations and fused kernels may use child parameters

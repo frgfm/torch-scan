@@ -43,8 +43,15 @@ dropout. Pre-norm and post-norm layers have the same MAC/DMA stage totals. Norma
 be independently present or absent; native `Identity` or no final normalization adds no stage. Encoder and decoder
 stacks must be nonempty and contain native layer types with matching embedding widths and batch layouts.
 `nn.Transformer` must contain native encoder/decoder stacks matching its embedding width and layout.
+Invoked native `forward` methods must be unchanged; instance replacements require explicit custom estimates.
+The attention output projection uses its parameter tensors directly, so replacing its unused `forward` has no effect.
 For an encoder call with a padding mask, construct `nn.TransformerEncoder(..., enable_nested_tensor=False)` so the
 estimate describes dense work rather than padding-based packing.
+
+PyTorch 2.1.0 has an encoder fast-path bug: a batch-first evaluation call can fail when a bias or LayerNorm affine
+tensor is absent. Use sequence-first layers/stacks for those configurations on that release. On releases that expose
+`torch.backends.mha.set_fastpath_enabled`, disabling the fast path is another option. TorchScan propagates native
+execution errors; these are separate from unsupported estimation formulas.
 
 MAC/DMA formulas accept native dense boolean and floating masks of the documented PyTorch shapes. Masks do not
 reduce dense matrix products. Token dependencies have a narrower mask boundary, described below. Compute estimates

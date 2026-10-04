@@ -519,8 +519,12 @@ def _inspector(
                 else f"{compact_value(count)} newly attributed parameters"
                 + (" · shared tensors" if stats["shared"] else "")
             )
-            output.extend((_text(left + 10, cursor + 51, storage, size=11, color=_MUTED), "</g>"))
+            output.append(_text(left + 10, cursor + 51, storage, size=11, color=_MUTED))
             cursor += 74
+            if dependency_text := call.get("token_dependency_text"):
+                cursor = _paragraph(output, left + 10, cursor, dependency_text, width=43, size=11, leading=15)
+                cursor += 10
+            output.append("</g>")
     diagnostics = _diagnostics(source)
     view = group.get("view", "module_flops")
     metrics = {view, "flops", "module_flops"} if view in ("module_flops", "macs", "dmas") else {view}

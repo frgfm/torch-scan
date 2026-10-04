@@ -4,7 +4,9 @@ import pytest
 import torch
 from torch import nn
 
+from torchscan import crawl_module
 from torchscan.modules._transformer import dmas_attention, macs_attention, validate_native_call
+from torchscan.modules.memory import module_dmas
 
 
 def _tokens(length, width=4, *, batch_first=True, batch=1):
@@ -125,8 +127,11 @@ def test_independent_encoder_and_decoder_layer_counts(batch_first, norm_first, a
 
 @pytest.mark.parametrize("bias", [False, True])
 def test_bias_and_nonaffine_normalization_have_independent_mac_and_dma_effects(bias):
-    layer = nn.TransformerEncoderLayer(4, 2, 8, bias=bias, batch_first=True).eval()
-    source = _tokens(3)
+    # PyTorch 2.1's batch-first fused encoder dereferences absent bias/affine
+    # tensors, and its hooks do not disable fusion. Use its sequence-first path.
+    batch_first = getattr(torch.backends, "mha", None) is not None
+    layer = nn.TransformerEncoderLayer(4, 2, 8, bias=bias, batch_first=batch_first).eval()
+    source = _tokens(3, batch_first=batch_first)
     with torch.no_grad():
         output = layer(source)
     assert macs_attention(layer, (source,), output) == 504
@@ -134,8 +139,7 @@ def test_bias_and_nonaffine_normalization_have_independent_mac_and_dma_effects(b
     assert dmas_attention(layer, (source,), output) == (912 if bias else 876)
     layer.norm1 = nn.LayerNorm(4, elementwise_affine=False).eval()
     layer.norm2 = nn.LayerNorm(4, elementwise_affine=False).eval()
-    # Native encoder fusion dereferences absent affine tensors on some Torch
-    # versions. A hook exercises the dense fallback, as crawling does.
+    # Later versions disable native fusion when a forward hook is present.
     handle = layer.register_forward_hook(lambda *_args: None)
     try:
         with torch.no_grad():
@@ -280,3 +284,41 @@ def test_native_class_with_sparse_parameters_never_receives_a_dense_count(parame
     for formula in (macs_attention, dmas_attention):
         with pytest.raises(NotImplementedError, match="real dense floating"):
             formula(layer, (_tokens(3),), None)
+
+
+@pytest.mark.parametrize("stage", ["linear1", "norm1"])
+def test_unused_registered_parameters_do_not_add_native_stage_dma_reads(stage):
+    layer = nn.TransformerEncoderLayer(4, 2, 8, batch_first=True).eval()
+    source = _tokens(3)
+    with torch.no_grad():
+        expected_output = layer(source)
+    operand_stage = getattr(layer, stage)
+    operand_stage.register_parameter("unused", nn.Parameter(torch.ones(100)))
+    operand_stage.unused_child = nn.Linear(3, 3).eval()
+
+    with torch.no_grad():
+        output = layer(source)
+    torch.testing.assert_close(output, expected_output)
+    # Attention452 + FF196 + two residual36 + two norm96 =912 accesses.
+    # The additional100 + (3x3+3) registered elements are never stage operands.
+    assert dmas_attention(layer, (source,), output) == 912
+    report = crawl_module(layer, args=(source,))
+    assert report["totals"]["dmas"]["value"] == 912
+    # Storage accounting still includes every registered model parameter.
+    assert report["totals"]["parameters"]["value"] == 172 + 100 + 12
+
+
+@pytest.mark.parametrize(("affine", "expected"), [(True, 96), (False, 64)])
+def test_standalone_layernorm_dma_reads_only_affine_operands(affine, expected):
+    norm = nn.LayerNorm(4, elementwise_affine=affine).eval()
+    source = _tokens(3)
+    with torch.no_grad():
+        expected_output = norm(source)
+    norm.register_parameter("unused", nn.Parameter(torch.ones(100)))
+    norm.unused_child = nn.Linear(3, 3).eval()
+    with torch.no_grad():
+        output = norm(source)
+    torch.testing.assert_close(output, expected_output)
+    # N=12, rows=3: statistics/normalization4N+5rows+1=64.
+    # Only an affine stage adds2N + weight4 + bias4 =32 accesses.
+    assert module_dmas(norm, source, output) == expected

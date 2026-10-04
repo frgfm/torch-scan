@@ -214,14 +214,21 @@ Use `strict=True` when any incomplete analysis must stop automation. See the
 
 ## Installation
 
-The examples here use the development API on `main`, which requires Python 3.11+ and PyTorch ≥2.1,<3:
+The stable release is **v0.2.0**. It requires Python ≥3.11,<4 and PyTorch ≥2.1,<3:
+
+```shell
+pip install torchscan
+```
+
+The unreleased version on `main` adds `render_report`, the `custom_modules` extension API, `custom_mapping` on
+`crawl_module` and `summary`, and native Transformer MAC, DMA, and token-dependency estimates.
+Install `main` to use these features:
 
 ```shell
 pip install git+https://github.com/frgfm/torch-scan.git
 ```
 
-For the published stable release, use `pip install torchscan`. Its API and requirements differ; see the
-[installation guide](https://frgfm.github.io/torch-scan/installing.html) and
+See the [installation guide](https://frgfm.github.io/torch-scan/installing.html) and
 [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html).
 For a local development checkout, follow [Contributing](CONTRIBUTING.md).
 

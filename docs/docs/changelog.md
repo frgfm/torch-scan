@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased (0.2.0)
+## Unreleased
+
+These changes require the development version on `main`. They are not in the 0.2.0 package.
+
+### Added
+
+- Scoped arithmetic, normalization, and attention FLOP formulas, plus GroupNorm. Independent formula checks and
+  model tests that do not download weights (#165).
+- Offline HTML and SVG module cost reports with `render_report` (#166).
+- Per-analysis custom module handlers with complete call context, independent metric estimates, and explicit subtree
+  ownership (#167).
+- `custom_mapping` operator overrides on `crawl_module` and `summary`, separate from module estimates (#167).
+- Native Transformer MACs, logical DMAs, and module-local token dependencies. Spatial receptive-field scalars remain
+  unavailable on token modules (#168).
+
+### Changed
+
+- Correct convolution, linear, pooling, normalization, and attention counts. Keep incomplete counts and diagnostics
+  visible (#165).
+
+## v0.2.0 (2026-10-03)
+
+Release note: [v0.2.0](https://github.com/frgfm/torch-scan/releases/tag/v0.2.0)
 
 Version 0.2 is a clean contract break focused on truthful, machine-readable analysis.
 
@@ -11,9 +33,6 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - Complete `args` and `kwargs` forwarding, including nested containers and non-tensor leaves.
 - `strict=True` and `IncompleteAnalysisError` for automation that rejects incomplete metrics.
 - PyTorch-native operator FLOPs through `measure_flops`, with per-call custom formulas and uncounted-op diagnostics.
-- Public per-analysis custom module handlers, complete call context, independent metric estimates, and explicit subtree ownership.
-- `custom_mapping` operator overrides on `crawl_module` and `summary`, separate from module estimates.
-- Scoped arithmetic/normalization/attention formulas, GroupNorm, independent checks, and no-download model smokes.
 - Pure `compare_reports` before/after comparison.
 - Explicit workload peak-memory measurement through `measure_peak_memory` (#149).
 - Opt-in `mode="structure"` for inexpensive shapes, call metadata, parameters, and buffers.
@@ -26,7 +45,6 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - Run model crawling under evaluation mode with gradients disabled, then restore every original module training flag.
 - Make crawler bookkeeping linear in layer-call count and cache forward signatures per module (#147, #152).
 - Separate module-formula metrics from operator-dispatch FLOPs.
-- Fix convolution, linear, pooling, normalization, and attention counts; preserve incomplete states and benchmark labels.
 - Compute module estimates in post-hooks and release activations during the forward pass.
 - Share forward signatures across identical implementations and avoid binding fully supplied positional inputs.
 - Generate integer/boolean inputs without an FP32 temporary and normalize operator names once per distinct packet.

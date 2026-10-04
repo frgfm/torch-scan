@@ -235,6 +235,13 @@ guarantee strict success: inspect the separate operator report too.
   handlers own their documented estimates across their subtree, while observed child calls remain in the structure.
   Register the enclosing model and declare ownership for the metrics whose formulas include its children. See
   [Native Transformer estimates](transformers.md) for complete-call fallback boundaries and token dependencies.
+- An observed descendant with a matching registration opens an otherwise atomic legacy root when the root has no
+  registered enclosing handler. The inclusive root formula is
+  excluded to prevent double counting. Missing root work produces `expanded_atomic_boundary` diagnostics and partial
+  totals with descendant counts as lower bounds. Register the root too to supply its own or inclusive estimates.
+  Without a matching caller registration, the original atomic boundary remains.
+- Atomic implementations can use child parameters without invoking their modules. Parameter totals stay unique,
+  but storage can be attributed to the enclosing atomic row instead of its child rows.
 - Third-party complex-model packages are optional. Register their module classes in your application or experiment;
   TorchScan does not import or install them.
 

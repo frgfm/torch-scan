@@ -131,6 +131,7 @@ incomplete; children do not silently become a substitute estimate. See [Custom m
 | `custom_metric_invalid` | One supplied metric violates its numeric or structured-result contract. |
 | `custom_metric_partial` | A supplied estimate is a lower bound. |
 | `custom_metric_unavailable` | An estimate is explicitly unavailable, including an omitted owned metric. |
+| `expanded_atomic_boundary` | Descendant overrides opened a legacy atomic root; its missing work keeps totals incomplete. |
 
 ## `FlopReport`
 

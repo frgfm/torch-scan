@@ -128,7 +128,8 @@ SCRIPT = r"""
     const heading = el('h3', node.path || '(root)'); heading.tabIndex = -1;
     aside.append(heading, el('p', node.type + ' · ' + node.calls.length + ' observed call(s)', 'muted'));
     metric(aside, node.display, node.display_status, 'metric-value');
-    aside.append(el('p', node.coverage ? 'The inclusive ancestor supplies this cost; this call has no separate estimate.' : 'Recorded contribution subtotal; derived from this path and its descendants.', 'under-map'));
+    aside.append(el('p', node.display_status === 'covered' ? 'The inclusive ancestor supplies this cost; this call has no separate estimate.' : 'Recorded contribution subtotal; derived from this path and its descendants.', 'under-map'));
+    if (node.coverage && node.has_contributions) aside.append(el('p', 'Own calls: ' + node.coverage, 'under-map'));
     if (node.direct_kind === 'structural') aside.append(el('p', 'No direct estimate was recorded for this container.', 'under-map'));
     if (data.before) {
       const comparison = el('div', undefined, 'comparison-note');

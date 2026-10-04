@@ -92,8 +92,8 @@ class _Wrapped(nn.Module):
 def test_complete_attention_arguments(cross, batch_first, bias, batch, macs, dmas):
     module = _native("attention", batch_first=batch_first, bias=bias, **({"kdim": 6, "vdim": 5} if cross else {}))
     query = _tokens(2 if cross else 3, batch_first=batch_first, batch_size=batch)
-    key = _tokens(3, 6, batch_size=batch) if cross else query
-    value = _tokens(3, 5, batch_size=batch) if cross else query
+    key = _tokens(3, 6, batch_first=batch_first, batch_size=batch) if cross else query
+    value = _tokens(3, 5, batch_first=batch_first, batch_size=batch) if cross else query
     # Exercise mixed positional/keyword cross inputs and a full keyword self call.
     kwargs = {"key": key, "value": value, "need_weights": False}
     if not cross:

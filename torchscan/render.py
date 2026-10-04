@@ -541,10 +541,10 @@ def _explorer_data(
                 node["display"] = _text(node["subtotal"])
                 node["before_display"] = _text(node["before_subtotal"])
                 node["display_status"] = node["status"]
-                if node["coverage"] is not None:
+                if node["coverage"] is not None and not node["has_contributions"]:
                     node["display"] = "covered · " + node["coverage"]
                     node["display_status"] = "covered"
-                if node["before_coverage"] is not None:
+                if node["before_coverage"] is not None and not node["before_has_contributions"]:
                     node["before_display"] = "covered · " + node["before_coverage"]
                 node["delta_display"] = (
                     f"complete · {node['delta']:+,} {group['unit']} (recorded contribution delta)"
@@ -640,13 +640,18 @@ def _inspector_html(node: dict[str, Any], group: dict[str, Any], before: Analysi
         if node["direct_kind"] == "structural"
         else ""
     )
+    coverage_note = (
+        f'<p class="under-map">Own calls: {escape(node["coverage"])}</p>'
+        if node["coverage"] is not None and node["has_contributions"]
+        else ""
+    )
     return (
         '<p class="eyebrow">SELECTED MODULE</p>'
         f'<h3 tabindex="-1">{escape(node["path"] or "(root)")}</h3>'
         f'<p class="muted">{escape(node["type"])} · {len(node["calls"])} observed call(s)</p>'
-        f'<p class="metric-value">{escape(node["display"]) if node["coverage"] is not None else _result(node["subtotal"])}</p>'
-        f'<p class="under-map">{"The inclusive ancestor supplies this cost; this call has no separate estimate." if node["coverage"] is not None else "Recorded contribution subtotal; derived from this path and its descendants."}</p>'
-        f"{structural_note}"
+        f'<p class="metric-value">{escape(node["display"]) if node["display_status"] == "covered" else _result(node["subtotal"])}</p>'
+        f'<p class="under-map">{"The inclusive ancestor supplies this cost; this call has no separate estimate." if node["display_status"] == "covered" else "Recorded contribution subtotal; derived from this path and its descendants."}</p>'
+        f"{coverage_note}{structural_note}"
         f"{comparison_html}{shapes}<h4>Call evidence · compute and first attribution</h4>{''.join(rows)}"
         f"{'<p>Structural ancestor; no call record.</p>' if not calls else ''}"
         f'<hr><p class="under-map">Method: {escape(group["method"])}</p>'

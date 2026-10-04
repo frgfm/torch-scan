@@ -1,6 +1,9 @@
 import json
+import warnings
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import FrozenInstanceError
+from itertools import combinations
 from math import prod
 
 import pytest
@@ -15,11 +18,14 @@ from torchscan import (
     crawl_module,
     crawler,
     metric_result,
+    render_report,
     summary,
 )
 
 COMPUTE_METRICS = ("module_flops", "macs", "dmas")
 ALL_METRICS = (*COMPUTE_METRICS, "receptive_field", "effective_stride", "effective_padding")
+RF_METRICS = ALL_METRICS[3:]
+RF_SUBSETS = [subset for size in range(4) for subset in combinations(RF_METRICS, size)]
 
 
 def _estimates(module_flops=0, macs=0, dmas=0):
@@ -819,3 +825,167 @@ def test_inclusive_extent_fallback_does_not_hide_unowned_stride_failure(monkeypa
     assert "receptive_field" not in _layer(report, "child")["metrics"]
     _assert_metric(_layer(report, "child")["metrics"]["effective_stride"], "unavailable", None)
     assert _diagnostics(report, metric="effective_stride")
+
+
+@pytest.fixture(params=["warning", "exception"])
+def failed_receptive_formula(monkeypatch, request):
+    def fail(*_args):
+        if request.param == "exception":
+            raise RuntimeError("legacy RF failed")
+        warnings.warn("legacy RF failed", UserWarning, stacklevel=1)
+        return 1, 1, 0
+
+    monkeypatch.setattr(crawler, "module_rf", fail)
+    return "module_metric_error" if request.param == "exception" else "unsupported_module_metric"
+
+
+@pytest.mark.parametrize("overrides", RF_SUBSETS)
+def test_receptive_failure_diagnoses_only_omitted_fields(failed_receptive_formula, overrides):
+    handler = _handler(dict.fromkeys(overrides, 7)) if overrides else None
+    report = _analyze(nn.Identity(), handler)
+    omitted = [name for name in RF_METRICS if name not in overrides]
+    metrics = _layer(report, "")["metrics"]
+    for name in RF_METRICS:
+        _assert_metric(
+            metrics[name], "complete" if name in overrides else "unavailable", 7 if name in overrides else None
+        )
+    expected = [(failed_receptive_formula, omitted[0], "")] if omitted else []
+    assert [(item["code"], item["metric"], item["path"]) for item in report["diagnostics"]] == expected
+
+
+@pytest.mark.parametrize("covered", RF_SUBSETS)
+def test_receptive_failure_survives_only_unowned_fields(monkeypatch, failed_receptive_formula, covered):
+    builtin = _handler(dict.fromkeys(covered, 9), covered)
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", lambda: {ChildModule: builtin})
+    handlers = {
+        ChildModule: _handler(dict.fromkeys(COMPUTE_METRICS, 0)),
+        nn.Identity: _handler({"receptive_field": 7}),
+    }
+    report = _analyze(ChildModule(nn.Identity()), custom_modules=handlers)
+    child = _layer(report, "child")
+    remaining = [name for name in RF_METRICS[1:] if name not in covered]
+    for name in covered:
+        assert name not in child["metrics"]
+        assert child["metric_owners"][name] == {"path": "", "call_index": 0}
+    for name in remaining:
+        _assert_metric(child["metrics"][name], "unavailable", None)
+    expected = [(failed_receptive_formula, remaining[0], "child")] if remaining else []
+    assert [(item["code"], item["metric"], item["path"]) for item in report["diagnostics"]] == expected
+
+
+@pytest.mark.usefixtures("failed_receptive_formula")
+def test_pruned_receptive_failure_does_not_retarget_unrelated_builtin_field(monkeypatch):
+    builtins = {
+        ChildModule: _handler({"effective_padding": 0}, {"effective_padding"}),
+        nn.Identity: _handler({"effective_stride": None}),
+    }
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", lambda: builtins)
+    handlers = {
+        ChildModule: _handler(dict.fromkeys(COMPUTE_METRICS, 0)),
+        nn.Identity: _handler({"receptive_field": 7}),
+    }
+    report = _analyze(ChildModule(nn.Identity()), custom_modules=handlers)
+    assert [(item["code"], item["metric"], item["path"]) for item in report["diagnostics"]] == [
+        ("unavailable_module_metric", "effective_stride", "child")
+    ]
+
+
+class FailingMapping(Mapping):
+    def __init__(self, values, *, iteration=False, key=None, error=RuntimeError):
+        self.values, self.iteration, self.key, self.error = values, iteration, key, error
+
+    def __iter__(self):
+        if self.iteration:
+            raise RuntimeError("cannot list estimate fields")
+        return iter(self.values)
+
+    def __len__(self):
+        return len(self.values)
+
+    def __getitem__(self, key):
+        if key == self.key:
+            raise self.error("cannot read estimate field")
+        return self.values[key]
+
+
+@pytest.mark.parametrize(
+    "failure", ["fields_iteration", "field_value", "field_missing", "metric_iteration", "metric_value"]
+)
+def test_mapping_access_failures_are_diagnostic_and_restore_state(failure):
+    estimates = _estimates(5, 7, 9)
+    if failure.startswith("metric"):
+        metric = metric_result(status="complete", value=5, unit="FLOPs", scope="module_call", method="mapping")
+        estimates["module_flops"] = FailingMapping(metric, iteration=failure == "metric_iteration", key="value")
+    else:
+        estimates = FailingMapping(
+            estimates,
+            iteration=failure == "fields_iteration",
+            key="module_flops",
+            error=KeyError if failure == "field_missing" else RuntimeError,
+        )
+    calls = []
+
+    def estimate(call):
+        calls.append(call)
+        return estimates
+
+    model = CustomIdentity().train()
+    before = _state(model)
+    handler = ModuleHandler(estimate)
+    report = _analyze(model, handler)
+    _assert_metric(report["totals"]["module_flops"], "unavailable", None)
+    code = "custom_handler_error" if failure == "fields_iteration" else "custom_metric_invalid"
+    assert _diagnostics(report, code=code, metric="module_flops")
+    if failure == "fields_iteration":
+        assert all(_layer(report, "")["metrics"][name]["status"] == "unavailable" for name in ALL_METRICS)
+    else:
+        _assert_totals(report, macs=7, dmas=9)
+        assert len(report["diagnostics"]) == 1
+    assert len(calls) == 1
+    assert _state(model) == before
+    with pytest.raises(IncompleteAnalysisError):
+        _analyze(model, handler, strict=True)
+    assert len(calls) == 2
+    assert _state(model) == before
+
+
+@pytest.mark.parametrize("registered_type", [nn.Linear, nn.Embedding])
+def test_atomic_root_descendant_registration_expands_only_observed_calls(registered_type, monkeypatch):
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", dict)
+    model = nn.Transformer(d_model=4, nhead=2, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=8, dropout=0)
+    model.unused = nn.Embedding(3, 4)
+    args = (torch.ones(3, 1, 4), torch.ones(2, 1, 4))
+    baseline = _analyze(model, args=args)
+    calls = []
+
+    def estimate(call):
+        calls.append(call)
+        return _estimates(2, 1, 1)
+
+    handlers = {registered_type: ModuleHandler(estimate)}
+    structure = _analyze(model, args=args, custom_modules=handlers, mode="structure", strict=True)
+    assert not calls
+    assert not structure["diagnostics"]
+    report = _analyze(model, args=args, custom_modules=handlers)
+    assert report["totals"]["parameters"] == baseline["totals"]["parameters"]
+    if registered_type is nn.Linear:
+        assert calls
+        assert len(_diagnostics(report, code="expanded_atomic_boundary", path="")) == 3
+        for name in COMPUTE_METRICS:
+            _assert_metric(_layer(report, "")["metrics"][name], "unavailable", None)
+            known = sum(
+                layer["metrics"][name]["known_value"] or 0 for layer in report["layers"] if name in layer["metrics"]
+            )
+            _assert_metric(report["totals"][name], "partial", known)
+        with pytest.raises(IncompleteAnalysisError) as exc_info:
+            _analyze(model, args=args, custom_modules=handlers, strict=True)
+        assert len(_diagnostics(exc_info.value.report, code="expanded_atomic_boundary", path="")) == 3
+    else:
+        assert not calls
+        assert report["totals"] == baseline["totals"]
+        assert report["diagnostics"] == baseline["diagnostics"]
+        for name in COMPUTE_METRICS:
+            assert _layer(report, "")["metrics"][name]["scope"] == "subtree"
+            assert all(name not in layer["metrics"] for layer in report["layers"][1:])
+    assert render_report(report).startswith("<!doctype html>")
+    assert _analyze(model, args=args) == baseline

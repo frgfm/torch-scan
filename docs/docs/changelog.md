@@ -11,6 +11,8 @@ Version 0.2 is a clean contract break focused on truthful, machine-readable anal
 - Complete `args` and `kwargs` forwarding, including nested containers and non-tensor leaves.
 - `strict=True` and `IncompleteAnalysisError` for automation that rejects incomplete metrics.
 - PyTorch-native operator FLOPs through `measure_flops`, with per-call custom formulas and uncounted-op diagnostics.
+- Public per-analysis custom module handlers, complete call context, independent metric estimates, and explicit subtree ownership.
+- `custom_mapping` operator overrides on `crawl_module` and `summary`, separate from module estimates.
 - Scoped arithmetic/normalization/attention formulas, GroupNorm, independent checks, and no-download model smokes.
 - Pure `compare_reports` before/after comparison.
 - Explicit workload peak-memory measurement through `measure_peak_memory` (#149).

@@ -17,6 +17,14 @@ import torch
 from torch import nn
 from torch.nn import Module
 
+from .extensions import (
+    _METRIC_UNITS,
+    ModuleCall,
+    ModuleHandler,
+    _handler_metrics,
+    _resolve_handler,
+    _validate_handlers,
+)
 from .flops import FlopReport, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
 from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
@@ -25,6 +33,11 @@ from .utils import aggregate_info, format_info
 __all__ = ["crawl_module", "summary"]
 
 _MODULE_METHOD = "torchscan_module_formula"
+
+
+def _builtin_module_handlers() -> Mapping[type[Module], ModuleHandler]:
+    """Supply complete-call built-in handlers without a mutable public registry."""
+    return {}
 
 
 @cache
@@ -39,8 +52,7 @@ def _describe(value: Any) -> dict[str, Any]:
     """Describe a Python value without retaining its contents."""
     if isinstance(value, torch.Tensor):
         return {
-            "kind": "tensor",
-            "shape": list(value.shape),
+            **({"kind": "nested_tensor"} if value.is_nested else {"kind": "tensor", "shape": list(value.shape)}),
             "dtype": str(value.dtype),
             "device": str(value.device),
             "requires_grad": value.requires_grad,
@@ -191,6 +203,8 @@ def _aggregate_metric(layers: list[LayerReport], name: str, unit: str) -> Metric
 
     known_values = [result["known_value"] for result in results if result["known_value"] is not None]
     known_total = sum(known_values)
+    methods = sorted({result["method"] for result in results})
+    method = _MODULE_METHOD if methods == [_MODULE_METHOD] else f"sum_module_estimates[{', '.join(methods)}]"
     if all(result["status"] == "complete" for result in results):
         status = "complete"
     elif known_values:
@@ -203,7 +217,7 @@ def _aggregate_metric(layers: list[LayerReport], name: str, unit: str) -> Metric
         known_value=known_total,
         unit=unit,
         scope="forward",
-        method=_MODULE_METHOD,
+        method=method,
     )
 
 
@@ -286,6 +300,8 @@ def crawl_module(
     device: str | torch.device | None = None,
     strict: bool = False,
     mode: Literal["full", "structure"] = "full",
+    custom_modules: Mapping[type[Module], ModuleHandler] | None = None,
+    custom_mapping: Mapping[Any, Callable[..., int | float]] | None = None,
 ) -> AnalysisReport:
     """Collect a truthful, machine-readable report from one inference forward pass.
 
@@ -295,10 +311,19 @@ def crawl_module(
     ``mode="structure"`` collects shapes, calls, parameters, and buffers without
     module formulas or operator dispatch. Unrequested compute totals are unavailable
     with method ``not_requested``; ``strict`` checks only requested metrics.
+
+    ``custom_modules`` maps module types to scoped ``ModuleHandler`` callbacks.
+    The closest class in the module's MRO wins; caller handlers precede built-ins.
+    Declared ``subtree_metrics`` are inclusive and suppress descendant estimates
+    for those fields, even when a callback fails. Other fields are module-local.
+    ``custom_mapping`` supplies separate operator FLOP overrides to ``measure_flops``.
+    Neither mapping changes global registries; structure mode executes neither.
     """
     if mode not in ("full", "structure"):
         raise ValueError("mode must be 'full' or 'structure'.")
     call_args, call_kwargs, input_metadata = _prepare_inputs(module, input_shape, dtype, args, kwargs, device)
+    custom_handlers = _validate_handlers(custom_modules)
+    builtin_handlers = _builtin_module_handlers()
     diagnostics: list[Diagnostic] = []
     layers: list[LayerReport] = []
     handles: list[torch.utils.hooks.RemovableHandle] = []
@@ -307,6 +332,7 @@ def crawl_module(
     seen_tensor_ids: set[int] = set()
     training_flags = [(child, child.training) for child in module.modules()]
     signatures: dict[Callable[..., Any], inspect.Signature | None] = {}
+    active_calls: list[int] = []
 
     def is_metric_leaf(current: Module) -> bool:
         return (
@@ -318,6 +344,8 @@ def crawl_module(
     def register(current: Module, path: str) -> None:
         forward_signature: inspect.Signature | None = None
         metric_leaf = is_metric_leaf(current)
+        custom_handler = _resolve_handler(current, custom_handlers)
+        handler = custom_handler or _resolve_handler(current, builtin_handlers)
         if metric_leaf and mode == "full":
             forward = current.forward
             # Bound methods of the same implementation have the same signature.
@@ -385,7 +413,23 @@ def crawl_module(
                     )
                 },
             })
-            pending.setdefault(id(hooked), []).append(len(layers) - 1)
+            layer_index = len(layers) - 1
+            layer = layers[layer_index]
+            if mode == "full":
+                covered: dict[str, dict[str, str | int]] = {}
+                for ancestor_index in active_calls:
+                    ancestor = layers[ancestor_index]
+                    for metric, scope in ancestor.get("metric_ownership", {}).items():
+                        if scope == "subtree":
+                            covered.setdefault(metric, {"path": ancestor["path"], "call_index": ancestor["call_index"]})
+                if covered:
+                    layer["metric_owners"] = covered
+                if handler is not None:
+                    layer["metric_ownership"] = {
+                        name: "subtree" for name in sorted(handler.subtree_metrics) if name not in covered
+                    }
+            pending.setdefault(id(hooked), []).append(layer_index)
+            active_calls.append(layer_index)
 
         def post_hook(
             hooked: Module,
@@ -394,9 +438,10 @@ def crawl_module(
             output: Any,
         ) -> None:
             layer_index = pending[id(hooked)].pop()
+            active_calls.pop()
             layer = layers[layer_index]
             layer["output"] = _describe(output)
-            if not metric_leaf or mode == "structure":
+            if mode == "structure" or (not metric_leaf and handler is None):
                 return
 
             ordered_inputs = _ordered_inputs(forward_signature, hook_args, hook_kwargs)
@@ -405,17 +450,36 @@ def crawl_module(
             # activation references before the next module executes.
             # PyTorch exposes no public context for suspending dispatch modes.
             with torch._C._DisableTorchDispatch():
-                populate_metrics(
-                    layer_index,
-                    hooked,
-                    ordered_inputs,
-                    output,
-                    _first_tensor(ordered_inputs),
-                    _first_tensor(output),
-                )
+                requested = set(_METRIC_UNITS) - layer.get("metric_owners", {}).keys()
+                if handler is not None and requested:
+                    estimates = _handler_metrics(
+                        handler,
+                        ModuleCall(hooked, hook_args, hook_kwargs, output),
+                        requested,
+                        diagnostics,
+                        path,
+                        custom=custom_handler is not None,
+                    )
+                    layer["metrics"].update(estimates)
+                    layer.setdefault("metric_ownership", {}).update({
+                        name: "subtree" if name in handler.subtree_metrics else "module_call" for name in estimates
+                    })
+                    requested -= estimates.keys()
+                if metric_leaf and requested:
+                    populate_metrics(
+                        layer_index,
+                        hooked,
+                        ordered_inputs,
+                        output,
+                        _first_tensor(ordered_inputs),
+                        _first_tensor(output),
+                        requested,
+                    )
 
         handles.append(current.register_forward_pre_hook(pre_hook, with_kwargs=True))
-        handles.append(current.register_forward_hook(post_hook, with_kwargs=True))
+        # A parent can catch a child's forward error and continue. Always unwind
+        # the dynamic ownership stack before observing later sibling calls.
+        handles.append(current.register_forward_hook(post_hook, with_kwargs=True, always_call=True))
 
     def populate_metrics(
         layer_index: int,
@@ -424,10 +488,13 @@ def crawl_module(
         output: Any,
         input_tensor: torch.Tensor | None,
         output_tensor: torch.Tensor | None,
+        requested: set[str],
     ) -> None:
         layer = layers[layer_index]
         if input_tensor is None or output_tensor is None:
             for metric, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
+                if metric not in requested:
+                    continue
                 layer["metrics"][metric] = metric_result(
                     status="unavailable",
                     unit=unit,
@@ -444,27 +511,18 @@ def crawl_module(
             return
 
         flops_output = output if isinstance(hooked, nn.MultiheadAttention) else output_tensor
-        layer["metrics"]["module_flops"] = _measure_module_metric(
-            "module_flops",
-            "FLOPs",
-            layer["path"],
-            diagnostics,
-            lambda: module_flops(hooked, ordered_inputs, flops_output),
-        )
-        layer["metrics"]["macs"] = _measure_module_metric(
-            "macs",
-            "MACs",
-            layer["path"],
-            diagnostics,
-            lambda: module_macs(hooked, input_tensor, output_tensor),
-        )
-        layer["metrics"]["dmas"] = _measure_module_metric(
-            "dmas",
-            "DMAs",
-            layer["path"],
-            diagnostics,
-            lambda: module_dmas(hooked, input_tensor, output_tensor),
-        )
+        measures = {
+            "module_flops": lambda: module_flops(hooked, ordered_inputs, flops_output),
+            "macs": lambda: module_macs(hooked, input_tensor, output_tensor),
+            "dmas": lambda: module_dmas(hooked, input_tensor, output_tensor),
+        }
+        for metric, measure in measures.items():
+            if metric in requested:
+                layer["metrics"][metric] = _measure_module_metric(
+                    metric, _METRIC_UNITS[metric], layer["path"], diagnostics, measure
+                )
+        if not requested & {"receptive_field", "effective_stride", "effective_padding"}:
+            return
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
@@ -491,6 +549,8 @@ def crawl_module(
                 )
         status = "unavailable" if receptive_values is None or caught else "complete"
         for index, name in enumerate(("receptive_field", "effective_stride", "effective_padding")):
+            if name not in requested:
+                continue
             layer["metrics"][name] = metric_result(
                 status=status,
                 value=receptive_values[index] if receptive_values is not None else None,
@@ -499,7 +559,12 @@ def crawl_module(
                 method=_MODULE_METHOD,
             )
 
-    targets = [("", module)] if isinstance(module, nn.Transformer) else list(module.named_modules())
+    legacy_atomic = (
+        isinstance(module, nn.Transformer)
+        and _resolve_handler(module, custom_handlers) is None
+        and _resolve_handler(module, builtin_handlers) is None
+    )
+    targets = [("", module)] if legacy_atomic else list(module.named_modules())
     flop_report: FlopReport
     try:
         module.eval()
@@ -509,7 +574,7 @@ def crawl_module(
             # PyTorch 2.1's explicit module tracker replaces caller tensors in hooks.
             # Omitting it preserves exact args; newer releases still attribute modules automatically.
             if mode == "full":
-                flop_report = measure_flops(lambda: module(*call_args, **call_kwargs))
+                flop_report = measure_flops(lambda: module(*call_args, **call_kwargs), custom_mapping=custom_mapping)
             else:
                 module(*call_args, **call_kwargs)
                 flop_report = {
@@ -611,6 +676,8 @@ def summary(
     device: str | torch.device | None = None,
     strict: bool = False,
     mode: Literal["full", "structure"] = "full",
+    custom_modules: Mapping[type[Module], ModuleHandler] | None = None,
+    custom_mapping: Mapping[Any, Callable[..., int | float]] | None = None,
 ) -> AnalysisReport:
     """Print and return a module report; use ``mode="structure"`` for shapes and counts only."""
     report = crawl_module(
@@ -622,6 +689,8 @@ def summary(
         device=device,
         strict=strict,
         mode=mode,
+        custom_modules=custom_modules,
+        custom_mapping=custom_mapping,
     )
     display_report = aggregate_info(report, max_depth) if isinstance(max_depth, int) else report
     print(format_info(display_report, wrap_mode, receptive_field, effective_rf_stats))  # ruff: ignore[print] T201

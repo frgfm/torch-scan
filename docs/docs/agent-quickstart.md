@@ -70,8 +70,13 @@ Record the hardware and workload state with accelerator results. Do not invent a
 
 1. Preserve the partial result and diagnostic.
 2. Confirm the operator and its exact overload in the installed PyTorch version.
-3. Rerun the equivalent workload with `measure_flops(..., custom_mapping=...)` only when the counting method is known
-   and reviewable. `crawl_module` does not accept custom mappings.
+3. Rerun with `custom_mapping` on `crawl_module`, `summary`, or `measure_flops` only when the counting method is known
+   and reviewable. Operator overrides stay scoped to that analysis.
 4. Keep the formula with the experiment or project that owns the assumption.
 
-See [Model and input support](model-support.md#custom-formulas) and [Methodology](methodology.md).
+For custom module/model estimates, pass `custom_modules={ModuleType: ModuleHandler(callback)}`. The callback receives
+the actual complete call context and may supply each metric independently. Declare inclusive subtree ownership for
+any estimate that includes child work; preserve diagnostics when fields are incomplete or callbacks fail.
+
+See the copyable [extension tutorial](extensions.md), [Model and input support](model-support.md#custom-formulas),
+and [Methodology](methodology.md).

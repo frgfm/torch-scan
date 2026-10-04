@@ -39,11 +39,13 @@ Use the smallest API that answers the request:
 - Peak PyTorch memory is not process RSS or total device memory.
 - Mocked or skipped CUDA/MPS checks are not hardware evidence.
 
-For an uncounted operator, preserve the partial result. Rerun the equivalent workload with
-`measure_flops(..., custom_mapping=...)` only when the owner can justify that operator's counting convention;
-`crawl_module` does not accept custom mappings. Do not create a global registry, baseline store, wrapper service, or
-automatic budget policy.
+For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
+`measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,
+use per-analysis `custom_modules={ModuleType: ModuleHandler(callback)}`. Callbacks receive a complete `ModuleCall`;
+declare inclusive subtree ownership per metric to avoid double-counting children. Keep the module and operator views
+separate. Do not create a global registry, baseline store, wrapper service, or automatic budget policy.
 
 In a repository checkout, read `../../../docs/docs/agent-quickstart.md` for the full workflow and
-`../../../docs/docs/report-schema.md` for the report contract. Outside a checkout, use the published documentation at
+`../../../docs/docs/report-schema.md` for the report contract, and `../../../docs/docs/extensions.md` for copyable
+extension examples. Outside a checkout, use the published documentation at
 `https://frgfm.github.io/torch-scan/`.

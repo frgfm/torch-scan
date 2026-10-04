@@ -1,5 +1,8 @@
 # Native Transformer estimates
 
+For a small runnable model, see the [custom Transformer example](custom-transformer.md). It combines the built-in
+encoder estimates with a caller-supplied head formula.
+
 TorchScan estimates one evaluation call to the exact native PyTorch types `nn.MultiheadAttention`,
 `nn.TransformerEncoderLayer`, `nn.TransformerDecoderLayer`, `nn.TransformerEncoder`, `nn.TransformerDecoder`, and
 `nn.Transformer`. MACs, logical DMAs, and module-local token dependencies use the complete call, including query,

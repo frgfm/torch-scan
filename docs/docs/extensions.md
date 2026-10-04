@@ -4,6 +4,9 @@ Pass `custom_modules` to `crawl_module` or `summary` to analyze your own `torch.
 to that analysis only: they do not change TorchScan's formulas or require your model library as a TorchScan dependency.
 Use `custom_mapping` on the same call when you also need operator FLOP overrides. The two views remain separate.
 
+For an end-to-end example, [combine a native Transformer encoder with a custom head](custom-transformer.md).
+It shows subtree ownership, nested outputs, and partial operator counts in one report.
+
 ## A complete custom call
 
 A `ModuleHandler` wraps one callback taking a `ModuleCall` and returning `ModuleEstimates`. The frozen `ModuleCall`

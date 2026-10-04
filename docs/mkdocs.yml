@@ -84,6 +84,7 @@ nav:
   - Guides:
       - Model and input support: model-support.md
       - Custom module extensions: extensions.md
+      - Custom Transformer example: custom-transformer.md
       - Understanding results: metrics.md
       - Methodology: methodology.md
       - Native Transformers: transformers.md

@@ -1,14 +1,24 @@
 # Installation
 
-TorchScan has a published stable release and an unreleased development version:
+Choose the stable release or the unreleased version on `main`:
 
 | Track | Version | Python | PyTorch |
 | --- | --- | --- | --- |
-| Stable | 0.1.2 | ≥3.6,<4 | ≥1.5,<2 |
-| Development (`main`) | 0.2.0.dev0 | ≥3.11,<4 | ≥2.1,<3 |
+| Stable | 0.2.0 | ≥3.11,<4 | ≥2.1,<3 |
+| Development (`main`) | Unreleased changes after 0.2.0 | ≥3.11,<4 | ≥2.1,<3 |
 
-The API reference on this site follows the development version. Version 0.2 is a deliberate breaking release; use the
-[migration guide](migration-v02.md) when moving from 0.1.
+Version 0.2.0 was released on October 3, 2026. Use the [migration guide](migration-v02.md) when moving from 0.1.
+The API reference on this site follows `main` and includes unreleased features.
+
+| Feature | Available in |
+| --- | --- |
+| Structured reports, `args`/`kwargs`, nested outputs, strict checks, structure mode, and report comparison | Stable 0.2.0 and `main` |
+| Native Transformer module FLOPs and callable peak-memory measurement | Stable 0.2.0 and `main` |
+| Offline HTML/SVG reports with `render_report` | `main` only; unreleased |
+| The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
+| New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
+
+See the [changelog](changelog.md) for other changes after 0.2.0.
 
 ## Stable release
 
@@ -18,7 +28,7 @@ Install the current PyPI release:
 pip install torchscan
 ```
 
-The 0.1.2 package does not contain the v0.2 report contract documented on this site.
+This installs v0.2.0 with the structured report contract. Install `main` for the unreleased features listed above.
 
 ## Development version
 

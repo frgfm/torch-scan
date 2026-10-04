@@ -157,6 +157,14 @@ def _handler_metrics(
     method = f"custom_module_handler:{identity}" if custom else "torchscan_module_formula"
 
     def diagnose(code: str, metric: str, message: str) -> None:
+        if not custom:
+            code = {
+                "custom_handler_error": "module_metric_error",
+                "custom_handler_invalid": "invalid_module_estimates",
+                "custom_metric_invalid": "invalid_module_metric",
+                "custom_metric_partial": "incomplete_module_metric",
+                "custom_metric_unavailable": "unavailable_module_metric",
+            }[code]
         diagnostics.append({"code": code, "severity": "warning", "metric": metric, "path": path, "message": message})
 
     def unavailable(name: str) -> MetricResult:
@@ -192,7 +200,7 @@ def _handler_metrics(
             results[name] = unavailable(name)
             continue
         results[name] = result
-        if result["status"] != "complete":
+        if result["status"] != "complete" and (custom or not result["method"].endswith(":not_applicable")):
             diagnose(
                 f"custom_metric_{result['status']}",
                 name,

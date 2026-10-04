@@ -13,6 +13,7 @@ from torchscan import (
     ModuleEstimates,
     ModuleHandler,
     crawl_module,
+    crawler,
     metric_result,
     summary,
 )
@@ -837,15 +838,200 @@ def test_caught_forward_failure_releases_subtree_ownership_before_fallback():
         },
     )
 
-    assert len(calls) == 1
-    assert _layer(report, "owner")["output"] == {"kind": "none"}
+    assert not calls
+    assert _layer(report, "owner")["output"] == {"kind": "failed"}
     assert _layer(report, "owner.child")["metric_owners"]["module_flops"] == {"path": "owner", "call_index": 0}
     assert "module_flops" not in _layer(report, "fallback").get("metric_owners", {})
     assert _layer(report, "fallback")["metrics"]["module_flops"]["value"] == 8
     assert report["totals"]["module_flops"]["status"] == "partial"
     assert report["totals"]["module_flops"]["known_value"] == 8
     assert report["totals"]["parameters"]["value"] == 12
+    assert any(diagnostic["code"] == "module_forward_error" for diagnostic in report["diagnostics"])
     assert model.training
     assert all(
         (len(child._forward_pre_hooks), len(child._forward_hooks)) == (pre, post) for child, pre, post in hooks_before
     )
+
+
+def test_successful_none_output_reaches_callback():
+    class ReturnsNone(nn.Module):
+        def forward(self):
+            return None
+
+    outputs = []
+
+    def estimate(call):
+        outputs.append(call.output)
+        return _estimates()
+
+    report = crawl_module(ReturnsNone(), args=(), custom_modules={ReturnsNone: ModuleHandler(estimate)}, strict=True)
+    assert outputs == [None]
+    assert _layer(report, "")["output"] == {"kind": "none"}
+
+
+def test_recursive_composite_keeps_outer_invocation_ownership():
+    class Recursive(nn.Module):
+        def forward(self, input_t, remaining):
+            return self(input_t, remaining - 1) if remaining else input_t
+
+    calls = []
+
+    def estimate(call):
+        calls.append(call.args[1])
+        return _estimates(10, 0, 0)
+
+    report = crawl_module(
+        Recursive(),
+        args=(torch.ones(1), 2),
+        custom_modules={Recursive: ModuleHandler(estimate, subtree_metrics=frozenset(ALL_METRICS))},
+        strict=True,
+    )
+    assert calls == [2]
+    assert [layer["call_index"] for layer in report["layers"]] == [0, 1, 2]
+    assert report["totals"]["module_flops"]["value"] == 10
+    assert all(
+        layer["metric_owners"]["module_flops"] == {"path": "", "call_index": 0} for layer in report["layers"][1:]
+    )
+
+
+def test_nested_tensor_context_keeps_actual_objects_without_rectangular_metadata():
+    inputs = torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(4, 3)])
+    calls = []
+
+    def estimate(call):
+        calls.append(call)
+        assert call.args[0] is inputs
+        assert call.output is inputs
+        return _estimates(0, 0, 0)
+
+    report = crawl_module(
+        CustomIdentity(), args=(inputs,), custom_modules={CustomIdentity: ModuleHandler(estimate)}, strict=True
+    )
+    assert len(calls) == 1
+    assert report["inputs"]["args"][0]["kind"] == "nested_tensor"
+    assert _layer(report, "")["output"]["kind"] == "nested_tensor"
+    assert "shape" not in _layer(report, "")["output"]
+    assert json.loads(json.dumps(report)) == report
+
+
+def test_registered_atomic_composite_does_not_add_inclusive_fallback_to_children():
+    model = nn.Transformer(d_model=4, nhead=2, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=8, dropout=0)
+    report = crawl_module(
+        model,
+        args=(torch.ones(3, 1, 4), torch.ones(2, 1, 4)),
+        custom_modules={nn.Transformer: ModuleHandler(lambda _call: {})},
+    )
+    assert len(report["layers"]) > 1
+    assert not any(name in _layer(report, "")["metrics"] for name in COMPUTE_METRICS)
+    for name in COMPUTE_METRICS:
+        known = sum(
+            layer["metrics"][name]["known_value"] or 0 for layer in report["layers"] if name in layer["metrics"]
+        )
+        assert report["totals"][name]["known_value"] == known
+
+
+@pytest.mark.parametrize("inclusive_custom", [False, True])
+def test_builtin_fallback_owns_only_fields_it_supplies(monkeypatch, inclusive_custom):
+    class BuiltinComposite(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = CustomIdentity()
+
+        def forward(self, input_t):
+            return self.child(input_t)
+
+    def builtin_estimate(_call):
+        return _estimates(100, 50, 75)
+
+    builtin = ModuleHandler(builtin_estimate, subtree_metrics=frozenset(ALL_METRICS))
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", lambda: {BuiltinComposite: builtin})
+    report = crawl_module(
+        BuiltinComposite(),
+        args=(torch.ones(1),),
+        custom_modules={
+            BuiltinComposite: ModuleHandler(
+                lambda _call: {"module_flops": 3},
+                subtree_metrics=frozenset({"module_flops"}) if inclusive_custom else frozenset(),
+            ),
+            # These failed child fields must be pruned with their diagnostics
+            # when an inclusive builtin fallback supplies the parent's fields.
+            CustomIdentity: ModuleHandler(lambda _call: _estimates(5, None, -1)),
+        },
+        strict=True,
+    )
+    assert report["totals"]["module_flops"]["value"] == (3 if inclusive_custom else 8)
+    assert report["totals"]["macs"]["value"] == 50
+    assert report["totals"]["dmas"]["value"] == 75
+    child = _layer(report, "child")
+    assert child["metric_owners"]["macs"] == {"path": "", "call_index": 0}
+    assert "macs" not in child["metrics"]
+    assert "dmas" not in child["metrics"]
+    assert _layer(report, "")["metrics"]["macs"]["method"] == "torchscan_module_formula"
+    assert _layer(report, "")["metrics"]["module_flops"]["method"].startswith("custom")
+    assert not report["diagnostics"]
+
+
+def test_builtin_error_uses_builtin_diagnostic_method_and_keeps_custom_field(monkeypatch):
+    def builtin_estimate(_call):
+        raise ValueError("builtin estimate failed")
+
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", lambda: {nn.Identity: ModuleHandler(builtin_estimate)})
+    report = crawl_module(
+        nn.Identity(),
+        args=(torch.ones(1),),
+        custom_modules={nn.Identity: ModuleHandler(lambda _call: {"module_flops": 3})},
+    )
+    assert report["totals"]["module_flops"]["value"] == 3
+    assert report["totals"]["macs"]["status"] == "unavailable"
+    assert all(diagnostic["code"] == "module_metric_error" for diagnostic in report["diagnostics"])
+    assert all(diagnostic["metric"] != "module_flops" for diagnostic in report["diagnostics"])
+    assert _layer(report, "")["metrics"]["macs"]["method"] == "torchscan_module_formula"
+
+
+def test_omitted_non_tensor_leaf_receptive_metrics_remain_explicitly_unavailable():
+    class Scalar(nn.Module):
+        def forward(self, scalar):
+            return scalar + 1
+
+    with pytest.raises(IncompleteAnalysisError) as exc_info:
+        crawl_module(
+            Scalar(),
+            args=(1,),
+            custom_modules={Scalar: ModuleHandler(lambda _call: {"module_flops": 1, "macs": 0, "dmas": 2})},
+            strict=True,
+        )
+    metrics = _layer(exc_info.value.report, "")["metrics"]
+    for name in ("receptive_field", "effective_stride", "effective_padding"):
+        assert metrics[name]["status"] == "unavailable"
+        assert any(diagnostic["metric"] == name for diagnostic in exc_info.value.report["diagnostics"])
+
+
+def test_inclusive_extent_fallback_does_not_hide_unowned_stride_failure(monkeypatch):
+    class Composite(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.child = CustomIdentity()
+
+        def forward(self, input_t):
+            return self.child(input_t)
+
+    monkeypatch.setattr(
+        crawler,
+        "_builtin_module_handlers",
+        lambda: {Composite: ModuleHandler(lambda _call: {"receptive_field": 7}, frozenset({"receptive_field"}))},
+    )
+    with pytest.raises(IncompleteAnalysisError) as exc_info:
+        crawl_module(
+            Composite(),
+            args=(torch.ones(1),),
+            custom_modules={
+                Composite: ModuleHandler(lambda _call: {"module_flops": 0, "macs": 0, "dmas": 0}),
+                CustomIdentity: ModuleHandler(lambda _call: {"module_flops": 0, "macs": 0, "dmas": 0}),
+            },
+            strict=True,
+        )
+    report = exc_info.value.report
+    assert _layer(report, "")["metrics"]["receptive_field"]["value"] == 7
+    assert "receptive_field" not in _layer(report, "child")["metrics"]
+    assert _layer(report, "child")["metrics"]["effective_stride"]["status"] == "unavailable"
+    assert any(diagnostic["metric"] == "effective_stride" for diagnostic in report["diagnostics"])

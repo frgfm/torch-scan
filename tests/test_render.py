@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET  # ruff: ignore[suspicious-xml-etree-imp
 import pytest
 from torch import nn
 
-from torchscan import crawl_module, metric_result, render_report
+from torchscan import ModuleHandler, crawl_module, metric_result, render_report
 from torchscan._render_map import build_maps
 
 
@@ -71,6 +71,82 @@ def _panel(root, name):
 
 def _embedded(root):
     return json.loads(root.find("script", id="torchscan-data")[0].text())
+
+
+@pytest.mark.parametrize("status", ["complete", "partial", "unavailable"])
+def test_inclusive_handler_coverage_is_not_rendered_as_missing_child_work(status):
+    estimate = metric_result(
+        status=status,
+        value=100,
+        known_value=20,
+        unit="FLOPs",
+        scope="subtree",
+        method="inclusive_cost",
+    )
+    report = crawl_module(
+        nn.Sequential(nn.Linear(4, 8, bias=False), nn.Identity(), nn.Linear(8, 2, bias=False)),
+        (4,),
+        custom_modules={
+            nn.Sequential: ModuleHandler(
+                lambda _call: {"module_flops": estimate}, subtree_metrics=frozenset({"module_flops"})
+            ),
+        },
+    )
+
+    root = _document(report)
+    groups = _embedded(root)["maps"]["module_flops"]["groups"]
+    assert len(groups) == 1
+    group = groups[0]
+    assert group["kind"] == "recorded"
+    assert group["known_total"] == estimate["known_value"]
+    for node in group["nodes"][1:]:
+        assert node["rail"] == []
+        assert node["direct"] is None
+        assert node["direct_kind"] == "covered"
+        assert node["display_status"] == "covered"
+        assert node["calls"][0]["display"] == "covered · included in (root) · call #0 inclusive estimate"
+        assert node["calls"][0]["display_status"] == "covered"
+        assert node["calls"][0]["owner"] == {"path": "", "call_index": 0}
+
+    detail = root.find("details", id="call-1")[0]
+    assert "module_flops: included in (root) · call #0 inclusive estimate" in detail.text()
+    assert "not_recorded" not in detail.text()
+    panel = _panel(root, "module_flops")
+    assert "Covered by inclusive estimates (3)" in panel.text()
+    assert f"Unranked incomplete or absent measurements ({0 if status == 'complete' else 1})" in panel.text()
+    svg = ET.fromstring(render_report(report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    assert not any(
+        "rail-" in element.attrib.get("id", "") and "node-1" in element.attrib["id"] for element in svg.iter()
+    )
+
+
+@pytest.mark.parametrize("invalid", ["scope", "owner_shape", "owner_index", "missing_owner", "duplicate_estimate"])
+def test_invalid_ownership_evidence_is_rejected(invalid):
+    report = crawl_module(
+        nn.Sequential(nn.Linear(4, 2)),
+        (4,),
+        custom_modules={
+            nn.Sequential: ModuleHandler(
+                lambda _call: {"module_flops": 100}, subtree_metrics=frozenset({"module_flops"})
+            ),
+        },
+    )
+    parent, child = report["layers"]
+    if invalid == "scope":
+        parent["metric_ownership"]["module_flops"] = "unknown"
+    elif invalid == "owner_shape":
+        child["metric_owners"]["module_flops"] = None
+    elif invalid == "owner_index":
+        child["metric_owners"]["module_flops"]["call_index"] = True
+    elif invalid == "missing_owner":
+        child["metric_owners"]["module_flops"]["path"] = "missing"
+    else:
+        child["metrics"]["module_flops"] = metric_result(
+            status="complete", value=1, unit="FLOPs", scope="module_call", method="duplicate"
+        )
+
+    with pytest.raises(ValueError):
+        render_report(report)
 
 
 def test_real_report_html_hierarchy_ranking_methods_and_offline_controls(report):

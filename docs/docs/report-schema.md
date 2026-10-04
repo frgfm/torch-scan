@@ -61,6 +61,10 @@ Recursive metadata preserves tuples, lists, mappings, scalars, and `None`. Tenso
 device, and `requires_grad`. It excludes tensor contents, filenames, source paths, and object representations that can
 leak private values.
 
+Ragged PyTorch nested tensors use `kind="nested_tensor"`, dtype, device, and `requires_grad` without a fabricated
+rectangular shape. A module invocation that raises inside a model that catches the error has output `kind="failed"`,
+unavailable estimates, and a `module_forward_error` diagnostic; its callback is not invoked.
+
 ## Layer calls
 
 Each layer record contains:

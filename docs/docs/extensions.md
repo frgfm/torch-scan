@@ -99,10 +99,14 @@ The callback may return any subset of these independent fields:
 A numeric field is a complete estimate, including a legitimate zero. A `MetricResult` preserves complete, partial, or
 unavailable state; `None` explicitly means unavailable. Omission is different: on a formula leaf, an omitted field uses
 the built-in formula, including its unsupported-work diagnostics. On an ordinary registered composite, an omitted,
-unowned field delegates to descendants. Existing atomic built-in models retain their formula-leaf fallback behavior.
+unowned field delegates to descendants. When a built-in complete-call handler exists, omitted fields use that handler's
+estimates and ownership scope before legacy leaf fallback or child delegation. Inclusive built-in fallbacks cover
+descendants only for the fields they supply; a caller's module-local field still adds to those children.
 An explicitly supplied `None` or unavailable result never falls back to a built-in zero or to children.
 
-Callbacks run once per matching invocation, so a reused module receives a new call context each time. Registration is
+Callbacks run at most once per successfully completed matching invocation; an ancestor owning all fields skips a
+descendant callback. A partially covered callback receives the full context, but its covered fields are ignored.
+A reused module receives a new call context each time it is estimated. Registration is
 for module types, not individual instances; branch on `call.module` attributes if instances need different formulas.
 
 ## Own an inclusive subtree explicitly
@@ -153,6 +157,11 @@ parameter statistics remain in the report. Covered metric fields are omitted fro
 identifies the owning ancestor's `path` and `call_index`. The owning row records `metric_ownership` as `"subtree"`;
 ordinary supplied estimates use `"module_call"`. Sum the retained estimates once, without inventing zeros for covered
 fields. Model parameter totals still count shared parameters only once.
+
+If a caller overrides some fields while other fields fall back to an inclusive built-in handler, descendant estimates
+may run before that parent callback returns. The selected parent fields then replace those contributions and their
+estimation diagnostics. This needs no retained child activations or extra model execution; it can perform additional
+estimation bookkeeping. Explicit caller subtree ownership suppresses child estimates before they execute.
 
 Declaring ownership is a commitment to that scope. If the parent omits an owned field, returns an unavailable value,
 or its callback fails, the children remain covered and the owned result is incomplete. TorchScan does not silently
@@ -212,6 +221,9 @@ guarantee strict success: inspect the separate operator report too.
   retaining an activation in your callback's own state can retain its storage and is your responsibility.
 - TorchScan removes its hooks and restores every original training flag after analysis, including after errors.
   Calls sharing a model instance must remain serialized.
+- A failed forward does not invoke its callback. If the enclosing model catches that failure and continues, its row
+  records output kind `failed`, unavailable estimates, and a `module_forward_error` diagnostic. Later sibling calls
+  are counted independently. A successfully returned `None` remains a complete callback output.
 - `mode="structure"` runs the forward pass for structural reporting but executes neither module handlers nor custom
   operator formulas. Compute metrics remain explicitly unrequested.
 - These are theoretical formulas for one observed call. They do not establish latency, hardware traffic, autograd

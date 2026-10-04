@@ -333,6 +333,7 @@ def crawl_module(
     training_flags = [(child, child.training) for child in module.modules()]
     signatures: dict[Callable[..., Any], inspect.Signature | None] = {}
     active_calls: list[int] = []
+    metric_diagnostics: list[tuple[int, Diagnostic]] = []
 
     def is_metric_leaf(current: Module) -> bool:
         return (
@@ -343,9 +344,12 @@ def crawl_module(
 
     def register(current: Module, path: str) -> None:
         forward_signature: inspect.Signature | None = None
-        metric_leaf = is_metric_leaf(current)
         custom_handler = _resolve_handler(current, custom_handlers)
-        handler = custom_handler or _resolve_handler(current, builtin_handlers)
+        builtin_handler = _resolve_handler(current, builtin_handlers)
+        handler = custom_handler or builtin_handler
+        # A registered composite defines its own boundary. Falling back to an
+        # inclusive atomic formula while also observing children double-counts.
+        metric_leaf = not any(current.children()) or (handler is None and is_metric_leaf(current))
         if metric_leaf and mode == "full":
             forward = current.forward
             # Bound methods of the same implementation have the same signature.
@@ -437,7 +441,7 @@ def crawl_module(
             hook_kwargs: dict[str, Any],
             output: Any,
         ) -> None:
-            layer_index = pending[id(hooked)].pop()
+            layer_index = pending[id(hooked)][-1]
             active_calls.pop()
             layer = layers[layer_index]
             layer["output"] = _describe(output)
@@ -449,6 +453,7 @@ def crawl_module(
             # only while calculating metadata-based estimates, then release all
             # activation references before the next module executes.
             # PyTorch exposes no public context for suspending dispatch modes.
+            call_diagnostics: list[Diagnostic] = []
             with torch._C._DisableTorchDispatch():
                 requested = set(_METRIC_UNITS) - layer.get("metric_owners", {}).keys()
                 if handler is not None and requested:
@@ -456,7 +461,7 @@ def crawl_module(
                         handler,
                         ModuleCall(hooked, hook_args, hook_kwargs, output),
                         requested,
-                        diagnostics,
+                        call_diagnostics,
                         path,
                         custom=custom_handler is not None,
                     )
@@ -464,6 +469,30 @@ def crawl_module(
                     layer.setdefault("metric_ownership", {}).update({
                         name: "subtree" if name in handler.subtree_metrics else "module_call" for name in estimates
                     })
+                    requested -= estimates.keys()
+                if custom_handler is not None and builtin_handler is not None and requested:
+                    estimates = _handler_metrics(
+                        builtin_handler,
+                        ModuleCall(hooked, hook_args, hook_kwargs, output),
+                        requested,
+                        call_diagnostics,
+                        path,
+                        custom=False,
+                    )
+                    layer["metrics"].update(estimates)
+                    layer.setdefault("metric_ownership", {}).update({
+                        name: "subtree" if name in builtin_handler.subtree_metrics else "module_call"
+                        for name in estimates
+                    })
+                    # Caller fields are only known after forward. If an inclusive
+                    # built-in supplies an omitted field, discard earlier child
+                    # estimates for that field; never retain child activations.
+                    for name in estimates.keys() & builtin_handler.subtree_metrics:
+                        owner = {"path": path, "call_index": layer["call_index"]}
+                        for descendant in layers[layer_index + 1 :]:
+                            descendant["metrics"].pop(name, None)
+                            descendant.get("metric_ownership", {}).pop(name, None)
+                            descendant.setdefault("metric_owners", {})[name] = owner
                     requested -= estimates.keys()
                 if metric_leaf and requested:
                     populate_metrics(
@@ -474,12 +503,43 @@ def crawl_module(
                         _first_tensor(ordered_inputs),
                         _first_tensor(output),
                         requested,
+                        call_diagnostics,
+                    )
+            metric_diagnostics.extend((layer_index, diagnostic) for diagnostic in call_diagnostics)
+
+        def cleanup_hook(hooked: Module, _hook_args: tuple[Any, ...], _output: Any) -> None:
+            pending_calls = pending.get(id(hooked))
+            if not pending_calls:
+                return
+            layer_index = pending_calls.pop()
+            layer = layers[layer_index]
+            if not active_calls or active_calls[-1] != layer_index:
+                return
+            # Only cleanup runs on a failed forward, so a legitimate None output
+            # still reaches the estimator through the ordinary post-hook.
+            active_calls.pop()
+            layer["output"] = {"kind": "failed"}
+            _diagnostic(
+                diagnostics,
+                code="module_forward_error",
+                metric="calls",
+                path=path,
+                message="The module forward did not complete; no estimation callback was executed.",
+            )
+            if mode == "full" and (metric_leaf or handler is not None):
+                for name in set(_METRIC_UNITS) - layer.get("metric_owners", {}).keys():
+                    layer["metrics"][name] = metric_result(
+                        status="unavailable",
+                        unit=_METRIC_UNITS[name],
+                        scope="subtree" if handler is not None and name in handler.subtree_metrics else "module_call",
+                        method="forward_failed",
                     )
 
         handles.append(current.register_forward_pre_hook(pre_hook, with_kwargs=True))
+        handles.append(current.register_forward_hook(post_hook, with_kwargs=True))
         # A parent can catch a child's forward error and continue. Always unwind
         # the dynamic ownership stack before observing later sibling calls.
-        handles.append(current.register_forward_hook(post_hook, with_kwargs=True, always_call=True))
+        handles.append(current.register_forward_hook(cleanup_hook, always_call=True))
 
     def populate_metrics(
         layer_index: int,
@@ -489,10 +549,11 @@ def crawl_module(
         input_tensor: torch.Tensor | None,
         output_tensor: torch.Tensor | None,
         requested: set[str],
+        call_diagnostics: list[Diagnostic],
     ) -> None:
         layer = layers[layer_index]
         if input_tensor is None or output_tensor is None:
-            for metric, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
+            for metric, unit in _METRIC_UNITS.items():
                 if metric not in requested:
                     continue
                 layer["metrics"][metric] = metric_result(
@@ -502,7 +563,7 @@ def crawl_module(
                     method=_MODULE_METHOD,
                 )
                 _diagnostic(
-                    diagnostics,
+                    call_diagnostics,
                     code="missing_metric_tensor",
                     metric=metric,
                     path=layer["path"],
@@ -519,7 +580,7 @@ def crawl_module(
         for metric, measure in measures.items():
             if metric in requested:
                 layer["metrics"][metric] = _measure_module_metric(
-                    metric, _METRIC_UNITS[metric], layer["path"], diagnostics, measure
+                    metric, _METRIC_UNITS[metric], layer["path"], call_diagnostics, measure
                 )
         if not requested & {"receptive_field", "effective_stride", "effective_padding"}:
             return
@@ -531,7 +592,7 @@ def crawl_module(
             caught = []
             receptive_values: tuple[float, float, float] | None = None
             _diagnostic(
-                diagnostics,
+                call_diagnostics,
                 code="module_metric_error",
                 metric="receptive_field",
                 path=layer["path"],
@@ -541,7 +602,7 @@ def crawl_module(
             receptive_values = (receptive_field, stride, padding)
             if caught:
                 _diagnostic(
-                    diagnostics,
+                    call_diagnostics,
                     code="unsupported_module_metric",
                     metric="receptive_field",
                     path=layer["path"],
@@ -602,6 +663,26 @@ def crawl_module(
     buffer_elements = sum(buffer.numel() for buffer in buffers)
     buffer_bytes = sum(buffer.numel() * buffer.element_size() for buffer in buffers)
     model_tensors = [*parameters, *buffers]
+    for layer_index, diagnostic in metric_diagnostics:
+        layer = layers[layer_index]
+        if diagnostic["metric"] not in layer.get("metric_owners", {}):
+            diagnostics.append(diagnostic)
+        elif diagnostic["metric"] == "receptive_field" and diagnostic["code"] in {
+            "unsupported_module_metric",
+            "module_metric_error",
+        }:
+            # The legacy RF formula returns a group of three fields. Covering
+            # its extent alone must not hide failed, unowned stride/padding.
+            affected = next(
+                (
+                    name
+                    for name in ("effective_stride", "effective_padding")
+                    if name in layer["metrics"] and layer["metrics"][name]["status"] != "complete"
+                ),
+                None,
+            )
+            if affected is not None:
+                diagnostics.append({**diagnostic, "metric": affected})
     diagnostics.extend(flop_report["diagnostics"])
 
     report: AnalysisReport = {

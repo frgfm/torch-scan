@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 import torch
 from torch import nn
-from torchscan import crawl_module, metric_result, render_report
+from torchscan import ModuleHandler, crawl_module, metric_result, render_report
 
 output = Path(sys.argv[1])
 model = nn.Sequential(
@@ -24,6 +24,10 @@ model = nn.Sequential(
 )
 report = crawl_module(model, (4,))
 output.joinpath('complete.html').write_text(render_report(report), encoding='utf-8')
+covered = crawl_module(model, (4,), custom_modules={nn.Sequential: ModuleHandler(
+    lambda call: {'module_flops': 100}, subtree_metrics=frozenset({'module_flops'})
+)})
+output.joinpath('covered.html').write_text(render_report(covered), encoding='utf-8')
 
 mixed = copy.deepcopy(report)
 next(layer for layer in mixed['layers'] if layer['path'] == '0.2')['metrics']['module_flops']['method'] = 'zzz_custom_formula'
@@ -180,6 +184,17 @@ assert.equal(generated.status, 0, generated.stderr);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.setViewportSize({ width: 1280, height: 900 });
+
+    // Inclusive parent coverage remains explicit when metric switching selects a covered child.
+    await load('covered.html');
+    await page.locator('#view-parameters').check();
+    await chartNode('0.0', group('parameters')).click();
+    await page.locator('#view-module_flops').check();
+    assert.equal(await selectedPath(), '0.0');
+    assert.match(await inspector().locator('.metric-value').textContent(), /covered.*inclusive estimate/);
+    assert.match(await inspector().textContent(), /this call has no separate estimate/);
+    assert.doesNotMatch(await inspector().textContent(), /unavailable.*not recorded/);
+    assert.equal(await panel().locator('.rail-card.unknown').count(), 0);
 
     // One reset restores every incompatible method group's independent branch state.
     await load('mixed.html');

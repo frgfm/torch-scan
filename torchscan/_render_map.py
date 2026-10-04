@@ -52,6 +52,16 @@ def _result(layer: LayerReport, view: str) -> MetricResult | None:
 _key = itemgetter("method", "unit", "scope")
 
 
+def _owner_text(owner: dict[str, str | int]) -> str:
+    return f"included in {owner['path'] or '(root)'} · call #{owner['call_index']} inclusive estimate"
+
+
+def _coverage(calls: list[dict[str, Any]]) -> str | None:
+    if calls and all(call.get("owner") is not None for call in calls):
+        return "; ".join(sorted({_owner_text(call["owner"]) for call in calls}))
+    return None
+
+
 def _summary(results: list[MetricResult], group: GroupKey, *, derived: bool = False) -> MetricResult | None:
     if not results:
         return None
@@ -106,6 +116,7 @@ def _calls(report: AnalysisReport | None, view: str) -> dict[str, list[dict[str,
                 "index": index,
                 "call_index": layer["call_index"],
                 "result": result,
+                "owner": layer.get("metric_owners", {}).get(view),
                 "shared": layer["parameters"]["shared"],
             })
     return paths
@@ -115,7 +126,7 @@ def _group_results(
     calls: list[dict[str, Any]], group: GroupKey, *, leaf: bool, synthetic: bool = False
 ) -> list[MetricResult]:
     if synthetic:
-        return [_unavailable(group) for call in calls if leaf and call["result"] is None]
+        return [_unavailable(group) for call in calls if leaf and call["result"] is None and call["owner"] is None]
     return [call["result"] for call in calls if call["result"] is not None and _key(call["result"]) == group]
 
 
@@ -289,7 +300,7 @@ def build_maps(
             if call["result"] is not None
         }
         missing_leaves = any(
-            call["result"] is None
+            call["result"] is None and call["owner"] is None
             for rows in (calls, before_calls)
             for path, row in rows.items()
             if not children[path]
@@ -347,16 +358,22 @@ def build_maps(
                     "before_calls": before_calls[path],
                     "direct": direct,
                     "direct_kind": "structural"
+                    if direct is None and _coverage(calls[path] or before_calls[path]) is None
+                    else "covered"
                     if direct is None
                     else "attributed"
                     if view in _PARAMETERS
                     else "recorded",
                     "direct_known": _known(direct),
+                    "coverage": _coverage(calls[path]),
+                    "before_coverage": _coverage(before_calls[path]),
                     "known": _known(subtotal),
                     "subtotal": subtotal,
+                    "has_contributions": bool(subtree[path]),
                     "status": subtotal["status"],
                     "before_direct": before_direct,
                     "before_subtotal": before_subtotal,
+                    "before_has_contributions": bool(before_subtree[path]),
                     "before_known": _known(before_subtotal),
                     "delta": delta,
                     "delta_reason": reason,

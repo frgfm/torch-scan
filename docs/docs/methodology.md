@@ -25,6 +25,12 @@ Supported module formulas calculate theoretical FLOPs, MACs, DMAs, and receptive
 the affected metric state instead of contributing zero. Formula definitions and their tested boundaries live in the
 package source; diagnostics expose unsupported paths.
 
+Per-analysis `custom_modules` handlers can supply estimates for custom leaves and composite modules/models. They
+receive complete actual calls and override supplied fields independently. Inclusive parent formulas declare subtree
+ownership per metric; only the owner contributes that metric to totals, while child structure and parameter counts
+remain visible. An incomplete owner remains incomplete rather than falling back to child estimates. See
+[Custom module extensions](extensions.md) for matching, ownership, and callback contracts.
+
 ## Operator FLOPs
 
 `measure_flops` uses PyTorch's `torch.utils.flop_counter.FlopCounterMode` around one owner-provided workload. The
@@ -34,12 +40,13 @@ leaf formula.
 For structure, shapes, parameters, and buffers alone, use `mode="structure"` in `crawl_module` or `summary`. This
 skips operator counting and module formulas while preserving one evaluation forward pass. Skipped compute totals
 are explicitly unavailable with method `not_requested`; strict checks apply only to requested metrics. Module
-formula work in full mode runs in post-hooks with dispatch suspended, allowing activations to be released during
-execution instead of retaining them for deferred analysis.
+formula and custom-handler work in full mode runs in post-hooks with dispatch suspended, allowing activations to be
+released during execution instead of retaining them for deferred analysis.
 
 Only operators with registered or caller-provided formulas contribute to the known count. TorchScan records executed
 but uncounted operators and marks the result partial. Caller formulas are scoped to one invocation and use the
-installed PyTorch version's shape-formula contract.
+installed PyTorch version's shape-formula contract. Pass `custom_mapping` to `crawl_module` or `summary` to use the
+same capability for their single-forward operator report. Module handlers do not supply operator estimates.
 
 The workload owns model state, gradient mode, autocast, device placement, warmup, and side effects. Exceptions are
 propagated unchanged.
@@ -110,7 +117,10 @@ Transpose example: `(2,4,3)`, Cout=6, groups=2, kernel=3, stride=2, padding=outp
 
 Reduction dtype: `dtype` > `out.dtype` > input. Fallback integer/boolean arithmetic, views/copies/fills/allocation, and
 Python constants are excluded. Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
-stay incomplete; native complex counts remain partial. Mixed-call diagnostics and strict mode are preserved.
+stay incomplete without explicit caller overrides; native complex counts remain partial. The
+[extension tutorial](extensions.md#a-complete-custom-call) demonstrates a caller convention of six real FLOPs per
+complex multiply and two per complex add, with separate MAC and logical DMA conventions. Such overrides are scoped to
+one analysis and are the caller's responsibility. Mixed-call diagnostics and strict mode are preserved.
 
 Remaining gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused MHA/encoder, specialized attention,
 unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered activations/pooling.

@@ -9,6 +9,16 @@ using non-trivial calls and [Understanding results](metrics.md) before comparing
 
 ::: torchscan.summary
 
+## Custom module extensions
+
+See [the extension tutorial](extensions.md) for complete examples and subtree ownership.
+
+::: torchscan.ModuleCall
+
+::: torchscan.ModuleEstimates
+
+::: torchscan.ModuleHandler
+
 ## Operator FLOPs
 
 ::: torchscan.measure_flops

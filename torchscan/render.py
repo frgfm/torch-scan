@@ -16,8 +16,8 @@ from operator import itemgetter
 from typing import Any, Literal, cast
 
 from ._render_assets import SCRIPT, STYLE
+from ._render_map import _owner_text, build_maps
 from ._render_map import _result as _attribution
-from ._render_map import build_maps
 from ._render_visual import compact_value, default_selection, map_svg, shape_text, visual_svg
 from .compare import ReportDiff, compare_reports
 from .report import AnalysisReport, Diagnostic, LayerReport, MetricResult, metric_result
@@ -44,7 +44,8 @@ _STORAGE = {
 _CONTEXT = ("torch_version", "torchscan_version", "python_version", "execution_mode", "devices", "dtypes")
 _BOUNDARIES = (
     "This is an observed module hierarchy, not a computational graph. Only executed calls appear. "
-    "Module-call estimates are additive contributions; absent container estimates are unavailable, not zero. "
+    "Module-call estimates are additive contributions; covered child metrics are included in their owning ancestor. "
+    "Other absent container estimates are unavailable, not zero. "
     "Operator module counts are inclusive and must not be summed or joined to module-call rows. "
     "Model totals are authoritative. Parameter attribution counts shared tensors once in execution order; "
     "uncalled parameters can appear only in model totals. "
@@ -153,6 +154,7 @@ def _validate(report: Any) -> None:
     if not isinstance(report.get("layers"), list):
         raise ValueError("layers must be a list")
     identities = set()
+    calls = {}
     for layer in report["layers"]:
         layer = _object(layer, "layer")
         for field in ("path", "name", "type"):
@@ -165,6 +167,7 @@ def _validate(report: Any) -> None:
         if key in identities:
             raise ValueError(f"duplicate layer call {key!r}")
         identities.add(key)
+        calls[key] = layer
         for field in ("input", "output"):
             _object(layer.get(field), f"layer.{field}")
         for field, counts in (("parameters", ("trainable", "frozen", "bytes")), ("buffers", ("elements", "bytes"))):
@@ -174,6 +177,27 @@ def _validate(report: Any) -> None:
             if not isinstance(statistics.get("shared"), bool):
                 raise ValueError(f"layer.{field}.shared must be a boolean")
         _metrics(layer.get("metrics"), "layer.metrics")
+        if "metric_ownership" in layer:
+            for scope in _object(layer["metric_ownership"], "layer.metric_ownership").values():
+                if scope not in ("module_call", "subtree"):
+                    raise ValueError("layer.metric_ownership has invalid scope")
+        if "metric_owners" in layer:
+            for name, owner in _object(layer["metric_owners"], "layer.metric_owners").items():
+                owner = _object(owner, "metric owner")
+                _string(owner.get("path"), "metric owner.path")
+                _number(owner.get("call_index"), "metric owner.call_index", integer=True)
+                if name in layer["metrics"]:
+                    raise ValueError("a covered metric must not have a separate child estimate")
+    for layer in report["layers"]:
+        for name, owner in layer.get("metric_owners", {}).items():
+            ancestor = calls.get((owner["path"], owner["call_index"]))
+            if (
+                ancestor is None
+                or ancestor is layer
+                or ancestor.get("metric_ownership", {}).get(name) != "subtree"
+                or ancestor["metrics"].get(name, {}).get("scope") != "subtree"
+            ):
+                raise ValueError("a covered metric requires an existing inclusive ancestor estimate")
     operators = _object(report.get("operator_flops"), "operator_flops")
     if type(operators.get("schema_version")) is not int or operators["schema_version"] != 1:
         raise ValueError("unsupported operator schema_version; expected 1")
@@ -336,9 +360,13 @@ def _ranking(report: AnalysisReport, view: str) -> str:
                 f"<td>{escape(result['method'])}<small>{escape(result['scope'])}; {escape(result['unit'])}</small></td></tr>"
             )
     unknown = []
+    covered = []
     for i, layer in enumerate(report["layers"]):
         result = _attribution(layer, view)
-        if result is None or result["status"] != "complete":
+        owner = layer.get("metric_owners", {}).get(view)
+        if owner is not None:
+            covered.append(f'<li><a href="#call-{i}">{escape(_label(layer))}</a>: {escape(_owner_text(owner))}</li>')
+        elif result is None or result["status"] != "complete":
             unknown.append(f'<li><a href="#call-{i}">{escape(_label(layer))}</a>: {_result(result)}</li>')
     return (
         f'<div class="ranking-table"><h3>{_VIEWS[view]}</h3>'
@@ -348,7 +376,8 @@ def _ranking(report: AnalysisReport, view: str) -> str:
         f"not each module's full ownership.</caption><thead><tr><th>Rank</th><th>Call</th><th>Contribution</th><th>Method</th></tr></thead>"
         f"<tbody>{''.join(body)}</tbody></table></div>"
         f"{'<p>No complete call measurements are available.</p>' if not body else ''}"
-        f"<h4>Unranked incomplete or absent measurements ({len(unknown)})</h4><ul>{''.join(unknown)}</ul></div>"
+        f"<h4>Unranked incomplete or absent measurements ({len(unknown)})</h4><ul>{''.join(unknown)}</ul>"
+        f"{'<h4>Covered by inclusive estimates (' + str(len(covered)) + ')</h4><ul>' + ''.join(covered) + '</ul>' if covered else ''}</div>"
     )
 
 
@@ -447,6 +476,12 @@ def _explorer_data(
             for node in group["nodes"]:
                 node["display"] = _text(node["subtotal"])
                 node["before_display"] = _text(node["before_subtotal"])
+                node["display_status"] = node["status"]
+                if node["coverage"] is not None and not node["has_contributions"]:
+                    node["display"] = "covered · " + node["coverage"]
+                    node["display_status"] = "covered"
+                if node["before_coverage"] is not None and not node["before_has_contributions"]:
+                    node["before_display"] = "covered · " + node["before_coverage"]
                 node["delta_display"] = (
                     f"complete · {node['delta']:+,} {group['unit']} (recorded contribution delta)"
                     if node["delta"] is not None
@@ -475,9 +510,19 @@ def _explorer_data(
                             and all(result[key] == group[key] for key in ("method", "unit", "scope"))
                         )
                         call["display"] = (
-                            _text(result) if call["in_group"] else "unavailable · not recorded in this method group"
+                            "covered · " + _owner_text(call["owner"])
+                            if call["owner"] is not None
+                            else _text(result)
+                            if call["in_group"]
+                            else "unavailable · not recorded in this method group"
                         )
-                        call["display_status"] = result["status"] if call["in_group"] else "unavailable"
+                        call["display_status"] = (
+                            "covered"
+                            if call["owner"] is not None
+                            else result["status"]
+                            if call["in_group"]
+                            else "unavailable"
+                        )
     return maps
 
 
@@ -508,7 +553,7 @@ def _inspector_html(node: dict[str, Any], group: dict[str, Any], before: Analysi
             bar = f'<div class="call-track" aria-hidden="true"><span style="width:{ratio}%"></span></div>'
         rows.append(
             f'<div class="call-card"><a href="#{prefix}-{call["index"]}">call #{call["call_index"]}</a>'
-            f'<p>{_result(result)}</p>{bar}<p class="muted">{escape(call["parameter_text"])}</p>'
+            f'<p>{escape(call["display"]) if call["owner"] is not None else _result(result)}</p>{bar}<p class="muted">{escape(call["parameter_text"])}</p>'
             f'<p class="muted">{escape(call["input_text"])} → {escape(call["output_text"])}</p></div>'
         )
     comparison_html = (
@@ -523,13 +568,18 @@ def _inspector_html(node: dict[str, Any], group: dict[str, Any], before: Analysi
         if node["direct_kind"] == "structural"
         else ""
     )
+    coverage_note = (
+        f'<p class="under-map">Own calls: {escape(node["coverage"])}</p>'
+        if node["coverage"] is not None and node["has_contributions"]
+        else ""
+    )
     return (
         '<p class="eyebrow">SELECTED MODULE</p>'
         f'<h3 tabindex="-1">{escape(node["path"] or "(root)")}</h3>'
         f'<p class="muted">{escape(node["type"])} · {len(node["calls"])} observed call(s)</p>'
-        f'<p class="metric-value">{_result(node["subtotal"])}</p>'
-        '<p class="under-map">Recorded contribution subtotal; derived from this path and its descendants.</p>'
-        f"{structural_note}"
+        f'<p class="metric-value">{escape(node["display"]) if node["display_status"] == "covered" else _result(node["subtotal"])}</p>'
+        f'<p class="under-map">{"The inclusive ancestor supplies this cost; this call has no separate estimate." if node["display_status"] == "covered" else "Recorded contribution subtotal; derived from this path and its descendants."}</p>'
+        f"{coverage_note}{structural_note}"
         f"{comparison_html}{shapes}<h4>Call evidence · compute and first attribution</h4>{''.join(rows)}"
         f"{'<p>Structural ancestor; no call record.</p>' if not calls else ''}"
         f'<hr><p class="under-map">Method: {escape(group["method"])}</p>'
@@ -608,7 +658,7 @@ def _html(
     for i, layer in enumerate(report["layers"]):
         metrics = dict(layer["metrics"])
         for name, unit in (("module_flops", "FLOPs"), ("macs", "MACs"), ("dmas", "DMAs")):
-            if name not in metrics:
+            if name not in metrics and name not in layer.get("metric_owners", {}):
                 metrics[name] = metric_result(
                     status="unavailable",
                     unit=unit,
@@ -620,12 +670,17 @@ def _html(
             for j, item in enumerate(diagnostics)
             if item.get("path") == layer["path"]
         )
+        ownership = "".join(
+            f"<li>{escape(name)}: {escape(_owner_text(owner))}</li>"
+            for name, owner in layer.get("metric_owners", {}).items()
+        )
         call_details.append(
             f'<details id="call-{i}" tabindex="-1"><summary>{escape(_label(layer))}</summary>'
             f"<h3>Input shapes and metadata</h3>{_metadata(layer['input'])}<h3>Output shapes and metadata</h3>{_metadata(layer['output'])}"
             f"<h3>Parameter and buffer attribution</h3>{_metadata({'parameters': layer['parameters'], 'buffers': layer['buffers']})}"
             "<p>Shared tensors are assigned once; a shared flag means some tensors were already attributed to an earlier call.</p>"
             f"<h3>Measurement methods</h3>{_metric_table(metrics)}"
+            f"{'<h3>Covered metrics</h3><ul>' + ownership + '</ul>' if ownership else ''}"
             f"<h3>Diagnostics for this module path</h3><ul>{diagnostic_links}</ul>"
             "<p>Path diagnostics apply to the module; the schema does not identify a specific repeated call.</p></details>"
         )

@@ -55,6 +55,8 @@ class LayerReport(TypedDict):
     parameters: dict[str, int | bool]
     buffers: dict[str, int | bool]
     metrics: dict[str, MetricResult]
+    metric_ownership: NotRequired[dict[str, Literal["module_call", "subtree"]]]
+    metric_owners: NotRequired[dict[str, dict[str, str | int]]]
 
 
 class AnalysisReport(TypedDict):

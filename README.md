@@ -111,6 +111,13 @@ dispatch or module formulas. Unrequested compute totals have `status="unavailabl
 `strict=True` checks the requested metrics. Full analysis remains the default. Both modes release intermediate
 activations as execution progresses.
 
+Add your own module/model estimates with
+`custom_modules={YourModule: ModuleHandler(your_callback)}` on `crawl_module` or `summary`. Callbacks receive the
+complete actual call and supply FLOPs, MACs, DMAs, or receptive-field fields independently. Explicit subtree ownership
+prevents inclusive parent estimates from double-counting children. Both APIs also accept `custom_mapping` for separate
+operator FLOP overrides. Registrations belong to one analysis and require no TorchScan dependency on your model library.
+See the [copyable extension tutorial](docs/docs/extensions.md), including a complex-valued example and counting conventions.
+
 ## Workload measurements
 
 Use zero-argument callables when the owner needs full control over execution:
@@ -222,6 +229,7 @@ For a local development checkout, follow [Contributing](CONTRIBUTING.md).
 
 - [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html)
 - [Model and input support](https://frgfm.github.io/torch-scan/model-support.html)
+- [Custom module extensions](https://frgfm.github.io/torch-scan/extensions.html)
 - [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html)
 - [API reference](https://frgfm.github.io/torch-scan/torchscan.html)
 

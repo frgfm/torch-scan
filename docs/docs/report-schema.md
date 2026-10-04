@@ -61,6 +61,10 @@ Recursive metadata preserves tuples, lists, mappings, scalars, and `None`. Tenso
 device, and `requires_grad`. It excludes tensor contents, filenames, source paths, and object representations that can
 leak private values.
 
+Ragged PyTorch nested tensors use `kind="nested_tensor"`, dtype, device, and `requires_grad` without a fabricated
+rectangular shape. A module invocation that raises inside a model that catches the error has output `kind="failed"`,
+unavailable estimates, and a `module_forward_error` diagnostic; its callback is not invoked.
+
 ## Layer calls
 
 Each layer record contains:
@@ -73,6 +77,32 @@ Each layer record contains:
   under `metrics`.
 
 Shared parameters are not duplicated in model totals merely because a module is called more than once.
+
+Custom handler rows may also contain optional ownership metadata:
+
+| Field | Meaning |
+| --- | --- |
+| `metric_ownership` | Metric name to `"module_call"` or `"subtree"` for the scope supplied by a registered handler. |
+| `metric_owners` | Covered metric name to the ancestor owner's `{ "path": ..., "call_index": ... }` identity. |
+
+A covered child's metric is absent from `metrics`, because the ancestor supplies that inclusive estimate. Its layer
+row, inputs/outputs, and parameter/buffer statistics remain present. Absence with `metric_owners` means covered work,
+not zero or unsupported work. Ownership follows dynamic invocations, so a shared child called outside the owning
+parent is counted independently. Sum retained estimates once; parameter totals are unaffected.
+
+Custom results use method `custom_module_handler:<callback module>.<callback qualname>`, optionally followed by the
+callback's supplied method, and normalized scope `module_call` or `subtree`. Partial and unavailable custom estimates,
+invalid results, and callback failures have diagnostics. Ownership remains in force when its inclusive estimate is
+incomplete; children do not silently become a substitute estimate. See [Custom module extensions](extensions.md).
+
+| Extension diagnostic code | Meaning |
+| --- | --- |
+| `custom_handler_error` | The callback raised; requested estimates are unavailable. |
+| `custom_handler_invalid` | The callback result is not a mapping of supported metric names. |
+| `custom_metric_invalid` | One supplied metric violates its numeric or structured-result contract. |
+| `custom_metric_partial` | A supplied estimate is a lower bound. |
+| `custom_metric_unavailable` | An estimate is explicitly unavailable, including an omitted owned metric. |
+| `expanded_atomic_boundary` | Descendant overrides opened a legacy atomic root; its missing work keeps totals incomplete. |
 
 ## `FlopReport`
 
@@ -93,8 +123,11 @@ even when the same packet has counted work.
 
 `crawl_module` stores the complete report under `operator_flops` and the same `total` result under
 `totals.operator_flops`. Module hooks and the native operator counter observe the same forward call; module formulas
-run in each leaf's post-hook with dispatch suspended so their own bookkeeping is not counted. Intermediate
-activations are released as the forward pass progresses; the report retains only metadata.
+run in post-hooks with dispatch suspended so their own bookkeeping and custom callback tensor operations are not
+counted. Intermediate activations are released as the forward pass progresses; the report retains only metadata.
+
+`custom_mapping` on `crawl_module` or `summary` configures this operator report independently from module handlers.
+Neither extension changes a global registry. `mode="structure"` executes no formulas or handlers.
 
 `Global`/`total` is authoritative. `crawl_module` does not request PyTorch 2.1's explicit module tracker because that
 tracker replaces tensors passed through its hooks; preserving the caller's exact `args` and `kwargs` takes priority.

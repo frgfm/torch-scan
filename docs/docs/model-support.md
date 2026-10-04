@@ -86,9 +86,9 @@ methods into one total.
 
 ## Custom formulas
 
-Supply custom operator formulas to standalone `measure_flops` calls through `custom_mapping`. This does not modify a
-global registry. `crawl_module` uses built-in formulas for its same-forward operator report and does not accept custom
-mappings. Formulas use PyTorch's shape-based `FlopCounterMode` contract:
+Supply custom operator formulas through `custom_mapping` on `crawl_module`, `summary`, or standalone `measure_flops`.
+Overrides apply to that analysis and take precedence over built-in formulas without modifying a global registry.
+Formulas use PyTorch's shape-based `FlopCounterMode` contract:
 
 ```python
 from math import prod
@@ -103,3 +103,13 @@ See [FLOP conventions and limits](methodology.md#flop-conventions) before supply
 
 Use operator packets such as `torch.ops.aten.sin`, not overloads such as `.default`, and check the installed PyTorch
 version's documentation when defining formulas.
+
+For custom leaves or composite modules/models, pass `custom_modules={ModuleType: ModuleHandler(callback)}`. The
+callback receives a `ModuleCall` with the module, actual complete `args`/`kwargs`, and complete output, including nested
+structures and non-tensor values. Supplied metric fields override built-in estimates independently. Type matching
+selects the closest registered class in the Python MRO, regardless of mapping order.
+
+Use `subtree_metrics` to declare inclusive estimates that own child work for specific metrics. Covered child calls
+remain in the structure and parameter report, while their covered estimates are omitted to prevent double-counting.
+Both extension mappings are ignored for compute in `mode="structure"`: no handler or operator formula executes.
+See the [extension tutorial](extensions.md) for callbacks, ownership, incomplete states, complex counting, and limits.

@@ -12,6 +12,8 @@ from collections.abc import Mapping, Sequence
 from html import escape
 from typing import Any
 
+from ._render_map import _owner_text
+
 _INK = "#20354e"
 _MUTED = "#61758b"
 _GREEN = "#227659"
@@ -163,15 +165,19 @@ def _node_description(node: dict[str, Any], group: dict[str, Any]) -> str:
     kind = (
         "uniquely attributed storage" if node["direct_kind"] == "attributed" else "recorded additive call contribution"
     )
-    description = (
-        f"{node['path'] or '(root)'} · {node['type']} · {len(node['calls'])} observed calls. "
-        f"Derived subtree subtotal: {_measurement(node['subtotal'])}. Own {kind}: {_measurement(node['direct'])}. "
-        f"Method: {group['method']}; scope: {group['scope']}."
+    description = f"{node['path'] or '(root)'} · {node['type']} · {len(node['calls'])} observed calls. "
+    if node["has_contributions"] or node.get("coverage") is None:
+        description += f"Derived subtree subtotal: {_measurement(node['subtotal'])}. "
+    description += (
+        f"Own calls covered: {node['coverage']}. No separate additive contribution. "
+        if node.get("coverage") is not None
+        else f"Own {kind}: {_measurement(node['direct'])}. "
     )
+    description += f"Method: {group['method']}; scope: {group['scope']}."
     if group.get("comparison"):
         if node["change"] in ("added", "removed"):
             description += f" Module {node['change']} in after report."
-        description += f" Before: {_measurement(node['before_subtotal'])}."
+        description += f" Before: {node['before_display']}."
         if node["delta"] is None:
             description += " Delta unknown: " + str(node["delta_reason"])
         else:
@@ -383,6 +389,7 @@ def _inspector(
         )
     )
     cursor += 39
+    covered_only = node["coverage"] is not None and not node["has_contributions"]
     output.append(
         _text(
             left,
@@ -391,23 +398,27 @@ def _inspector(
             if node["direct_kind"] == "recorded"
             else "Own unique attribution"
             if node["direct_kind"] == "attributed"
+            else "Covered by inclusive ancestor estimate"
+            if covered_only
             else "Derived descendant subtotal",
             size=12,
             color=_MUTED,
         )
     )
-    measured = node["direct"] if node["direct_kind"] != "structural" else node["subtotal"]
+    measured = node["direct"] if node["direct_kind"] in ("recorded", "attributed") else node["subtotal"]
     cursor = _paragraph(
         output,
         left,
         cursor + 29,
-        _measurement(measured),
+        node["coverage"] or node["before_coverage"] if covered_only else _measurement(measured),
         width=30,
         size=19,
         leading=25,
         color=_GREEN if measured and measured["status"] == "complete" else _AMBER,
         weight=650,
     )
+    if node["coverage"] is not None and node["has_contributions"]:
+        cursor = _paragraph(output, left, cursor + 9, f"Own calls: {node['coverage']}", width=43)
     cursor = _paragraph(
         output,
         left,
@@ -420,7 +431,7 @@ def _inspector(
             output,
             left,
             cursor + 9,
-            f"Before subtree: {_measurement(node['before_subtotal'])}. After subtree: {_measurement(node['subtotal'])}.",
+            f"Before subtree: {node['before_display']}. After subtree: {node['display']}.",
             width=43,
         )
         delta = (
@@ -478,7 +489,8 @@ def _inspector(
             layer = source["layers"][call["index"]]
             call_id = f"{'before-call' if baseline else 'call'}-{call['index']}"
             result = _call_result(call, group)
-            description = f"{node['path'] or '(root)'} call #{call['call_index']}: {_measurement(result)}. Input {shape_text(layer['input'])}; output {shape_text(layer['output'])}."
+            measurement = _owner_text(call["owner"]) if call.get("owner") is not None else _measurement(result)
+            description = f"{node['path'] or '(root)'} call #{call['call_index']}: {measurement}. Input {shape_text(layer['input'])}; output {shape_text(layer['output'])}."
             output.extend((
                 f'<g id="{call_id}"><title>{escape(description)}</title>',
                 _rect(left, cursor, width - 40, 64, fill="#f3f7fa"),
@@ -486,7 +498,7 @@ def _inspector(
                 _text(
                     left + 94,
                     cursor + 18,
-                    _short_measurement(result),
+                    "Covered by inclusive estimate" if call.get("owner") is not None else _short_measurement(result),
                     size=11,
                     color=_GREEN if result and result["status"] == "complete" else _AMBER,
                 ),

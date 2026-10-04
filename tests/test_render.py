@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET  # ruff: ignore[suspicious-xml-etree-imp
 import pytest
 from torch import nn
 
-from torchscan import crawl_module, metric_result, render_report
+from torchscan import ModuleHandler, crawl_module, metric_result, render_report
 from torchscan._render_map import build_maps
 
 
@@ -57,8 +57,27 @@ class Document(HTMLParser):
 
 
 @pytest.fixture
-def report():
-    return crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Identity(), nn.Linear(8, 2, bias=False)), (4,))
+def report_model():
+    return nn.Sequential(nn.Linear(4, 8, bias=False), nn.Identity(), nn.Linear(8, 2, bias=False))
+
+
+@pytest.fixture
+def report(report_model):
+    return crawl_module(report_model, (4,))
+
+
+@pytest.fixture
+def covered_report(report_model, request):
+    estimate = metric_result(
+        status=getattr(request, "param", "complete"),
+        value=100,
+        known_value=20,
+        unit="FLOPs",
+        scope="subtree",
+        method="inclusive_cost",
+    )
+    handler = ModuleHandler(lambda _call: {"module_flops": estimate}, frozenset({"module_flops"}))
+    return crawl_module(report_model, (4,), custom_modules={nn.Sequential: handler})
 
 
 def _document(report, **kwargs):
@@ -71,6 +90,137 @@ def _panel(root, name):
 
 def _embedded(root):
     return json.loads(root.find("script", id="torchscan-data")[0].text())
+
+
+@pytest.mark.parametrize("covered_report", ["complete", "partial", "unavailable"], indirect=True)
+def test_inclusive_handler_coverage_is_not_rendered_as_missing_child_work(covered_report):
+    estimate = covered_report["layers"][0]["metrics"]["module_flops"]
+    root = _document(covered_report)
+    groups = _embedded(root)["maps"]["module_flops"]["groups"]
+    assert len(groups) == 1
+    group = groups[0]
+    assert group["kind"] == "recorded"
+    assert group["known_total"] == estimate["known_value"]
+    for node in group["nodes"][1:]:
+        assert node["rail"] == []
+        assert node["direct"] is None
+        assert node["direct_kind"] == node["display_status"] == "covered"
+        call = node["calls"][0]
+        assert call["display"] == "covered · included in (root) · call #0 inclusive estimate"
+        assert call["display_status"] == "covered"
+        assert call["owner"] == {"path": "", "call_index": 0}
+
+    detail = root.find("details", id="call-1")[0]
+    assert "module_flops: included in (root) · call #0 inclusive estimate" in detail.text()
+    assert "not_recorded" not in detail.text()
+    panel = _panel(root, "module_flops")
+    assert "Covered by inclusive estimates (3)" in panel.text()
+    count = 0 if estimate["status"] == "complete" else 1
+    assert f"Unranked incomplete or absent measurements ({count})" in panel.text()
+    svg = ET.fromstring(render_report(covered_report, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
+    assert not any(
+        "rail-" in element.attrib.get("id", "") and "node-1" in element.attrib["id"] for element in svg.iter()
+    )
+
+
+@pytest.mark.parametrize("invalid", ["scope", "owner_shape", "owner_index", "missing_owner", "duplicate_estimate"])
+def test_invalid_ownership_evidence_is_rejected(covered_report, invalid):
+    parent, child = covered_report["layers"][:2]
+    if invalid == "scope":
+        parent["metric_ownership"]["module_flops"] = "unknown"
+    elif invalid == "owner_shape":
+        child["metric_owners"]["module_flops"] = None
+    elif invalid == "owner_index":
+        child["metric_owners"]["module_flops"]["call_index"] = True
+    elif invalid == "missing_owner":
+        child["metric_owners"]["module_flops"]["path"] = "missing"
+    else:
+        child["metrics"]["module_flops"] = metric_result(
+            status="complete", value=1, unit="FLOPs", scope="module_call", method="duplicate"
+        )
+
+    with pytest.raises(ValueError):
+        render_report(covered_report)
+
+
+@pytest.fixture
+def shared_outside_report():
+    class Owner(nn.Sequential):
+        pass
+
+    class SharedOutside(nn.Module):
+        def __init__(self, include):
+            super().__init__()
+            self.owner = Owner(nn.Sequential(nn.Identity()))
+            self.outside = self.owner[0][0]
+            self.zzother = nn.Identity()
+            self.include = include
+
+        def forward(self, inputs):
+            owned = self.owner(inputs)
+            return self.zzother(self.outside(owned) if self.include else owned)
+
+    def collect(status, count, *, include=True, inclusive=100):
+        estimate = metric_result(
+            status=status, value=count, known_value=count, unit="FLOPs", scope="module_call", method="outside"
+        )
+
+        def a_outside(_call):
+            return {"module_flops": estimate}
+
+        def zz_owner(_call):
+            return {"module_flops": inclusive}
+
+        return crawl_module(
+            SharedOutside(include),
+            (4,),
+            custom_modules={
+                Owner: ModuleHandler(zz_owner, frozenset({"module_flops"})),
+                nn.Identity: ModuleHandler(a_outside),
+            },
+        )
+
+    return collect
+
+
+@pytest.mark.parametrize(("status", "count"), [("complete", 0), ("complete", 5), ("partial", 5), ("unavailable", None)])
+def test_covered_container_keeps_shared_descendant_contributions_visible(shared_outside_report, status, count):
+    report = shared_outside_report(status, count)
+    html = render_report(report, before=report)
+    group = next(
+        group
+        for group in _embedded(Document(html).root)["maps"]["module_flops"]["groups"]
+        if group["method"].endswith(":outside")
+    )
+    node = _node(group, "owner.0")
+    assert node["direct_kind"] == "covered"
+    assert node["coverage"] is not None
+    assert node["has_contributions"]
+    assert node["before_has_contributions"]
+    assert node["display_status"] == node["subtotal"]["status"] == status
+    assert node["known"] == count
+    assert node["display"].startswith(status)
+    assert node["before_display"].startswith(status)
+    for source in (html, render_report(report, format="svg")):
+        description = _tile_anchor(_maps(source)[group["id"]], node).attrib["aria-label"]
+        assert f"Derived subtree subtotal: {status}" in description
+        assert "Own calls covered: included in owner" in description
+
+
+def test_svg_comparison_keeps_coverage_independent_between_snapshots(shared_outside_report):
+    contributed = shared_outside_report("complete", 0, inclusive=0)
+    covered = shared_outside_report("complete", 0, include=False, inclusive=0)
+    for before, after in ((contributed, covered), (covered, contributed)):
+        svg = ET.fromstring(render_report(after, before=before, format="svg"))  # ruff: ignore[suspicious-xml-element-tree-usage]
+        inspector = next(element for element in svg.iter() if element.attrib.get("id", "").startswith("inspector-"))
+        text = " ".join(" ".join(inspector.itertext()).split())
+        complete = "complete · 0 FLOPs"
+        included = "covered · included in owner"
+        assert f"Before subtree: {complete if before is contributed else included}" in text
+        assert f"After subtree: {complete if after is contributed else included}" in text
+        assert "unavailable" not in text
+        label = "Derived descendant subtotal" if after is contributed else "Covered by inclusive ancestor estimate"
+        assert label in text
 
 
 def test_real_report_html_hierarchy_ranking_methods_and_offline_controls(report):

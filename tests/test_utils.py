@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchscan import crawl_module, utils
+from torchscan import ModuleHandler, crawl_module, summary, utils
 from torchscan.report import metric_result
 
 
@@ -69,3 +69,32 @@ def test_depth_limited_report_preserves_totals_and_detaches_nested_values():
     view["totals"]["parameters"]["value"] = -1
     assert report["layers"][0]["output"]["shape"] == [1, 2]
     assert report["totals"]["parameters"]["value"] == 10
+
+
+@pytest.mark.parametrize(
+    ("status", "known", "display"),
+    [
+        ("complete", 3, "3"),
+        ("partial", 0, ">=0"),
+        ("partial", 3.1234567, ">=3.1234567"),
+        ("partial", 1.234567890123456e-9, ">=1.234567890123456e-09"),
+        ("unavailable", None, "?"),
+    ],
+)
+def test_summary_labels_receptive_lower_bounds(status, known, display, capsys):
+    estimate = metric_result(
+        status=status, value=known, known_value=known, unit="elements", scope="module_call", method="bound"
+    )
+    fields = ("receptive_field", "effective_stride", "effective_padding")
+    report = summary(
+        nn.Identity(),
+        (2,),
+        receptive_field=True,
+        effective_rf_stats=True,
+        custom_modules={nn.Identity: ModuleHandler(lambda _call: dict.fromkeys(fields, estimate))},
+    )
+    assert (
+        utils.format_line_str(report["layers"][0], receptive_field=True, effective_rf_stats=True)[5:] == [display] * 3
+    )
+    if status == "partial":
+        assert capsys.readouterr().out.count(display) == 3

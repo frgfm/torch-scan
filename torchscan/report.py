@@ -14,6 +14,7 @@ __all__ = [
     "IncompleteAnalysisError",
     "LayerReport",
     "MetricResult",
+    "TokenDependency",
     "metric_result",
 ]
 
@@ -42,6 +43,34 @@ class Diagnostic(TypedDict):
     operator: NotRequired[str]
 
 
+class TokenRelation(TypedDict):
+    """Compact structural relation between output and input token positions."""
+
+    kind: Literal["all", "same_position", "prefix", "none"]
+    first_position: NotRequired[int]
+    limit: NotRequired[int]
+
+
+class TokenSource(TypedDict):
+    """A module-call input token axis and its dependency relation."""
+
+    arguments: list[str]
+    sequence_axis: int
+    length: int
+    relation: TokenRelation
+
+
+class TokenDependency(TypedDict):
+    """Module-local token dependencies, separate from scalar spatial metrics."""
+
+    status: Literal["complete", "unavailable"]
+    scope: str
+    method: str
+    assumptions: list[str]
+    output: NotRequired[dict[str, int]]
+    sources: NotRequired[list[TokenSource]]
+
+
 class LayerReport(TypedDict):
     """Information collected for one module invocation."""
 
@@ -55,6 +84,8 @@ class LayerReport(TypedDict):
     parameters: dict[str, int | bool]
     buffers: dict[str, int | bool]
     metrics: dict[str, MetricResult]
+    token_dependencies: NotRequired[TokenDependency]
+
     metric_ownership: NotRequired[dict[str, Literal["module_call", "subtree"]]]
     metric_owners: NotRequired[dict[str, dict[str, str | int]]]
 

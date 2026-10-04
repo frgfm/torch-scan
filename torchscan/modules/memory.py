@@ -14,6 +14,7 @@ from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 from ._pooling import adaptive_kernel_size
+from ._transformer import _norm_dmas
 
 __all__ = ["module_dmas"]
 
@@ -35,6 +36,10 @@ def module_dmas(module: Module, inp: Tensor, out: Tensor) -> int:
         return dmas_flatten(module, inp, out)
     if isinstance(module, nn.Linear):
         return dmas_linear(module, inp, out)
+    if type(module) is nn.LayerNorm:
+        if math.prod(module.normalized_shape) == 0:
+            raise NotImplementedError("LayerNorm DMAs require a nonempty normalized row.")
+        return _norm_dmas(module, inp)
     if isinstance(module, (nn.ReLU, nn.ReLU6)):
         return dmas_relu(module, inp, out)
     if isinstance(module, (nn.ELU, nn.LeakyReLU)):

@@ -160,6 +160,7 @@ SCRIPT = r"""
         const fill = el('span'); fill.style.width = (100 * call.result.value / maximum) + '%'; track.append(fill); row.append(track);
       }
       row.append(el('p', call.parameter_text, 'muted'), el('p', call.input_text + ' → ' + call.output_text, 'muted'));
+      if (call.token_dependency_text) row.append(el('p', call.token_dependency_text, 'muted'));
       aside.append(row);
     }
     if (!node.calls.length) aside.append(el('p', data.before && node.before_calls.length ? 'Removed module; only before calls are recorded.' : 'Structural ancestor; no call record.', 'muted'));

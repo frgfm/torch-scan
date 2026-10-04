@@ -20,6 +20,7 @@ from torch.nn import Module
 from .extensions import (
     _METRIC_UNITS,
     ModuleCall,
+    ModuleEstimates,
     ModuleHandler,
     _handler_metrics,
     _resolve_handler,
@@ -27,17 +28,104 @@ from .extensions import (
 )
 from .flops import FlopReport, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
+from .modules._token_dependencies import module_token_dependencies
+from .modules._transformer import dmas_attention, macs_attention, validate_native_call
 from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
 from .utils import aggregate_info, format_info
 
 __all__ = ["crawl_module", "summary"]
 
 _MODULE_METHOD = "torchscan_module_formula"
+_NATIVE_TRANSFORMERS = (
+    nn.MultiheadAttention,
+    nn.TransformerEncoderLayer,
+    nn.TransformerDecoderLayer,
+    nn.TransformerEncoder,
+    nn.TransformerDecoder,
+    nn.Transformer,
+)
+_SPATIAL_METRICS = {"receptive_field", "effective_stride", "effective_padding"}
 
 
 def _builtin_module_handlers() -> Mapping[type[Module], ModuleHandler]:
     """Supply complete-call built-in handlers without a mutable public registry."""
-    return {}
+    handler = ModuleHandler(_native_module_estimates, subtree_metrics=frozenset(_METRIC_UNITS))
+    return dict.fromkeys(_NATIVE_TRANSFORMERS, handler)
+
+
+def _native_module_estimates(
+    call: ModuleCall,
+    *,
+    requested: set[str] | None = None,
+    diagnostics: list[Diagnostic] | None = None,
+    path: str = "",
+) -> ModuleEstimates:
+    """Adapt native formulas to the shared complete-call handler contract."""
+    requested = set(_METRIC_UNITS) if requested is None else requested
+    diagnostics = [] if diagnostics is None else diagnostics
+    inputs = _ordered_inputs(inspect.signature(call.module.forward), call.args, call.kwargs)
+
+    def flops() -> int:
+        if any(
+            parameter.is_nested or parameter.layout != torch.strided or not parameter.is_floating_point()
+            for parameter in call.module.parameters()
+        ):
+            raise NotImplementedError("Native Transformer FLOPs require dense real floating-point parameters.")
+        # Preserve the legacy MHA FLOP convention, including zero batches. Native
+        # composites additionally exclude packing and modified child algorithms:
+        # their dense FLOPs would otherwise be an upper bound, not counted work.
+        if type(call.module) is not nn.MultiheadAttention:
+            validate_native_call(call.module, inputs, call.output)
+        return module_flops(call.module, inputs, call.output)
+
+    measures = {
+        "module_flops": flops,
+        "macs": lambda: macs_attention(call.module, inputs, call.output),
+        "dmas": lambda: dmas_attention(call.module, inputs, call.output),
+    }
+    estimates: dict[str, MetricResult] = {}
+    for name, measure in measures.items():
+        if name in requested:
+            if _first_tensor(call.output) is None:
+                _diagnostic(
+                    diagnostics,
+                    code="missing_metric_tensor",
+                    metric=name,
+                    path=path,
+                    message="The native call did not return an activation tensor; its forward may have failed.",
+                )
+                result = metric_result(
+                    status="unavailable", unit=_METRIC_UNITS[name], scope="subtree", method=_MODULE_METHOD
+                )
+            else:
+                result = _measure_module_metric(name, _METRIC_UNITS[name], path, diagnostics, measure)
+            result["scope"] = "subtree"
+            estimates[name] = result
+    for name in requested & _SPATIAL_METRICS:
+        estimates[name] = metric_result(status="unavailable", unit="elements", scope="subtree", method="not_applicable")
+    return cast(ModuleEstimates, estimates)
+
+
+def _native_token_report(call: ModuleCall, layer: LayerReport, diagnostics: list[Diagnostic]) -> None:
+    inputs = _ordered_inputs(inspect.signature(call.module.forward), call.args, call.kwargs)
+    try:
+        if _first_tensor(call.output) is None:
+            raise NotImplementedError("The native call did not return an activation tensor.")
+        layer["token_dependencies"] = module_token_dependencies(call.module, inputs, call.output)
+    except Exception as error:  # ruff: ignore[blind-except] BLE001  # Optional report information.
+        layer["token_dependencies"] = {
+            "status": "unavailable",
+            "scope": "module_call",
+            "method": "torchscan_token_dependency_v1",
+            "assumptions": [],
+        }
+        _diagnostic(
+            diagnostics,
+            code="unsupported_token_dependencies",
+            metric="token_dependencies",
+            path=layer["path"],
+            message=f"{type(error).__name__}: {error}",
+        )
 
 
 @cache
@@ -365,7 +453,7 @@ def crawl_module(
         def pre_hook(hooked: Module, hook_args: tuple[Any, ...], hook_kwargs: dict[str, Any]) -> None:
             call_index = call_counts.get(id(hooked), 0)
             call_counts[id(hooked)] = call_index + 1
-            recurse = isinstance(hooked, nn.MultiheadAttention) or (
+            recurse = isinstance(hooked, _NATIVE_TRANSFORMERS) or (
                 hooked is module and isinstance(module, nn.Transformer)
             )
             trainable = frozen = parameter_bytes = buffer_elements = buffer_bytes = 0
@@ -454,31 +542,30 @@ def crawl_module(
             # activation references before the next module executes.
             # PyTorch exposes no public context for suspending dispatch modes.
             call_diagnostics: list[Diagnostic] = []
+
+            def run_handler(selected: ModuleHandler, names: set[str], *, custom: bool) -> dict[str, MetricResult]:
+                call = ModuleCall(hooked, hook_args, hook_kwargs, output)
+                if not custom and selected.estimate is _native_module_estimates:
+                    results = cast(
+                        dict[str, MetricResult],
+                        _native_module_estimates(call, requested=names, diagnostics=call_diagnostics, path=path),
+                    )
+                    if "receptive_field" in names:
+                        _native_token_report(call, layer, call_diagnostics)
+                    return results
+                return _handler_metrics(selected, call, names, call_diagnostics, path, custom=custom)
+
             with torch._C._DisableTorchDispatch():
                 requested = set(_METRIC_UNITS) - layer.get("metric_owners", {}).keys()
                 if handler is not None and requested:
-                    estimates = _handler_metrics(
-                        handler,
-                        ModuleCall(hooked, hook_args, hook_kwargs, output),
-                        requested,
-                        call_diagnostics,
-                        path,
-                        custom=custom_handler is not None,
-                    )
+                    estimates = run_handler(handler, requested, custom=custom_handler is not None)
                     layer["metrics"].update(estimates)
                     layer.setdefault("metric_ownership", {}).update({
                         name: "subtree" if name in handler.subtree_metrics else "module_call" for name in estimates
                     })
                     requested -= estimates.keys()
                 if custom_handler is not None and builtin_handler is not None and requested:
-                    estimates = _handler_metrics(
-                        builtin_handler,
-                        ModuleCall(hooked, hook_args, hook_kwargs, output),
-                        requested,
-                        call_diagnostics,
-                        path,
-                        custom=False,
-                    )
+                    estimates = run_handler(builtin_handler, requested, custom=False)
                     layer["metrics"].update(estimates)
                     layer.setdefault("metric_ownership", {}).update({
                         name: "subtree" if name in builtin_handler.subtree_metrics else "module_call"
@@ -493,6 +580,8 @@ def crawl_module(
                             descendant["metrics"].pop(name, None)
                             descendant.get("metric_ownership", {}).pop(name, None)
                             descendant.setdefault("metric_owners", {})[name] = owner
+                            if name == "receptive_field":
+                                descendant.pop("token_dependencies", None)
                     requested -= estimates.keys()
                 if metric_leaf and requested:
                     populate_metrics(
@@ -527,6 +616,13 @@ def crawl_module(
                 message="The module forward did not complete; no estimation callback was executed.",
             )
             if mode == "full" and (metric_leaf or handler is not None):
+                if type(hooked) in _NATIVE_TRANSFORMERS and "receptive_field" not in layer.get("metric_owners", {}):
+                    layer["token_dependencies"] = {
+                        "status": "unavailable",
+                        "scope": "module_call",
+                        "method": "torchscan_token_dependency_v1",
+                        "assumptions": [],
+                    }
                 for name in set(_METRIC_UNITS) - layer.get("metric_owners", {}).keys():
                     layer["metrics"][name] = metric_result(
                         status="unavailable",
@@ -665,7 +761,8 @@ def crawl_module(
     model_tensors = [*parameters, *buffers]
     for layer_index, diagnostic in metric_diagnostics:
         layer = layers[layer_index]
-        if diagnostic["metric"] not in layer.get("metric_owners", {}):
+        metric = "receptive_field" if diagnostic["metric"] == "token_dependencies" else diagnostic["metric"]
+        if metric not in layer.get("metric_owners", {}):
             diagnostics.append(diagnostic)
         elif diagnostic["metric"] == "receptive_field" and diagnostic["code"] in {
             "unsupported_module_metric",

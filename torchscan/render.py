@@ -20,7 +20,8 @@ from ._render_map import _owner_text, build_maps
 from ._render_map import _result as _attribution
 from ._render_visual import compact_value, default_selection, map_svg, shape_text, visual_svg
 from .compare import ReportDiff, compare_reports
-from .report import AnalysisReport, Diagnostic, LayerReport, MetricResult, metric_result
+from .report import AnalysisReport, Diagnostic, LayerReport, MetricResult, TokenDependency, metric_result
+from .utils import _token_dependency_text
 
 __all__ = ["render_report"]
 
@@ -50,6 +51,9 @@ _BOUNDARIES = (
     "Model totals are authoritative. Parameter attribution counts shared tensors once in execution order; "
     "uncalled parameters can appear only in model totals. "
     "FLOPs do not establish latency. Static parameter and buffer bytes are not measured peak memory."
+    " Token dependencies describe a module call's main activation output and its token inputs; "
+    "they are not graph-wide effective receptive fields. Spatial receptive-field, stride and padding "
+    "are unavailable where they do not apply."
 )
 
 
@@ -134,6 +138,43 @@ def _diagnostics(value: Any, where: str) -> None:
                 _string(diagnostic[field], f"{where}.{field}")
 
 
+def _token_dependencies(value: Any, where: str) -> None:
+    value = _object(value, where)
+    if value.get("status") not in ("complete", "unavailable"):
+        raise ValueError(f"{where} has invalid status")
+    if value.get("scope") != "module_call":
+        raise ValueError(f"{where}.scope must be module_call")
+    _string(value.get("method"), f"{where}.method")
+    assumptions = value.get("assumptions")
+    if not isinstance(assumptions, list):
+        raise ValueError(f"{where}.assumptions must be a list")
+    for assumption in assumptions:
+        _string(assumption, f"{where}.assumptions")
+    if value["status"] == "complete" or "output" in value:
+        output = _object(value.get("output"), f"{where}.output")
+        for field in ("sequence_axis", "length"):
+            _number(output.get(field), f"{where}.output.{field}", integer=True)
+    if value["status"] == "complete" or "sources" in value:
+        sources = value.get("sources")
+        if not isinstance(sources, list):
+            raise ValueError(f"{where}.sources must be a list")
+        for source in sources:
+            source = _object(source, f"{where}.sources")
+            arguments = source.get("arguments")
+            if not isinstance(arguments, list) or not arguments:
+                raise ValueError(f"{where}.sources.arguments must be a nonempty list")
+            for argument in arguments:
+                _string(argument, f"{where}.sources.arguments")
+            for field in ("sequence_axis", "length"):
+                _number(source.get(field), f"{where}.sources.{field}", integer=True)
+            relation = _object(source.get("relation"), f"{where}.sources.relation")
+            if relation.get("kind") not in ("all", "same_position", "prefix", "none"):
+                raise ValueError(f"{where}.sources.relation has invalid kind")
+            for field in ("first_position", "limit"):
+                if field in relation:
+                    _number(relation[field], f"{where}.sources.relation.{field}", integer=True)
+
+
 def _validate(report: Any) -> None:
     report = _object(report, "report")
     try:
@@ -177,6 +218,8 @@ def _validate(report: Any) -> None:
             if not isinstance(statistics.get("shared"), bool):
                 raise ValueError(f"layer.{field}.shared must be a boolean")
         _metrics(layer.get("metrics"), "layer.metrics")
+        if "token_dependencies" in layer:
+            _token_dependencies(layer["token_dependencies"], "layer.token_dependencies")
         if "metric_ownership" in layer:
             for scope in _object(layer["metric_ownership"], "layer.metric_ownership").values():
                 if scope not in ("module_call", "subtree"):
@@ -244,6 +287,16 @@ def _result(result: MetricResult | None) -> str:
 
 def _metadata(value: Any) -> str:
     return f"<pre>{escape(json.dumps(value, ensure_ascii=False, indent=2))}</pre>"
+
+
+def _token_dependency_html(value: TokenDependency | None, *, heading: str = "Token dependencies") -> str:
+    if value is None:
+        return ""
+    return (
+        f"<h3>{escape(heading)}</h3><p>{escape(_token_dependency_text(value))}</p>"
+        f"<p>Method: {escape(value['method'])}; scope: {escape(value['scope'])}; status: {escape(value['status'])}.</p>"
+        f"{_metadata(value)}"
+    )
 
 
 def _ranked(report: AnalysisReport, view: str) -> list[tuple[int, LayerReport, MetricResult]]:
@@ -451,9 +504,20 @@ def _comparison_html(before: AnalysisReport, after: AnalysisReport, differences:
                     f"{escape(_delta(difference, reasons))}</li>"
                     for name, difference in layer["metrics"].items()
                 )
-                entries.append(f"<li>{escape(label)}<ul>{metrics}</ul></li>")
+                dependency_change = layer.get("token_dependencies")
+                token_details = ""
+                if dependency_change is not None:
+                    token_details = (
+                        "<p>Module-local token dependencies changed.</p>"
+                        + _token_dependency_html(dependency_change["before"], heading="Before token dependencies")
+                        + _token_dependency_html(dependency_change["after"], heading="After token dependencies")
+                    )
+                entries.append(f"<li>{escape(label)}<ul>{metrics}</ul>{token_details}</li>")
             else:
-                entries.append(f"<li>{escape(label)}{_metric_table(layer['metrics'])}</li>")
+                entries.append(
+                    f"<li>{escape(label)}{_metric_table(layer['metrics'])}"
+                    f"{_token_dependency_html(layer.get('token_dependencies'))}</li>"
+                )
         changes.append(f"<h3>{kind.capitalize()} calls ({len(entries)})</h3><ul>{''.join(entries)}</ul>")
     return (
         '<section id="comparison" tabindex="-1"><h2>Before / after</h2><p>Deltas are after minus before. '
@@ -503,6 +567,8 @@ def _explorer_data(
                         )
                         call["input_text"] = shape_text(layer["input"])
                         call["output_text"] = shape_text(layer["output"])
+                        if "token_dependencies" in layer:
+                            call["token_dependency_text"] = _token_dependency_text(layer["token_dependencies"])
                         result = call["result"]
                         call["in_group"] = (
                             group["kind"] == "recorded"
@@ -554,7 +620,13 @@ def _inspector_html(node: dict[str, Any], group: dict[str, Any], before: Analysi
         rows.append(
             f'<div class="call-card"><a href="#{prefix}-{call["index"]}">call #{call["call_index"]}</a>'
             f'<p>{escape(call["display"]) if call["owner"] is not None else _result(result)}</p>{bar}<p class="muted">{escape(call["parameter_text"])}</p>'
-            f'<p class="muted">{escape(call["input_text"])} → {escape(call["output_text"])}</p></div>'
+            f'<p class="muted">{escape(call["input_text"])} → {escape(call["output_text"])}</p>'
+            + (
+                f'<p class="muted">{escape(call["token_dependency_text"])}</p>'
+                if "token_dependency_text" in call
+                else ""
+            )
+            + "</div>"
         )
     comparison_html = (
         '<div class="comparison-note">'
@@ -675,6 +747,7 @@ def _html(
             f"<h3>Parameter and buffer attribution</h3>{_metadata({'parameters': layer['parameters'], 'buffers': layer['buffers']})}"
             "<p>Shared tensors are assigned once; a shared flag means some tensors were already attributed to an earlier call.</p>"
             f"<h3>Measurement methods</h3>{_metric_table(metrics)}"
+            f"{_token_dependency_html(layer.get('token_dependencies'))}"
             f"{'<h3>Covered metrics</h3><ul>' + ownership + '</ul>' if ownership else ''}"
             f"<h3>Diagnostics for this module path</h3><ul>{diagnostic_links}</ul>"
             "<p>Path diagnostics apply to the module; the schema does not identify a specific repeated call.</p></details>"
@@ -755,6 +828,7 @@ def _html(
                 f'<details id="before-call-{i}" tabindex="-1"><summary>{escape(_label(layer))}</summary>'
                 f"<h3>Before input shapes and metadata</h3>{_metadata(layer['input'])}"
                 f"<h3>Before output shapes and metadata</h3>{_metadata(layer['output'])}"
+                f"{_token_dependency_html(layer.get('token_dependencies'), heading='Before token dependencies')}"
                 f"{_metric_table(layer['metrics'])}<h3>Before diagnostics for this module path</h3><ul>"
                 + "".join(
                     f'<li><a href="#before-diagnostic-{j}">{escape(item["code"])}</a>: {escape(item["message"])}</li>'

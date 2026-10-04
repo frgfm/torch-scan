@@ -914,7 +914,9 @@ def test_nested_tensor_context_keeps_actual_objects_without_rectangular_metadata
     assert json.loads(json.dumps(report)) == report
 
 
-def test_registered_atomic_composite_does_not_add_inclusive_fallback_to_children():
+def test_registered_atomic_composite_does_not_add_inclusive_fallback_to_children(monkeypatch):
+    # Test the legacy atomic fallback separately from registered native handlers.
+    monkeypatch.setattr(crawler, "_builtin_module_handlers", dict)
     model = nn.Transformer(d_model=4, nhead=2, num_encoder_layers=1, num_decoder_layers=1, dim_feedforward=8, dropout=0)
     report = crawl_module(
         model,

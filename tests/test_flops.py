@@ -633,6 +633,79 @@ def test_native_sparse_matrix_layout_and_caller_override():
         crawl_module(nn.ReLU(), args=(sparse,), strict=True)
 
 
+@pytest.mark.parametrize("unsupported_first", [False, True])
+def test_unregistered_nested_linear_executes_kernel_and_preserves_dense_counts(unsupported_first):
+    nested = torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(1, 3)])
+    dense, weight = torch.ones(3, 3), torch.ones(2, 3)
+    ordered = (nested, dense) if unsupported_first else (dense, nested)
+    calls, outputs = 0, []
+
+    def workload():
+        nonlocal calls
+        calls += 1
+        outputs.extend(F.linear(inputs, weight) for inputs in ordered)
+
+    report = measure_flops(workload)
+    assert calls == 1
+    # Only the dense3x3 @3x2 product contributes36 known FLOPs. Modern
+    # counters must not decompose nested linear and query undefined sizes.
+    assert report["total"]["status"] == "partial"
+    assert report["total"]["known_value"] == 36
+    assert any(item["operator"] == "aten.linear" for item in report["diagnostics"])
+    nested_output = outputs[0 if unsupported_first else 1]
+    assert torch.equal(
+        nested_output.to_padded_tensor(0), torch.tensor([[[3.0, 3.0], [3.0, 3.0]], [[3.0, 3.0], [0.0, 0.0]]])
+    )
+    assert _complete_count(lambda: F.linear(dense, weight)) == 36
+
+
+def test_nested_linear_caller_raw_override_has_priority_and_registry_is_scoped():
+    nested = torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(1, 3)])
+    weight = torch.ones(2, 3)
+    before = FlopCounterMode(display=False)
+    registry = dict(getattr(before, "flop_registry", getattr(before, "flop_mapping", {})))
+    calls = 0
+
+    def stored_rows(inputs, matrix, bias=None, *, out_val):
+        nonlocal calls
+        calls += 1
+        assert inputs.is_nested
+        assert out_val.is_nested
+        assert matrix.shape == (2, 3)
+        assert bias is None
+        # Three stored token rows, two destinations, three terms,2 ops/term.
+        return 36
+
+    stored_rows._get_raw = True
+    mapping = {torch.ops.aten.linear: stored_rows}
+    report = measure_flops(lambda: F.linear(nested, weight), custom_mapping=mapping)
+    assert calls == 1
+    assert report["total"]["status"] == "complete"
+    assert report["total"]["value"] == 36
+    assert report["by_operator"] == {"aten.linear": 36}
+    after = FlopCounterMode(display=False)
+    assert dict(getattr(after, "flop_registry", getattr(after, "flop_mapping", {}))) == registry
+    assert mapping == {torch.ops.aten.linear: stored_rows}
+
+
+def test_nested_operator_guard_preserves_kernel_errors_and_one_workload_call():
+    nested = torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(1, 3)])
+    weight = torch.ones(2, 4)
+    with pytest.raises(RuntimeError) as raw_error:
+        F.linear(nested, weight)
+    calls = 0
+
+    def workload():
+        nonlocal calls
+        calls += 1
+        F.linear(nested, weight)
+
+    with pytest.raises(RuntimeError) as measured_error:
+        measure_flops(workload)
+    assert str(measured_error.value) == str(raw_error.value)
+    assert calls == 1
+
+
 @pytest.mark.parametrize("stack", ["encoder", "decoder"])
 @pytest.mark.parametrize("norm", [None, nn.Identity(), nn.Linear(4, 4, bias=False)])
 def test_transformer_final_norm_boundary(stack, norm):

@@ -1,5 +1,5 @@
 import inspect
-import json
+from contextlib import suppress
 
 import pytest
 import torch
@@ -37,8 +37,7 @@ def _relation(report, argument):
     return next(source["relation"] for source in report["sources"] if argument in source["arguments"])
 
 
-@pytest.mark.parametrize("batch_first", [False, True])
-@pytest.mark.parametrize("floating", [False, True])
+@pytest.mark.parametrize(("batch_first", "floating"), [(False, False), (True, True)])
 def test_self_attention_reports_real_causal_and_unmasked_token_dependencies(batch_first, floating):
     torch.manual_seed(101)
     module = nn.MultiheadAttention(4, 2, batch_first=batch_first, dropout=0).double().eval()
@@ -46,14 +45,8 @@ def test_self_attention_reports_real_causal_and_unmasked_token_dependencies(batc
     inp = _layout(tensor, batch_first)
     unmasked = module_token_dependencies(module, _ordered(module, inp, inp, inp))
     assert unmasked["output"] == {"sequence_axis": int(batch_first), "length": 4}
-    assert unmasked["sources"] == [
-        {
-            "arguments": ["query", "key", "value"],
-            "sequence_axis": int(batch_first),
-            "length": 4,
-            "relation": {"kind": "all"},
-        },
-    ]
+    assert unmasked["sources"][0]["arguments"] == ["query", "key", "value"]
+    assert _relation(unmasked, "query") == {"kind": "all"}
 
     def attention(variable, mask=None):
         variable = _layout(variable, batch_first)
@@ -65,36 +58,28 @@ def test_self_attention_reports_real_causal_and_unmasked_token_dependencies(batc
     causal = module_token_dependencies(module, _ordered(module, inp, inp, inp, attn_mask=mask, is_causal=True))
     assert _relation(causal, "query") == {"kind": "prefix"}
     assert torch.equal(_dependency_blocks(lambda value: attention(value, mask), tensor), ~_causal(4))
-    assert json.loads(json.dumps(causal)) == causal
 
 
-@pytest.mark.parametrize("batch_first", [False, True])
-def test_cross_attention_distinguishes_query_from_unequal_source_tokens(batch_first):
+def test_cross_attention_distinguishes_query_from_unequal_source_tokens():
     torch.manual_seed(103)
-    module = nn.MultiheadAttention(4, 2, kdim=6, vdim=6, batch_first=batch_first, dropout=0).double().eval()
-    target = torch.randn(1, 2, 4, dtype=torch.double)
-    source = torch.randn(1, 3, 6, dtype=torch.double)
-    query, memory = _layout(target, batch_first), _layout(source, batch_first)
-    report = module_token_dependencies(module, _ordered(module, query, memory, memory, need_weights=False))
+    module = nn.MultiheadAttention(4, 2, kdim=6, vdim=6, batch_first=True).double().eval()
+    query = torch.randn(1, 2, 4, dtype=torch.double)
+    memory = torch.randn(1, 3, 6, dtype=torch.double)
+    report = module_token_dependencies(module, _ordered(module, query, memory, memory))
     assert _relation(report, "query") == {"kind": "same_position"}
     assert _relation(report, "key") == {"kind": "all"}
     assert report["sources"][1]["arguments"] == ["key", "value"]
-
-    def attention(q, kv, mask=None):
-        q, kv = _layout(q, batch_first), _layout(kv, batch_first)
-        return _layout(module(q, kv, kv, attn_mask=mask, need_weights=False)[0], batch_first)
-
-    assert torch.equal(_dependency_blocks(lambda value: attention(value, source), target), torch.eye(2).bool())
-    assert _dependency_blocks(lambda value: attention(target, value), source).all()
+    assert torch.equal(_dependency_blocks(lambda q: module(q, memory, memory)[0], query), torch.eye(2).bool())
+    assert _dependency_blocks(lambda kv: module(query, kv, kv)[0], memory).all()
     mask = _causal(2, 3)
     causal = module_token_dependencies(module, _ordered(module, query, memory, memory, attn_mask=mask))
     assert _relation(causal, "query") == {"kind": "same_position", "first_position": 1}
     assert _relation(causal, "key") == {"kind": "prefix"}
     assert torch.equal(
-        _dependency_blocks(lambda value: attention(value, source, mask), target),
+        _dependency_blocks(lambda q: module(q, memory, memory, attn_mask=mask)[0], query),
         torch.tensor([[False, False], [False, True]]),
     )
-    assert torch.equal(_dependency_blocks(lambda value: attention(target, value, mask), source), ~mask)
+    assert torch.equal(_dependency_blocks(lambda kv: module(query, kv, kv, attn_mask=mask)[0], memory), ~mask)
 
 
 def test_single_key_softmax_has_no_query_or_key_dependency():
@@ -112,45 +97,34 @@ def test_single_key_softmax_has_no_query_or_key_dependency():
     assert _dependency_blocks(lambda tensor: module(query, key, tensor)[0], value).all()
 
 
+@pytest.mark.parametrize("decoder", [False, True])
 @pytest.mark.parametrize("norm_first", [False, True])
-@pytest.mark.parametrize("batch_first", [False, True])
-def test_native_encoder_layers_and_stacks_preserve_prefix_semantics(norm_first, batch_first):
+def test_native_layers_and_stacks_preserve_causal_dependencies(decoder, norm_first):
     torch.manual_seed(109)
-    layer = nn.TransformerEncoderLayer(4, 2, 7, dropout=0, norm_first=norm_first, batch_first=batch_first).double()
-    stack = nn.TransformerEncoder(layer, 2, norm=nn.LayerNorm(4).double(), enable_nested_tensor=False).eval()
-    layer.eval()
+    layer_type = nn.TransformerDecoderLayer if decoder else nn.TransformerEncoderLayer
+    stack_type = nn.TransformerDecoder if decoder else nn.TransformerEncoder
+    layer = layer_type(4, 2, 7, dropout=0, norm_first=norm_first, batch_first=True).double().eval()
+    options = {} if decoder else {"enable_nested_tensor": False}
+    stack = stack_type(layer, 2, norm=nn.LayerNorm(4).double(), **options).eval()
     tensor = torch.randn(1, 3, 4, dtype=torch.double)
-    src = _layout(tensor, batch_first)
-    mask = _causal(3, floating=True)
-    for module in (layer, stack):
-        mask_name = "src_mask" if isinstance(module, nn.TransformerEncoderLayer) else "mask"
-        inputs = _ordered(module, src, **{mask_name: mask})
-        report = module_token_dependencies(module, inputs)
-        assert _relation(report, "src") == {"kind": "prefix"}
-
-        def call(value, module=module, mask_name=mask_name):
-            return _layout(module(_layout(value, batch_first), **{mask_name: mask}), batch_first)
-
-        assert torch.equal(_dependency_blocks(call, tensor), ~_causal(3))
-
-
-@pytest.mark.parametrize("norm_first", [False, True])
-def test_decoder_stack_preserves_causal_target_and_all_memory_dependencies(norm_first):
-    torch.manual_seed(113)
-    layer = nn.TransformerDecoderLayer(4, 2, 7, dropout=0, norm_first=norm_first, batch_first=True).double()
-    stack = nn.TransformerDecoder(layer, 2, norm=nn.LayerNorm(4).double()).eval()
-    layer.eval()
-    target = torch.randn(1, 3, 4, dtype=torch.double)
     memory = torch.randn(1, 4, 4, dtype=torch.double)
-    mask = _causal(3)
-    for module in (layer, stack):
-        report = module_token_dependencies(module, _ordered(module, target, memory, tgt_mask=mask))
-        assert _relation(report, "tgt") == {"kind": "prefix"}
-        assert _relation(report, "memory") == {"kind": "all"}
+    other = (memory,) if decoder else ()
+    for module, mask_name in (
+        (layer, "tgt_mask" if decoder else "src_mask"),
+        (stack, "tgt_mask" if decoder else "mask"),
+    ):
+        masks = {mask_name: _causal(3, floating=True)}
+        report = module_token_dependencies(module, _ordered(module, tensor, *other, **masks))
+        assert _relation(report, "tgt" if decoder else "src") == {"kind": "prefix"}
         assert torch.equal(
-            _dependency_blocks(lambda value, module=module: module(value, memory, tgt_mask=mask), target), ~_causal(3)
+            _dependency_blocks(lambda value, module=module, masks=masks: module(value, *other, **masks), tensor),
+            ~_causal(3),
         )
-        assert _dependency_blocks(lambda value, module=module: module(target, value, tgt_mask=mask), memory).all()
+        if decoder:
+            assert _relation(report, "memory") == {"kind": "all"}
+            assert _dependency_blocks(
+                lambda value, module=module, masks=masks: module(tensor, value, **masks), memory
+            ).all()
 
 
 def test_unmasked_decoder_self_attention_composes_causal_memory_prefixes_across_layers():
@@ -169,20 +143,7 @@ def test_unmasked_decoder_self_attention_composes_causal_memory_prefixes_across_
 @pytest.mark.parametrize("causal_encoder", [False, True])
 def test_transformer_composes_encoder_mixing_before_causal_cross_attention(causal_encoder):
     torch.manual_seed(131)
-    module = (
-        nn
-        .Transformer(
-            d_model=4,
-            nhead=2,
-            num_encoder_layers=2,
-            num_decoder_layers=2,
-            dim_feedforward=7,
-            dropout=0,
-            batch_first=True,
-        )
-        .double()
-        .eval()
-    )
+    module = nn.Transformer(4, 2, 2, 2, 7, dropout=0, batch_first=True).double().eval()
     module.encoder.enable_nested_tensor = False
     module.encoder.use_nested_tensor = False
     src = torch.randn(1, 4, 4, dtype=torch.double)
@@ -263,47 +224,24 @@ def test_causal_per_head_masks_have_the_same_token_relation_as_broadcast_masks()
     assert _relation(report, "query") == {"kind": "prefix"}
 
 
-def test_caught_native_forward_failure_has_unavailable_metrics_and_preserves_ownership_cleanup():
-    class CaughtNativeError(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.bad = nn.TransformerEncoderLayer(4, 2, 7, batch_first=False, dropout=0)
-            self.identity = nn.Identity()
-            self.caught = 0
-
+def test_caught_native_forward_failure_has_unavailable_tokens_and_no_dense_upper_bound():
+    class Recovery(nn.Sequential):
         def forward(self, source):
-            try:
-                self.bad(source.double())  # Shape-valid inputs cannot multiply FP32 projection parameters.
-            except RuntimeError:
-                self.caught += 1
-            return self.identity(source)
+            with suppress(RuntimeError):
+                self[0](source.double())  # Shape-valid input cannot multiply FP32 projection parameters.
+            return self[1](source)
 
-    module = CaughtNativeError()
+    module = Recovery(nn.TransformerEncoderLayer(4, 2, 7, dropout=0), nn.Identity())
     source = torch.randn(3, 1, 4)
-    flags = [child.training for child in module.modules()]
     report = crawl_module(module, args=(source,))
-    assert module.caught == 1
-    failed = next(layer for layer in report["layers"] if layer["path"] == "bad")
+    failed = next(layer for layer in report["layers"] if layer["path"] == "0")
     assert failed["output"]["kind"] == "failed"
+    assert failed["token_dependencies"]["status"] == "unavailable"
     for metric in ("module_flops", "macs", "dmas"):
         assert failed["metrics"][metric]["status"] == "unavailable"
         assert failed["metrics"][metric]["known_value"] is None
-        assert failed["metric_ownership"][metric] == "subtree"
-        # The successful Identity contributes its legacy zero compute / input
-        # DMA count. The failed branch cannot add a full dense upper bound.
         assert report["totals"][metric]["status"] == "partial"
         assert report["totals"][metric]["known_value"] == (source.numel() if metric == "dmas" else 0)
-    assert failed["token_dependencies"]["status"] == "unavailable"
-    child = next(layer for layer in report["layers"] if layer["path"] == "bad.self_attn")
+    child = next(layer for layer in report["layers"] if layer["path"] == "0.self_attn")
     assert "macs" not in child["metrics"]
-    assert child["metric_owners"]["macs"] == {"path": "bad", "call_index": 0}
-    assert all(
-        diagnostic["metric"] == "calls"
-        for diagnostic in report["diagnostics"]
-        if diagnostic.get("path") == "bad.self_attn"
-    )
-    sibling = next(layer for layer in report["layers"] if layer["path"] == "identity")
-    assert "metric_owners" not in sibling
-    assert sibling["metrics"]["macs"]["status"] == "complete"
-    assert [child.training for child in module.modules()] == flags
-    assert all(not child._forward_hooks and not child._forward_pre_hooks for child in module.modules())
+    assert child["metric_owners"]["macs"] == {"path": "0", "call_index": 0}

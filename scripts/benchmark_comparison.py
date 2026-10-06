@@ -13,7 +13,7 @@ from pathlib import Path
 
 import torch
 
-from torchscan import compare_benchmarks, measure_latency, profile_workload, render_report
+from torchscan import compare_benchmarks, measure_flops, measure_latency, profile_workload, render_report
 from torchscan.process import measure_peak_memory, measure_peak_rss
 from torchscan.report import metric_result
 
@@ -53,6 +53,9 @@ def main():
     for name, workload in (("per_sample", per_sample), ("batched", batched)):
         report = measure_latency(workload, device=options.device, inputs=inputs, work_units=32, work_unit="samples")
         report["context"].update(experiment=name, model="Linear(128,128), seed=0", execution_mode="eval/inference_mode")
+        compute = measure_flops(workload)
+        report["totals"]["operator_flops"] = compute["total"]
+        report["context"]["flop_diagnostics"] = compute["diagnostics"]
         method = {
             "cpu": "torch.profiler.export_memory_timeline",
             "cuda": "torch.cuda.max_memory_reserved",

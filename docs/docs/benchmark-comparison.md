@@ -81,9 +81,9 @@ python scripts/benchmark_comparison.py --device cuda:0 --rss --output /tmp/torch
 ```
 
 This no-download example compares a locally initialized linear layer, one sample at a time versus one batch. It
-records clean timing, a separate tensor/allocator memory pass, an optional fresh-process RSS trial, an operator
+records clean timing, separate operator FLOPs and tensor/allocator memory passes, an optional fresh-process RSS trial, an operator
 profile, and an output check. Each RSS child includes imports, model/input construction, and 100 completed calls;
 it does not include profiling. MPS GPU operator time or allocator peaks can be unavailable in the installed PyTorch.
 The report preserves that limit. Omit `--rss` on Windows. Each device needs real matching hardware; results cannot
 predict another machine's latency or service throughput. The example records a microbenchmark, not a production
-speedup promise.
+speedup promise. Incomplete FLOP counts keep their lower bounds and diagnostics; they do not prevent timing.

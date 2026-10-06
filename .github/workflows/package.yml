@@ -82,11 +82,13 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           python-version: ${{ matrix.python }}
-      - name: Install legacy native benchmark dependencies
-        if: matrix.name == 'minimum'
-        run: uv pip install "setuptools<70" "numpy<2"
       - name: Install compatibility environment
-        run: uv pip install -e ".[test]" "${{ matrix.torch }}"
+        run: |
+          if [[ "${{ matrix.name }}" == "minimum" ]]; then
+            uv pip install -e ".[test]" "${{ matrix.torch }}" "setuptools<70" "numpy<2"
+          else
+            uv pip install -e ".[test]" "${{ matrix.torch }}"
+          fi
       - name: Run v0.2 contract tests
         run: >-
           pytest

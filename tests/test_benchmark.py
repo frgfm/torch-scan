@@ -71,46 +71,39 @@ def test_completed_timing_and_statistics(monkeypatch, device, invalid):
     assert report["totals"]["throughput"]["value"] == pytest.approx(400)
 
 
-def test_failures_preserve_threads(monkeypatch):
+def test_failures_preserve_threads():
+    with pytest.raises(TypeError):
+        measure_latency(None, device="cpu")
     threads = torch.get_num_threads()
     error = RuntimeError("workload failed")
     with pytest.raises(RuntimeError) as caught:
         measure_latency(Mock(side_effect=error), device="cpu")
     assert caught.value is error
     assert torch.get_num_threads() == threads
-    monkeypatch.setattr(torch.__config__, "parallel_info", lambda: "native thread pool")
-    setter = Mock()
-    monkeypatch.setattr(torch, "set_num_threads", setter)
-    with pytest.raises(NotImplementedError, match="cannot restore"):
-        measure_latency(lambda: None, device="cpu", num_threads=threads + 1)
-    setter.assert_not_called()
 
 
 @pytest.mark.parametrize(
-    "settings",
+    ("settings", "error_type"),
     [
-        {"work_units": 0},
-        {"work_units": True},
-        {"work_units": 10**1000},
-        {"work_unit": " "},
-        {"num_threads": False},
-        {"warmup": -1},
-        {"min_run_time": float("inf")},
-        {"min_repeats": 1},
-        {"device": "meta"},
-        {"device": "cuda:2"},
-        {"device": "mps:1"},
+        ({"work_units": 0}, ValueError),
+        ({"work_units": True}, ValueError),
+        ({"work_units": 10**1000}, ValueError),
+        ({"work_unit": " "}, ValueError),
+        ({"warmup": -1}, ValueError),
+        ({"min_run_time": float("inf")}, ValueError),
+        ({"min_repeats": 1}, ValueError),
+        ({"device": "meta"}, NotImplementedError),
+        ({"device": "cuda:2"}, RuntimeError),
+        ({"device": "mps:1"}, RuntimeError),
     ],
 )
-def test_invalid_configuration_does_not_run(monkeypatch, settings):
+def test_invalid_configuration_does_not_run(monkeypatch, settings, error_type):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
     workload = Mock()
-    with pytest.raises((ValueError, RuntimeError, NotImplementedError)):
+    with pytest.raises(error_type):
         measure_latency(workload, **({"device": "cpu"} | settings))
     workload.assert_not_called()
-    with pytest.raises(TypeError):
-        measure_latency(None, device="cpu")
 
 
 @pytest.mark.parametrize("system", ["darwin", "linux", "win32"])

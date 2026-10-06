@@ -82,8 +82,9 @@ See [Peak memory](metrics.md#peak-memory) for backend boundaries and comparison 
 
 ## Latency
 
-Use [`torch.utils.benchmark.Timer`](https://docs.pytorch.org/docs/stable/benchmark_utils.html) for warmup, replicates,
-and synchronization. Keep latency separate from theoretical operation counts.
+Use [`measure_latency`](metrics.md#latency-and-throughput) for first-call time, warmed timing, and throughput. It uses
+PyTorch's native timer for warmup and replicates, with explicit selected-device synchronization. Keep timing separate
+from theoretical operation counts.
 
 ## Minimum reproducibility record
 

@@ -11,17 +11,20 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import torch
 
 from .crawler import _describe, _package_version
 from .report import MetricResult, metric_result
 
+if TYPE_CHECKING:
+    from torch.utils.benchmark import Measurement, Timer
+
 __all__ = ["BenchmarkReport", "measure_latency"]
 
 _METHOD = "torch.utils.benchmark.Timer"
-# ponytail: thread count is process-global; use separate processes for parallel benchmarks.
+# ponytail: native timing uses process-global thread settings; use processes for parallel benchmarks.
 _TIMING_LOCK = threading.Lock()
 
 
@@ -66,7 +69,7 @@ def _synchronizer(device: torch.device) -> tuple[torch.device, Callable[[], None
     raise NotImplementedError(f"Latency measurement is not implemented for '{device}'.")
 
 
-def _benchmark_tools() -> tuple[type[Any], type[Any]]:
+def _benchmark_tools() -> tuple[type["Timer"], type["Measurement"]]:
     try:
         from torch.utils.benchmark import Measurement, Timer
     except ImportError as error:
@@ -89,11 +92,10 @@ def _positive_finite(value: object) -> bool:
 def _run_timing(
     workload: Callable[[], object],
     synchronize: Callable[[], None],
-    num_threads: int | None,
     warmup: int,
     min_run_time: float,
     min_repeats: int,
-) -> tuple[float, Any, int]:
+) -> tuple[float, "Measurement", int]:
     timer_type, measurement_type = _benchmark_tools()
 
     def clock() -> float:
@@ -101,30 +103,20 @@ def _run_timing(
         return time.perf_counter()
 
     with _TIMING_LOCK:
-        previous_threads = torch.get_num_threads()
-        threads = previous_threads if num_threads is None else num_threads
-        if threads != previous_threads and "native thread pool" in torch.__config__.parallel_info():
-            raise NotImplementedError(
-                "This PyTorch native-threadpool build cannot restore a changed thread count. "
-                "Set the count before creating the model, then omit num_threads when measuring."
-            )
-        try:
-            torch.set_num_threads(threads)
-            start = clock()
+        threads = torch.get_num_threads()
+        start = clock()
+        workload()
+        first_call = clock() - start
+        for _ in range(warmup):
             workload()
-            first_call = clock() - start
-            for _ in range(warmup):
-                workload()
-            timer = timer_type(stmt="workload()", globals={"workload": workload}, timer=clock, num_threads=threads)
-            measurement = timer.blocked_autorange(min_run_time=min_run_time)
-            samples = list(measurement.raw_times)
-            while len(samples) < min_repeats:
-                samples.extend(timer.timeit(measurement.number_per_run).raw_times)
-            measurement = measurement_type(
-                number_per_run=measurement.number_per_run, raw_times=samples, task_spec=measurement.task_spec
-            )
-        finally:
-            torch.set_num_threads(previous_threads)
+        timer = timer_type(stmt="workload()", globals={"workload": workload}, timer=clock, num_threads=threads)
+        measurement = timer.blocked_autorange(min_run_time=min_run_time)
+        samples = list(measurement.raw_times)
+        while len(samples) < min_repeats:
+            samples.extend(timer.timeit(measurement.number_per_run).raw_times)
+        measurement = measurement_type(
+            number_per_run=measurement.number_per_run, raw_times=samples, task_spec=measurement.task_spec
+        )
     return first_call, measurement, threads
 
 
@@ -135,7 +127,6 @@ def measure_latency(
     inputs: Any = None,
     work_units: float = 1,
     work_unit: str = "calls",
-    num_threads: int | None = None,
     warmup: int = 5,
     min_run_time: float = 0.2,
     min_repeats: int = 5,
@@ -146,15 +137,13 @@ def measure_latency(
         workload: Zero-argument callable. Owns model state, inputs, gradient mode,
             precision, transfers, and any other work included in the timing.
             It is called repeatedly, including during PyTorch timer calibration.
-        device: One CPU, CUDA, or MPS device used by the workload. Accelerator
-            work on that device is completed before reading each timer boundary.
+        device: CPU, CUDA, or MPS device on which the workload already executes.
+            Select and place the workload yourself; this argument only chooses synchronization.
+            Work on that device is completed before reading each timer boundary.
         inputs: Optional caller-supplied input description. Only recursive metadata
             is recorded; this argument is not forwarded to the workload.
         work_units: Positive number of work units completed by each invocation.
         work_unit: Unit name, such as "images" or "tokens"; throughput uses this unit per second.
-        num_threads: PyTorch intra-op thread count. Defaults to the current count;
-            the previous count is restored after measurement, including failures.
-            Native-threadpool builds reject a different count because they cannot restore it.
         warmup: Explicit warmup calls after the first call. PyTorch also calibrates its timer.
         min_run_time: Positive minimum duration of warmed block measurements in seconds.
             Calibration, first call, warmup, and minimum repeats can extend total runtime.
@@ -175,7 +164,9 @@ def measure_latency(
     Notes:
         Exceptions and workload side effects are preserved. This function does not
         change gradient mode, move inputs, evaluate the model, or measure FLOPs/memory.
-        Use one device per workload; multi-device/distributed synchronization is not provided.
+        Configure PyTorch threads before building the model. The active count is recorded;
+        keep it unchanged during the workload. Use one device per workload;
+        multi-device/distributed synchronization is not provided.
     """
     if not callable(workload):
         raise TypeError("workload must be callable.")
@@ -185,8 +176,6 @@ def measure_latency(
     for name, value, minimum in (("warmup", warmup, 0), ("min_repeats", min_repeats, 2)):
         if type(value) is not int or value < minimum:
             raise ValueError(f"{name} must be an integer >= {minimum}.")
-    if num_threads is not None and (type(num_threads) is not int or num_threads < 1):
-        raise ValueError("num_threads must be a positive integer or None.")
     if not isinstance(work_unit, str) or not work_unit.strip():
         raise ValueError("work_unit must be a non-empty string.")
     input_metadata = _describe(inputs)
@@ -194,9 +183,7 @@ def measure_latency(
     processor = _processor()
     device_name = torch.cuda.get_device_name(normalized_device) if normalized_device.type == "cuda" else processor
 
-    first_call, measurement, threads = _run_timing(
-        workload, synchronize, num_threads, warmup, min_run_time, min_repeats
-    )
+    first_call, measurement, threads = _run_timing(workload, synchronize, warmup, min_run_time, min_repeats)
     samples = measurement.raw_times
 
     if any(not _positive_finite(value) for value in [first_call, *samples]):

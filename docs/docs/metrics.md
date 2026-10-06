@@ -86,6 +86,7 @@ import json
 import torch
 from torchscan import measure_latency
 
+torch.set_num_threads(1)  # Configure once, before constructing the model.
 model = torch.nn.Linear(64, 16).eval()
 inputs = torch.ones(32, 64)
 
@@ -101,7 +102,6 @@ report = measure_latency(
     inputs=inputs,
     work_units=inputs.shape[0],
     work_unit="samples",
-    num_threads=1,
 )
 print(json.dumps(report, indent=2))
 ```
@@ -122,10 +122,11 @@ effects. Only work inside that callable is included. It is invoked once for the 
 warmed up, and then invoked many times by native timer calibration and timed blocks. Training workloads must manage
 gradients and changing optimizer state themselves. No weights are downloaded or inputs moved automatically.
 
-`num_threads` defaults to the current PyTorch intra-op thread count and is restored after success or failure. Timing
-calls are serialized because this setting is process-global; unrelated work can still affect measurements.
-Native-threadpool builds cannot restore a changed count, so TorchScan rejects such overrides before executing the
-workload. On these builds, configure threads before constructing the model and omit `num_threads` when measuring.
+Configure threads with `torch.set_num_threads` before constructing the model. TorchScan records the active count and
+passes it to the native timer; it exposes no separate thread override. Keep thread configuration fixed during the
+workload. Timing calls are serialized because native timing uses process-global settings; unrelated work can still
+affect measurements. `device` must match where the callable executes; it does not choose a CUDA execution context or
+move tensors. On CPU/MPS, `device_name` records the CPU/SoC model; `device` distinguishes the backend.
 `warmup`, `min_run_time`, and `min_repeats` control explicit warmup and minimum block measurements. PyTorch performs
 additional warmup/calibration, so `min_run_time` is not a wall-clock timeout. Timed blocks use timeit's default garbage
 collection behavior; first-call timing uses an ordinary synchronized clock.

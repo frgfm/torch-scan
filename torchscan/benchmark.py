@@ -66,7 +66,7 @@ def _synchronizer(device: torch.device) -> tuple[torch.device, Callable[[], None
         if device.index not in (None, 0) or not torch.backends.mps.is_available():
             raise RuntimeError(f"Requested MPS device '{device}' is unavailable in PyTorch {torch.__version__}.")
         return torch.device("mps"), torch.mps.synchronize
-    raise NotImplementedError(f"Latency measurement is not implemented for '{device}'.")
+    raise NotImplementedError(f"Workload measurement is not implemented for '{device}'.")
 
 
 def _benchmark_tools() -> tuple[type["Timer"], type["Measurement"]]:

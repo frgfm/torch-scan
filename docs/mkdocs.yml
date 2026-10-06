@@ -86,6 +86,7 @@ nav:
       - Custom module extensions: extensions.md
       - Custom Transformer example: custom-transformer.md
       - Understanding results: metrics.md
+      - Workload memory and bottlenecks: workload-diagnostics.md
       - Methodology: methodology.md
       - Native Transformers: transformers.md
       - Report schema: report-schema.md

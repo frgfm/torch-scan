@@ -36,6 +36,14 @@ for a runnable example and measurement boundaries.
 
 ::: torchscan.BenchmarkReport
 
+## Workload diagnostics
+
+See [workload diagnostics](workload-diagnostics.md) for separate process RAM and profiler passes.
+
+::: torchscan.profile_workload
+
+::: torchscan.ProfileReport
+
 ## Offline visual reports
 
 ::: torchscan.render_report

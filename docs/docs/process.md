@@ -10,6 +10,15 @@ gradient mode, device placement, warmup, and cache state.
 
 ::: torchscan.process.measure_peak_memory
 
+## Measure peak resident process RAM
+
+`measure_peak_rss` runs a command in a fresh child on Linux/macOS. It records the child's whole lifetime, including
+imports and loading. See [workload diagnostics](workload-diagnostics.md) for an example and memory scope boundaries.
+
+::: torchscan.process.measure_peak_rss
+
+## Peak-memory workload examples
+
 ### Inference
 
 ```python

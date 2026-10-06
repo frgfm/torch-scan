@@ -6,6 +6,7 @@ from torchscan.compare import *
 from torchscan.crawler import *
 from torchscan.extensions import *
 from torchscan.flops import *
+from torchscan.profiler import *
 from torchscan.render import *
 from torchscan.report import *
 

@@ -17,6 +17,8 @@ Use the smallest API that answers the request:
 - `mode="structure"` on either API: hierarchy, shapes, calls, parameters, and buffers with less overhead.
 - `measure_flops(workload)`: operator FLOPs for one zero-argument workload call.
 - `measure_peak_memory(workload, device=...)`: backend-specific PyTorch peak memory.
+- `measure_peak_rss(command)`: Linux/macOS child-process lifetime RSS, including loading and imports.
+- `profile_workload(workload, device=...)`: one instrumented operator diagnostic pass; not clean latency.
 - `measure_latency(workload, device=..., inputs=...)`: first-call time, warmed block-average timing, and explicit
   work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.

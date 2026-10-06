@@ -93,6 +93,7 @@ jobs:
         run: >-
           pytest
           tests/test_benchmark.py
+          tests/test_diagnostics.py
           tests/test_compare.py
           tests/test_crawler.py
           tests/test_custom_transformer.py

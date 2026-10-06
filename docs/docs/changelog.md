@@ -6,6 +6,7 @@ These changes require the development version on `main`. They are not in the 0.2
 
 ### Added
 
+- Per-child Linux/macOS peak RSS and separate native operator profiles with optional Chrome traces.
 - Workload timing with `measure_latency`: first-call time, warmed block-average latency/IQR, explicit work-unit
   throughput, CPU/CUDA/MPS synchronization, and JSON-serializable hardware/input metadata.
 - Scoped arithmetic, normalization, and attention FLOP formulas, plus GroupNorm. Independent formula checks and

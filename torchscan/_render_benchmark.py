@@ -9,7 +9,7 @@ from html import escape
 from typing import Any
 
 from ._render_assets import STYLE
-from .benchmark_compare import _latency_change, _matching_context, _validate_benchmark
+from .benchmark_compare import _context_changes, _latency_change, _matching_context, _validate_benchmark
 from .compare import _diff_metrics
 from .render import _diagnostics, _json_tree, _metadata, _metric_table, _number, _object, _string
 
@@ -74,9 +74,7 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
             raise ValueError("Latency change does not match the stored measurements/check status.")
     body = _metric_table(after["totals"])
     verdict = "Single workload measurement"
-    if comparison:
-        if before is None:
-            raise ValueError("Comparison baseline is missing.")
+    if before is not None:
         verdict = "Output check passed" if report["correctness"] == "passed" else "Output check failed — gains withheld"
         rows = []
         for name, difference in report["totals"].items():
@@ -96,7 +94,7 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
             + f"<p>Latency change: {escape(report['latency_change'].replace('_', ' '))}. "
             "IQR is descriptive variability, not a significance test. Task accuracy is unmeasured.</p>"
             + "<details><summary>Changed measurement settings</summary>"
-            + _metadata(report["context_changes"])
+            + _metadata(_context_changes(before, after))
             + "</details>"
         )
     timings = {"baseline": before["measurement"], "candidate": after["measurement"]} if before else after["measurement"]

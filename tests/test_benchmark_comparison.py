@@ -32,8 +32,19 @@ def test_checked_comparison_and_safe_html():
     assert "Output check passed" in html
     assert "aten::mm" in html
     assert json.loads(json.dumps(result)) == result
+    result["context_changes"].clear()
+    assert "warmup" in render_report(result).split("Changed measurement settings", 1)[1].split("</details>", 1)[0]
     assert "Single workload" in render_report(after)
     assert "No operator profile" in render_report(before)
+    for field, value in (
+        ("schema_version", 2),
+        ("operators", None),
+        ("context", {"device": "cuda:999", "torch_version": str(torch.__version__)}),
+    ):
+        changed = deepcopy(after)
+        changed["profile"][field] = value
+        with pytest.raises(ValueError):
+            render_report(changed)
     with pytest.raises(ValueError):
         render_report(after, format="svg")
     result["totals"]["latency"]["delta"] = 999
@@ -55,6 +66,9 @@ def test_failed_output_check_withholds_gains(assertion):
     assert result["latency_change"] == "unavailable"
     assert all(metric["delta"] is None for metric in result["totals"].values())
     assert "Output check failed" in render_report(result)
+    result["correctness"] = "unknown"
+    with pytest.raises(ValueError, match="comparison"):
+        render_report(result)
 
 
 def test_context_status_and_checker_contract():
@@ -75,6 +89,15 @@ def test_context_status_and_checker_contract():
     changed["totals"]["latency_iqr"]["unit"] = "milliseconds"
     with pytest.raises(ValueError, match="timing unit"):
         compare_benchmarks(changed, changed, check=lambda: True)
+    for field, value in (("schema_version", 2), ("totals", {})):
+        changed = deepcopy(after)
+        changed[field] = value
+        with pytest.raises(ValueError):
+            render_report(changed)
+    changed = deepcopy(after)
+    changed["totals"]["latency"].update(value=0, known_value=0)
+    with pytest.raises(ValueError, match="timing value"):
+        render_report(changed)
     after["totals"]["latency"].update(status="partial", value=None)
     result = compare_benchmarks(before, after, check=lambda: True)
     assert result["totals"]["latency"]["delta"] is None

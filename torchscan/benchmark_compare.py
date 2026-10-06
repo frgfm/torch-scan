@@ -88,6 +88,14 @@ def _latency_change(
     return "within_variability" if abs(delta) <= variability else "faster" if delta < 0 else "slower"
 
 
+def _context_changes(before: BenchmarkReport, after: BenchmarkReport) -> dict[str, Any]:
+    return {
+        key: {"before": before["context"].get(key), "after": after["context"].get(key)}
+        for key in sorted(before["context"].keys() | after["context"].keys())
+        if before["context"].get(key) != after["context"].get(key)
+    }
+
+
 def compare_benchmarks(
     before: BenchmarkReport,
     after: BenchmarkReport,
@@ -126,11 +134,6 @@ def compare_benchmarks(
     if not passed:
         for difference in differences.values():
             difference["status"], difference["delta"] = "unavailable", None
-    changes = {
-        key: {"before": before["context"].get(key), "after": after["context"].get(key)}
-        for key in sorted(before["context"].keys() | after["context"].keys())
-        if before["context"].get(key) != after["context"].get(key)
-    }
     return {
         "schema_version": 1,
         "report_type": "benchmark_comparison",
@@ -139,5 +142,5 @@ def compare_benchmarks(
         "totals": differences,
         "correctness": "passed" if passed else "failed",
         "latency_change": _latency_change(before, after, differences),
-        "context_changes": changes,
+        "context_changes": _context_changes(before, after),
     }

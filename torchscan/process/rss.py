@@ -47,6 +47,7 @@ def measure_peak_rss(command: Sequence[str], *, cwd: str | Path | None = None) -
         Linux/macOS use per-child wait4 accounting, not the parent's cumulative
         child high-water mark. Standard streams are inherited. Child process trees
         are not summed, and container/device memory are outside this metric's scope.
+        The command must exit; no deadline or process-tree cancellation is added.
     """
     if isinstance(command, (str, bytes)) or not command or any(not isinstance(arg, str) for arg in command):
         raise ValueError("command must be a non-empty sequence of strings.")

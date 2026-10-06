@@ -41,12 +41,14 @@ def test_operator_profile_and_trace(tmp_path, device):
 
     def workload():
         calls.append(1)
-        return inputs @ weights
+        with torch.profiler.record_function("custom_scope"):
+            return inputs @ weights
 
     trace = tmp_path / "trace.json"
     report = profile_workload(workload, device=device, trace_path=trace)
     assert calls == [1]
     assert any(row["operator"] == "aten::mm" for row in report["operators"])
+    assert any(row["operator"] == "custom_scope" for row in report["operators"])
     assert json.loads(trace.read_text())
     assert json.loads(json.dumps(report)) == report
     with pytest.raises(FileExistsError):
@@ -88,11 +90,19 @@ def test_cuda_profile_units_and_unavailable_time(monkeypatch, cuda_trace):
             self_cpu_memory_usage=16,
         )
     ]
+    events = native.key_averages.return_value
+    events.append(SimpleNamespace(**{**vars(events[0]), "key": "current", "self_device_time_total": 200}))
+    events.append(SimpleNamespace(**{**vars(events[0]), "key": "unknown", "self_cuda_time_total": None}))
     monkeypatch.setattr(torch.profiler, "profile", lambda **_kwargs: native)
     report = profile_workload(lambda: None, device="cuda")
-    row = report["operators"][0]
+    rows = {row["operator"]: row for row in report["operators"]}
+    row = rows["aten::mm"]
     assert row["cpu_self_seconds"] == pytest.approx(50e-6)
     assert row["device_self_seconds"] == (pytest.approx(100e-6) if cuda_trace else None)
+    assert rows["current"]["device_self_seconds"] == (pytest.approx(200e-6) if cuda_trace else None)
+    assert rows["unknown"]["device_self_seconds"] is None
+    if cuda_trace:
+        assert report["operators"][-1]["operator"] == "unknown"
     assert bool(report["diagnostics"]) is not cuda_trace
     with pytest.raises(TypeError):
         profile_workload(None, device="cuda")

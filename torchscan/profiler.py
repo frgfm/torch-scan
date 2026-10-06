@@ -4,14 +4,13 @@
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 from collections.abc import Callable
-from operator import itemgetter
 from pathlib import Path
 from typing import Any, TypedDict
 
 import torch
 
 from .benchmark import _synchronizer
-from .process.memory import _PEAK_MEMORY_LOCK
+from .process.memory import _PEAK_MEMORY_LOCK  # Native profiling and memory counters share process-global state.
 from .report import Diagnostic
 
 __all__ = ["ProfileReport", "profile_workload"]
@@ -33,7 +32,7 @@ def profile_workload(
     trace_path: str | Path | None = None,
     limit: int = 20,
 ) -> ProfileReport:
-    """Find expensive operators without treating profiler timings as benchmark latency.
+    """Find expensive profiler events without treating their timings as benchmark latency.
 
     Args:
         workload: Zero-argument callable, invoked once with its state unchanged by TorchScan.
@@ -45,7 +44,7 @@ def profile_workload(
             self time on CUDA and CPU self time otherwise.
 
     Returns:
-        Operator calls, input shapes, self times in seconds, and net allocated bytes.
+        Grouped operator/runtime events, calls, input shapes, self times in seconds, and net allocated bytes.
         Allocated bytes are event deltas, not peak RAM. Parent/overlapping time must
         not be summed into a claimed model latency.
 
@@ -84,7 +83,7 @@ def profile_workload(
         if device_time_supported:
             device_time = getattr(event, "self_device_time_total", None)
             if device_time is None:
-                device_time = event.self_cuda_time_total
+                device_time = getattr(event, "self_cuda_time_total", None)
         rows.append({
             "operator": event.key,
             "calls": event.count,
@@ -94,7 +93,7 @@ def profile_workload(
             "cpu_net_bytes": event.self_cpu_memory_usage,
         })
     ranking = "device_self_seconds" if device_time_supported else "cpu_self_seconds"
-    rows.sort(key=itemgetter(ranking), reverse=True)
+    rows.sort(key=lambda row: (row[ranking] is not None, row[ranking] or 0), reverse=True)
     diagnostics: list[Diagnostic] = []
     if normalized.type == "mps":
         diagnostics.append({

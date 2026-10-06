@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
 import torch
 
@@ -20,6 +20,8 @@ from .report import MetricResult, metric_result
 
 if TYPE_CHECKING:
     from torch.utils.benchmark import Measurement, Timer
+
+    from .profiler import ProfileReport
 
 __all__ = ["BenchmarkReport", "measure_latency"]
 
@@ -36,6 +38,7 @@ class BenchmarkReport(TypedDict):
     inputs: dict[str, Any]
     totals: dict[str, MetricResult]
     measurement: dict[str, Any]
+    profile: NotRequired["ProfileReport"]
 
 
 def _processor() -> str:

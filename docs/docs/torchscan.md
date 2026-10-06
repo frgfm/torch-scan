@@ -36,6 +36,12 @@ for a runnable example and measurement boundaries.
 
 ::: torchscan.BenchmarkReport
 
+See [checked performance experiments](benchmark-comparison.md) for output checks and offline benchmark reports.
+
+::: torchscan.compare_benchmarks
+
+::: torchscan.BenchmarkComparison
+
 ## Workload diagnostics
 
 See [workload diagnostics](workload-diagnostics.md) for separate process RAM and profiler passes.

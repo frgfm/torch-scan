@@ -13,7 +13,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from html import escape
 from operator import itemgetter
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ._render_assets import SCRIPT, STYLE
 from ._render_map import _owner_text, build_maps
@@ -22,6 +22,10 @@ from ._render_visual import compact_value, default_selection, map_svg, shape_tex
 from .compare import ReportDiff, compare_reports
 from .report import AnalysisReport, Diagnostic, LayerReport, MetricResult, TokenDependency, metric_result
 from .utils import _token_dependency_text
+
+if TYPE_CHECKING:
+    from .benchmark import BenchmarkReport
+    from .benchmark_compare import BenchmarkComparison
 
 __all__ = ["render_report"]
 
@@ -896,7 +900,7 @@ def _svg(
 
 
 def render_report(
-    report: AnalysisReport,
+    report: "AnalysisReport | BenchmarkReport | BenchmarkComparison",
     *,
     format: Literal["html", "svg"] = "html",  # ruff: ignore[builtin-argument-shadowing]
     before: AnalysisReport | None = None,
@@ -906,7 +910,7 @@ def render_report(
     """Render structured analysis as a self-contained HTML report or standalone SVG.
 
     Args:
-        report: Schema-v1 report returned by ``crawl_module`` or ``summary``.
+        report: Schema-v1 model analysis, benchmark, or checked benchmark comparison.
         format: ``"html"`` for interactive native controls or ``"svg"`` for a static snapshot.
         before: Optional baseline passed to ``compare_reports(before, report)``.
         title: Plain-text report title. Untrusted strings are escaped.
@@ -928,6 +932,14 @@ def render_report(
     """
     if format not in ("html", "svg"):
         raise ValueError("format must be 'html' or 'svg'")
+    if isinstance(report, dict) and ("measurement" in report or report.get("report_type") == "benchmark_comparison"):
+        if format != "html" or before is not None:
+            raise ValueError("Benchmark reports use HTML; pass a compare_benchmarks result for before/after evidence.")
+        _string(title, "title")
+        from ._render_benchmark import render_benchmark
+
+        return render_benchmark(dict(report), title=title)
+    report = cast(AnalysisReport, report)
     if not isinstance(metric, str) or metric not in _VIEWS:
         raise ValueError(f"metric must be one of {', '.join(_VIEWS)}")
     _string(title, "title")

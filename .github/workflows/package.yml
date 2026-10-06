@@ -83,10 +83,16 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install compatibility environment
-        run: uv pip install -e ".[test]" "${{ matrix.torch }}"
+        run: |
+          if [[ "${{ matrix.name }}" == "minimum" ]]; then
+            uv pip install -e ".[test]" "${{ matrix.torch }}" "setuptools<70" "numpy<2"
+          else
+            uv pip install -e ".[test]" "${{ matrix.torch }}"
+          fi
       - name: Run v0.2 contract tests
         run: >-
           pytest
+          tests/test_benchmark.py
           tests/test_compare.py
           tests/test_crawler.py
           tests/test_custom_transformer.py
@@ -185,6 +191,8 @@ jobs:
           assert report;
           assert callable(torchscan.summary);
           assert callable(torchscan.measure_flops);
+          timing = torchscan.measure_latency(lambda: torch.ones(4) + 1, device='cpu', min_run_time=0.01);
+          assert timing['totals']['latency']['status'] == 'complete';
           assert callable(torchscan.compare_reports);
           assert callable(torchscan.process.measure_peak_memory)"
 

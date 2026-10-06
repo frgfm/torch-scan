@@ -15,6 +15,7 @@ The API reference on this site follows `main` and includes unreleased features.
 | Structured reports, `args`/`kwargs`, nested outputs, strict checks, structure mode, and report comparison | Stable 0.2.0 and `main` |
 | Native Transformer module FLOPs and callable peak-memory measurement | Stable 0.2.0 and `main` |
 | Offline HTML/SVG reports with `render_report` | `main` only; unreleased |
+| First-call and warmed workload timing with `measure_latency` | `main` only; unreleased |
 | The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
 | New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
 

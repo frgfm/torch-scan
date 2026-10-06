@@ -71,9 +71,76 @@ Accelerator statistics are process-global, so unrelated concurrent allocations c
 
 ## Latency and throughput
 
-TorchScan does not wrap latency measurement. Use PyTorch's
-[`torch.utils.benchmark.Timer`](https://docs.pytorch.org/docs/stable/benchmark_utils.html), which already handles warmup,
-replicates, and accelerator synchronization. Keep latency results separate from TorchScan's theoretical counts.
+The unreleased `measure_latency` API uses
+[`torch.utils.benchmark.Timer`](https://docs.pytorch.org/docs/stable/benchmark_utils.html) to measure one
+caller-controlled workload. It synchronizes the selected CPU/CUDA/MPS device explicitly, including on older
+supported PyTorch versions. It returns JSON-serializable first-call time, warmed latency, variability, and throughput:
+
+Prefer a current PyTorch release for timing. PyTorch 2.1's native benchmark imports require compatible dependencies
+(`setuptools<70` and `numpy<2`). TorchScan imports these tools only when timing is requested, so this requirement does
+not affect the model inspection APIs. Missing benchmark dependencies raise an actionable import error before execution.
+
+```python
+import json
+
+import torch
+from torchscan import measure_latency
+
+torch.set_num_threads(1)  # Configure once, before constructing the model.
+model = torch.nn.Linear(64, 16).eval()
+inputs = torch.ones(32, 64)
+
+
+def workload():
+    with torch.inference_mode():
+        return model(inputs)
+
+
+report = measure_latency(
+    workload,
+    device=inputs.device,
+    inputs=inputs,
+    work_units=inputs.shape[0],
+    work_unit="samples",
+)
+print(json.dumps(report, indent=2))
+```
+
+| `totals` metric | Meaning |
+| --- | --- |
+| `first_call_latency` | One completed call before warmup, in seconds. Not model loading or fresh-process startup. |
+| `latency` | Median seconds per call, computed from warmed block averages. |
+| `latency_iqr` | Interquartile range of the same block averages, in seconds. |
+| `throughput` | Declared work units completed across timed blocks, divided by their total elapsed seconds. |
+
+`work_units` describes what **one call** completes; `work_unit` gives the unit name. For example, a call processing
+32 samples uses `work_units=32, work_unit="samples"`. Tokens must count the work actually completed, not a requested
+maximum. The default unit is calls per second. These are local workload measurements, not queued-service throughput.
+
+The callable owns evaluation/training state, gradient mode, precision, transfers, preprocessing, and other side
+effects. Only work inside that callable is included. It is invoked once for the first-call measurement, explicitly
+warmed up, and then invoked many times by native timer calibration and timed blocks. Training workloads must manage
+gradients and changing optimizer state themselves. No weights are downloaded or inputs moved automatically.
+
+Configure threads with `torch.set_num_threads` before constructing the model. TorchScan records the active count and
+passes it to the native timer; it exposes no separate thread override. Keep thread configuration fixed during the
+workload. Timing calls are serialized because native timing uses process-global settings; unrelated work can still
+affect measurements. `device` must match where the callable executes; it does not choose a CUDA execution context or
+move tensors. On CPU/MPS, `device_name` records the CPU/SoC model; `device` distinguishes the backend.
+`warmup`, `min_run_time`, and `min_repeats` control explicit warmup and minimum block measurements. PyTorch performs
+additional warmup/calibration, so `min_run_time` is not a wall-clock timeout. Timed blocks use timeit's default garbage
+collection behavior; first-call timing uses an ordinary synchronized clock.
+
+Inputs are optional caller-supplied metadata, not arguments forwarded to the callable. The report labels whether they
+were supplied and stores shapes/dtypes rather than tensor contents. Hardware, software, thread settings, work units,
+timing options, raw block durations, calls per block, and timed call count accompany the metrics. See
+[`BenchmarkReport`](torchscan.md#workload-timing).
+
+Keep block-average latency separate from individual request percentiles. First-call time also includes a completion
+synchronization that warmed blocks amortize over several calls; its difference from warmed latency is not a pure
+startup-cost measurement. Use one device per workload. Multi-device/distributed synchronization, memory measurement,
+FLOP counting, profiling, and output-quality checks are separate tasks. `compare_reports` and `render_report` currently
+accept model analysis reports, not benchmark reports. Counting can be partial without preventing timing.
 
 ## Reproducible reporting
 

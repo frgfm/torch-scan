@@ -17,6 +17,8 @@ Use the smallest API that answers the request:
 - `mode="structure"` on either API: hierarchy, shapes, calls, parameters, and buffers with less overhead.
 - `measure_flops(workload)`: operator FLOPs for one zero-argument workload call.
 - `measure_peak_memory(workload, device=...)`: backend-specific PyTorch peak memory.
+- `measure_latency(workload, device=..., inputs=...)`: first-call time, warmed block-average timing, and explicit
+  work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.
 
 ## Workflow
@@ -38,6 +40,8 @@ Use the smallest API that answers the request:
 - Keep module FLOPs and operator FLOPs separate.
 - Peak PyTorch memory is not process RSS or total device memory.
 - Mocked or skipped CUDA/MPS checks are not hardware evidence.
+- Timing inputs are caller-supplied metadata. Block-average latency is not request p95, and first-call time is not
+  model loading or fresh-process startup. Keep benchmark reports separate from `compare_reports`/`render_report`.
 
 For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
 `measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,

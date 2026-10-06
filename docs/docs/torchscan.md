@@ -27,6 +27,15 @@ See [the extension tutorial](extensions.md) for complete examples and subtree ow
 
 ::: torchscan.compare_reports
 
+## Workload timing
+
+This API requires the unreleased development version. See [Latency and throughput](metrics.md#latency-and-throughput)
+for a runnable example and measurement boundaries.
+
+::: torchscan.measure_latency
+
+::: torchscan.BenchmarkReport
+
 ## Offline visual reports
 
 ::: torchscan.render_report

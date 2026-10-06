@@ -92,7 +92,9 @@ def profile_workload(
             "device_self_seconds": None if device_time is None else device_time / 1e6,
             "cpu_net_bytes": event.self_cpu_memory_usage,
         })
-    ranking = "device_self_seconds" if device_time_supported else "cpu_self_seconds"
+    ranking = (
+        "device_self_seconds" if any(row["device_self_seconds"] is not None for row in rows) else "cpu_self_seconds"
+    )
     rows.sort(key=lambda row: (row[ranking] is not None, row[ranking] or 0), reverse=True)
     diagnostics: list[Diagnostic] = []
     if normalized.type == "mps":

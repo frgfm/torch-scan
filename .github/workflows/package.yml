@@ -71,9 +71,12 @@ jobs:
           - name: minimum
             python: "3.11"
             torch: torch==2.1.0
+            # Native benchmark imports legacy pkg_resources.packaging on PyTorch 2.1.
+            setuptools: setuptools<70
           - name: latest
             python: "3.14"
             torch: torch>=2.1.0,<3.0.0
+            setuptools: setuptools>=77.0.3
     name: compatibility (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v7
@@ -83,10 +86,11 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Install compatibility environment
-        run: uv pip install -e ".[test]" "${{ matrix.torch }}"
+        run: uv pip install -e ".[test]" "${{ matrix.torch }}" "${{ matrix.setuptools }}"
       - name: Run v0.2 contract tests
         run: >-
           pytest
+          tests/test_benchmark.py
           tests/test_compare.py
           tests/test_crawler.py
           tests/test_custom_transformer.py
@@ -185,6 +189,8 @@ jobs:
           assert report;
           assert callable(torchscan.summary);
           assert callable(torchscan.measure_flops);
+          timing = torchscan.measure_latency(lambda: torch.ones(4) + 1, device='cpu', min_run_time=0.01);
+          assert timing['totals']['latency']['status'] == 'complete';
           assert callable(torchscan.compare_reports);
           assert callable(torchscan.process.measure_peak_memory)"
 

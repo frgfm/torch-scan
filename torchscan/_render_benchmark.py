@@ -106,7 +106,7 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
         "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\">"
         f"<title>{escape(title)}</title><style>{STYLE}"
-        "h1{font-size:2rem}header p{max-width:72ch}.benchmark-context{margin-top:1rem}"
+        "h1{font-size:2rem}header p{max-width:72ch}"
         "</style></head><body><a class='skip' href='#measurements'>Skip to measurements</a><main>"
         f"<header><h1>{escape(title)}</h1><p>{escape(verdict)}</p>"
         "<p>Completed workload timing, scoped memory, and separate operator evidence on the recorded hardware. "

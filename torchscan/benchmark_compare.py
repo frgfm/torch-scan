@@ -42,6 +42,9 @@ def _validate_benchmark(report: object) -> BenchmarkReport:
         raise ValueError("Benchmark timing metrics are missing.")
     for name in ("first_call_latency", "latency", "throughput", "latency_iqr"):
         metric = report["totals"][name]
+        unit = f"{report['context'].get('work_unit')}/s" if name == "throughput" else "seconds"
+        if metric["unit"] != unit:
+            raise ValueError(f"Invalid benchmark timing unit: {name}.")
         if metric["status"] == "complete" and (metric["value"] < 0 or (name != "latency_iqr" and metric["value"] == 0)):
             raise ValueError(f"Invalid benchmark timing value: {name}.")
     return cast(BenchmarkReport, report)

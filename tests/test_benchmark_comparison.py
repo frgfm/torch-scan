@@ -71,6 +71,10 @@ def test_context_status_and_checker_contract():
         compare_benchmarks(before, after, check=None)
     with pytest.raises(ValueError, match="check"):
         compare_benchmarks(before, after, check=lambda: "truthy")
+    changed = deepcopy(after)
+    changed["totals"]["latency_iqr"]["unit"] = "milliseconds"
+    with pytest.raises(ValueError, match="timing unit"):
+        compare_benchmarks(changed, changed, check=lambda: True)
     after["totals"]["latency"].update(status="partial", value=None)
     result = compare_benchmarks(before, after, check=lambda: True)
     assert result["totals"]["latency"]["delta"] is None

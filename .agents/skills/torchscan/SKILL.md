@@ -22,6 +22,8 @@ Use the smallest API that answers the request:
 - `measure_latency(workload, device=..., inputs=...)`: first-call time, warmed block-average timing, and explicit
   work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.
+- `compare_benchmarks(before, after, check=...)`: compatible workload comparison with an owner-supplied output check.
+- `render_report(report)`: offline model HTML/SVG or benchmark/comparison HTML, without remeasurement.
 
 ## Workflow
 
@@ -43,7 +45,9 @@ Use the smallest API that answers the request:
 - Peak PyTorch memory is not process RSS or total device memory.
 - Mocked or skipped CUDA/MPS checks are not hardware evidence.
 - Timing inputs are caller-supplied metadata. Block-average latency is not request p95, and first-call time is not
-  model loading or fresh-process startup. Keep benchmark reports separate from `compare_reports`/`render_report`.
+  model loading or fresh-process startup. Use `compare_benchmarks` for timing and `compare_reports` for model estimates.
+- A passed output check does not establish task accuracy. Failed checks withhold benchmark deltas; IQR labels are
+  descriptive, not statistical significance. Preserve methods, memory scopes, hardware, and raw timing evidence.
 
 For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
 `measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,

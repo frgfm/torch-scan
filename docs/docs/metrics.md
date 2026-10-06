@@ -139,8 +139,9 @@ timing options, raw block durations, calls per block, and timed call count accom
 Keep block-average latency separate from individual request percentiles. First-call time also includes a completion
 synchronization that warmed blocks amortize over several calls; its difference from warmed latency is not a pure
 startup-cost measurement. Use one device per workload. Multi-device/distributed synchronization, memory measurement,
-FLOP counting, profiling, and output-quality checks are separate tasks. `compare_reports` and `render_report` currently
-accept model analysis reports, not benchmark reports. Counting can be partial without preventing timing.
+FLOP counting, profiling, and output-quality checks are separate tasks. Use
+[`compare_benchmarks`](benchmark-comparison.md) for checked timing comparisons and `render_report` for their offline
+HTML evidence. `compare_reports` compares model analysis only. Counting can be partial without preventing timing.
 
 ## Reproducible reporting
 

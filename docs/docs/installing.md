@@ -17,6 +17,7 @@ The API reference on this site follows `main` and includes unreleased features.
 | Offline HTML/SVG reports with `render_report` | `main` only; unreleased |
 | First-call and warmed workload timing with `measure_latency` | `main` only; unreleased |
 | Child process RSS with `measure_peak_rss` and operator diagnostics with `profile_workload` | `main` only; unreleased |
+| Checked benchmark comparisons and offline workload HTML reports | `main` only; unreleased |
 | The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
 | New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
 

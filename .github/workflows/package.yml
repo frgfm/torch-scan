@@ -4,7 +4,7 @@ on:
   push:
     branches: main
   pull_request:
-    branches: main
+    branches: [main, "codex/**"]
   release:
     types: [published]
 
@@ -93,6 +93,7 @@ jobs:
         run: >-
           pytest
           tests/test_benchmark.py
+          tests/test_benchmark_comparison.py
           tests/test_diagnostics.py
           tests/test_compare.py
           tests/test_crawler.py
@@ -192,8 +193,11 @@ jobs:
           assert report;
           assert callable(torchscan.summary);
           assert callable(torchscan.measure_flops);
-          timing = torchscan.measure_latency(lambda: torch.ones(4) + 1, device='cpu', min_run_time=0.01);
+          inputs = torch.ones(4);
+          timing = torchscan.measure_latency(lambda: inputs + 1, device='cpu', inputs=inputs, min_run_time=0.01);
           assert timing['totals']['latency']['status'] == 'complete';
+          comparison = torchscan.compare_benchmarks(timing, timing, check=lambda: True);
+          assert 'Output check passed' in torchscan.render_report(comparison);
           assert callable(torchscan.compare_reports);
           assert callable(torchscan.process.measure_peak_memory)"
 

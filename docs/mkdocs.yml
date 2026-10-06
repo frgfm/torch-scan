@@ -87,6 +87,7 @@ nav:
       - Custom Transformer example: custom-transformer.md
       - Understanding results: metrics.md
       - Workload memory and bottlenecks: workload-diagnostics.md
+      - Checked performance experiments: benchmark-comparison.md
       - Methodology: methodology.md
       - Native Transformers: transformers.md
       - Report schema: report-schema.md

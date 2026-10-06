@@ -112,6 +112,7 @@ HTML/SVG content, and JavaScript-disabled controls.
 Untrusted text/attributes are escaped; anchors use generated IDs. Embedded JSON escapes script delimiters,
 ampersands, and Unicode line separators. HTML has a restrictive Content Security Policy for its fixed, hash-authorized
 script and inline styles. SVG has no scripts or external references. Inspect supplied metadata before sharing.
-Only schema-v1 analysis reports are supported, not standalone `FlopReport`, `ReportDiff`, peak-memory reports,
-or legacy summaries. The renderer does not reconstruct topology, infer coverage, benchmark runtime, or claim
-that an experiment preserves accuracy or improves performance.
+Schema-v1 model reports support HTML and SVG. [Benchmark reports and checked benchmark comparisons](benchmark-comparison.md)
+also support HTML, with timing, scoped memory, separate profiles, and execution context. Standalone `FlopReport`,
+`ReportDiff`, peak-memory reports, and legacy summaries are unsupported. The renderer does not reconstruct topology,
+infer coverage, or remeasure runtime. It displays a saved output check without claiming task accuracy.

@@ -33,6 +33,7 @@ def test_checked_comparison_and_safe_html():
     assert "aten::mm" in html
     assert json.loads(json.dumps(result)) == result
     assert "Single workload" in render_report(after)
+    assert "No operator profile" in render_report(before)
     with pytest.raises(ValueError):
         render_report(after, format="svg")
     result["totals"]["latency"]["delta"] = 999

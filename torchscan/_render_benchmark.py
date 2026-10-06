@@ -45,7 +45,7 @@ def _profile(report: Mapping[str, Any]) -> str:
     return (
         "<p>Instrumented operator self time and net allocations. These are not clean latency or peak memory.</p>"
         f"<ul>{notes}</ul><div class='table-scroll'><table><caption>Separate operator diagnostic pass</caption>"
-        "<thead><tr><th>Operator</th><th>Input shapes</th><th>Calls</th><th>CPU self ms</th><th>Device self ms</th><th>CPU net bytes</th></tr></thead>"
+        "<thead><tr><th>Operator / runtime event</th><th>Input shapes</th><th>Calls</th><th>CPU self ms</th><th>Device self ms</th><th>CPU net bytes</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></div>"
         f"<details><summary>Profiler settings and row limits</summary>{_metadata(profile['context'])}</details>"
     )
@@ -56,27 +56,35 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
     comparison = report.get("report_type") == "benchmark_comparison"
     before = report.get("before") if comparison else None
     after = _validate_benchmark(report.get("after") if comparison else report)
+    changes: dict[str, Any] = {}
     if comparison:
         before = _validate_benchmark(before)
         _matching_context(before, after)
         if (
             type(report.get("schema_version")) is not int
             or report["schema_version"] != 1
-            or report.get("correctness") not in {"passed", "failed"}
+            or report.get("output_check") not in {"passed", "failed"}
         ):
             raise ValueError("Invalid benchmark comparison.")
         expected = _diff_metrics(before["totals"], after["totals"])
-        if report["correctness"] == "failed":
+        if report["output_check"] == "failed":
             for difference in expected.values():
                 difference["status"], difference["delta"] = "unavailable", None
         if report["totals"] != expected:
             raise ValueError("Comparison deltas do not match the stored measurements/check status.")
         if report.get("latency_change") != _latency_change(before, after, expected):
             raise ValueError("Latency change does not match the stored measurements/check status.")
+        changes = _context_changes(before, after)
+        if report.get("context_changes") != changes:
+            raise ValueError("Context changes do not match the stored measurements.")
     body = _metric_table(after["totals"])
     verdict = "Single workload measurement"
     if before is not None:
-        verdict = "Output check passed" if report["correctness"] == "passed" else "Output check failed — gains withheld"
+        verdict = (
+            "Output check passed" if report["output_check"] == "passed" else "Output check failed — gains withheld"
+        )
+        if changes:
+            verdict += ". Recorded context changed: " + ", ".join(changes)
         rows = []
         for name, difference in report["totals"].items():
             delta = difference["delta"]
@@ -94,12 +102,15 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
             + "</tbody></table></div>"
             + f"<p>Latency change: {escape(report['latency_change'].replace('_', ' '))}. "
             "IQR is descriptive variability, not a significance test. Task accuracy is unmeasured.</p>"
-            + "<details><summary>Changed measurement settings</summary>"
-            + _metadata(_context_changes(before, after))
+            + "<details><summary>Changed execution context</summary>"
+            + _metadata(changes)
             + "</details>"
         )
     timings = {"baseline": before["measurement"], "candidate": after["measurement"]} if before else after["measurement"]
     profile_heading = "Candidate bottleneck evidence" if comparison else "Bottleneck evidence"
+    profiles = f"<section><h2>{profile_heading}</h2>{_profile(after)}</section>"
+    if before is not None and before.get("profile") is not None:
+        profiles = f"<section><h2>Baseline bottleneck evidence</h2>{_profile(before)}</section>" + profiles
     return (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -108,10 +119,10 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
         "h1{font-size:2rem}header p{max-width:72ch}"
         "</style></head><body><a class='skip' href='#measurements'>Skip to measurements</a><main>"
         f"<header><h1>{escape(title)}</h1><p>{escape(verdict)}</p>"
-        "<p>Completed workload timing, scoped memory, and separate operator evidence on the recorded hardware. "
+        "<p>Recorded workload timing and any supplied memory or profiler evidence. "
         "Values retain their methods; unavailable data stays visible.</p></header>"
-        f"<section id='measurements'><h2>Timing and memory</h2>{body}</section>"
-        f"<section><h2>{profile_heading}</h2>{_profile(after)}</section>"
+        f"<section id='measurements'><h2>Measured values</h2>{body}</section>"
+        f"{profiles}"
         "<section><h2>Execution context</h2><details><summary>Inputs and hardware</summary>"
         f"{_metadata({'inputs': after['inputs'], 'context': after['context']})}</details>"
         "<details><summary>Raw timing blocks</summary>" + _metadata(timings) + "</details></section>"

@@ -30,7 +30,8 @@ def candidate():
 settings = dict(device="cpu", inputs=inputs, work_units=32, work_unit="samples")
 before = measure_latency(baseline, **settings)
 after = measure_latency(candidate, **settings)
-after["profile"] = profile_workload(candidate, device="cpu")  # Separate from timing.
+before["profile"] = profile_workload(baseline, device="cpu")  # Separate from timing.
+after["profile"] = profile_workload(candidate, device="cpu")
 comparison = compare_benchmarks(
     before,
     after,
@@ -41,7 +42,7 @@ Path("comparison.html").write_text(render_report(comparison), encoding="utf-8")
 ```
 
 The check runs outside timing. Returning `None` or `True` passes; returning `False` or raising `AssertionError` fails.
-Other exceptions propagate. A failed check preserves both measurements but withholds every numeric delta and the
+Other exceptions propagate. `output_check` records this callback's result. A failed check preserves both measurements but withholds every numeric delta and the
 speed label. Check representative outputs and task accuracy yourself. Matching a few tensors is not a task-level
 accuracy guarantee, and TorchScan does not retain outputs or choose a tolerance.
 
@@ -69,7 +70,8 @@ without rerunning the check. Inspect the evidence before sharing it.
 
 Use [`measure_peak_rss`](workload-diagnostics.md#whole-process-peak-rss) in a fresh child and append its `MetricResult`
 to the matching report's `totals`. Convert `measure_peak_memory` results to separate byte metrics with explicit
-methods and scopes. Do not add RSS to allocator or tensor peaks, especially on unified-memory hardware. Profiler
+methods and scopes. CPU tensor peaks include observed tensors already resident before the call; `delta_bytes` is
+the increment from the recorded baseline. Do not add RSS to allocator or tensor peaks, especially on unified-memory hardware. Profiler
 operator times include instrumentation and are not clean workload timing.
 
 Run the complete example on each available device:

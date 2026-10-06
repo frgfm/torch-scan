@@ -24,7 +24,7 @@ class BenchmarkComparison(TypedDict):
     before: BenchmarkReport
     after: BenchmarkReport
     totals: dict[str, _MetricDiff]
-    correctness: Literal["passed", "failed"]
+    output_check: Literal["passed", "failed"]
     latency_change: LatencyChange
     context_changes: dict[str, Any]
 
@@ -107,8 +107,8 @@ def compare_benchmarks(
     Args:
         before: Baseline report from measure_latency, optionally including memory/profile evidence.
         after: Candidate report for matching hardware, software, inputs, and work units.
-        check: Caller-owned output check, executed outside timing. None or True means
-            success; False or AssertionError means failure. Other exceptions propagate.
+        check: Caller-owned output check, executed outside timing. Exactly None or Python True means
+            success; Python False or AssertionError means failure. Other exceptions propagate.
 
     Returns:
         Measured deltas only when the output check passes. Input/hardware/software
@@ -140,7 +140,7 @@ def compare_benchmarks(
         "before": deepcopy(before),
         "after": deepcopy(after),
         "totals": differences,
-        "correctness": "passed" if passed else "failed",
+        "output_check": "passed" if passed else "failed",
         "latency_change": _latency_change(before, after, differences),
         "context_changes": _context_changes(before, after),
     }

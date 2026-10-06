@@ -22,7 +22,7 @@ def test_checked_comparison_and_safe_html():
     after["context"]["warmup"] = 9
     after["profile"] = profile_workload(lambda: torch.ones(2, 2) @ torch.ones(2, 2), device="cpu")
     result = compare_benchmarks(before, after, check=lambda: None)
-    assert result["correctness"] == "passed"
+    assert result["output_check"] == "passed"
     assert result["totals"]["latency"]["delta"] == pytest.approx(-0.01)
     assert result["latency_change"] == "faster"
     assert result["context_changes"]["warmup"]["after"] == 9
@@ -31,11 +31,16 @@ def test_checked_comparison_and_safe_html():
     assert "<script>alert(1)</script>" not in html
     assert "Output check passed" in html
     assert "aten::mm" in html
+    assert "Recorded context changed: warmup" in html
     assert json.loads(json.dumps(result)) == result
-    result["context_changes"].clear()
-    assert "warmup" in render_report(result).split("Changed measurement settings", 1)[1].split("</details>", 1)[0]
-    assert "Single workload" in render_report(after)
+    changed = deepcopy(result)
+    changed["context_changes"].clear()
+    with pytest.raises(ValueError, match="Context changes"):
+        render_report(changed)
     assert "No operator profile" in render_report(before)
+    before["profile"] = after["profile"]
+    assert "Baseline bottleneck evidence" in render_report(compare_benchmarks(before, after, check=lambda: True))
+    assert "Single workload" in render_report(after)
     for field, value in (
         ("schema_version", 2),
         ("operators", None),
@@ -62,11 +67,11 @@ def test_failed_output_check_withholds_gains(assertion):
         return False
 
     result = compare_benchmarks(before, after, check=check)
-    assert result["correctness"] == "failed"
+    assert result["output_check"] == "failed"
     assert result["latency_change"] == "unavailable"
     assert all(metric["delta"] is None for metric in result["totals"].values())
     assert "Output check failed" in render_report(result)
-    result["correctness"] = "unknown"
+    result["output_check"] = "unknown"
     with pytest.raises(ValueError, match="comparison"):
         render_report(result)
 

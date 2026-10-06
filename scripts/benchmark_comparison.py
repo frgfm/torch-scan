@@ -61,7 +61,7 @@ def main():
             "cuda": "torch.cuda.max_memory_reserved",
             "mps": "torch.accelerator.memory.max_memory_reserved",
         }[device.type]
-        scope = "workload_tensor_peak" if device.type == "cpu" else "allocator_reserved_peak"
+        scope = "pytorch_tracked_tensor_peak" if device.type == "cpu" else "allocator_reserved_peak"
         try:
             memory = measure_peak_memory(workload, device=options.device)
         except NotImplementedError as error:
@@ -91,10 +91,10 @@ def main():
                 "--rss-child",
                 name,
             ])
+        report["profile"] = profile_workload(workload, device=options.device, limit=10)
         reports.append(report)
 
     before, after = reports
-    after["profile"] = profile_workload(batched, device=options.device, limit=10)
     comparison = compare_benchmarks(
         before, after, check=lambda: torch.testing.assert_close(per_sample(), batched(), rtol=1e-4, atol=1e-5)
     )
@@ -114,7 +114,7 @@ def main():
             f"{totals['latency']['value'] * 1000:.4f} | {totals['latency_iqr']['value'] * 1000:.4f} | "
             f"{totals['throughput']['value']:.0f} | {rss_text}"
         )
-    print(f"Output check: {comparison['correctness']}; latency change: {comparison['latency_change']}")
+    print(f"Output check: {comparison['output_check']}; latency change: {comparison['latency_change']}")
     print(f"Saved {options.output.resolve()}/comparison.json and comparison.html")
 
 

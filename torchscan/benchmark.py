@@ -86,6 +86,48 @@ def _positive_finite(value: object) -> bool:
         return False
 
 
+def _run_timing(
+    workload: Callable[[], object],
+    synchronize: Callable[[], None],
+    num_threads: int | None,
+    warmup: int,
+    min_run_time: float,
+    min_repeats: int,
+) -> tuple[float, Any, int]:
+    timer_type, measurement_type = _benchmark_tools()
+
+    def clock() -> float:
+        synchronize()
+        return time.perf_counter()
+
+    with _TIMING_LOCK:
+        previous_threads = torch.get_num_threads()
+        threads = previous_threads if num_threads is None else num_threads
+        if threads != previous_threads and "native thread pool" in torch.__config__.parallel_info():
+            raise NotImplementedError(
+                "This PyTorch native-threadpool build cannot restore a changed thread count. "
+                "Set the count before creating the model, then omit num_threads when measuring."
+            )
+        try:
+            torch.set_num_threads(threads)
+            start = clock()
+            workload()
+            first_call = clock() - start
+            for _ in range(warmup):
+                workload()
+            timer = timer_type(stmt="workload()", globals={"workload": workload}, timer=clock, num_threads=threads)
+            measurement = timer.blocked_autorange(min_run_time=min_run_time)
+            samples = list(measurement.raw_times)
+            while len(samples) < min_repeats:
+                samples.extend(timer.timeit(measurement.number_per_run).raw_times)
+            measurement = measurement_type(
+                number_per_run=measurement.number_per_run, raw_times=samples, task_spec=measurement.task_spec
+            )
+        finally:
+            torch.set_num_threads(previous_threads)
+    return first_call, measurement, threads
+
+
 def measure_latency(
     workload: Callable[[], object],
     *,
@@ -149,39 +191,13 @@ def measure_latency(
         raise ValueError("work_unit must be a non-empty string.")
     input_metadata = _describe(inputs)
     normalized_device, synchronize = _synchronizer(torch.device(device))
-    timer_type, measurement_type = _benchmark_tools()
     processor = _processor()
     device_name = torch.cuda.get_device_name(normalized_device) if normalized_device.type == "cuda" else processor
 
-    def clock() -> float:
-        synchronize()
-        return time.perf_counter()
-
-    with _TIMING_LOCK:
-        previous_threads = torch.get_num_threads()
-        threads = previous_threads if num_threads is None else num_threads
-        if threads != previous_threads and "native thread pool" in torch.__config__.parallel_info():
-            raise NotImplementedError(
-                "This PyTorch native-threadpool build cannot restore a changed thread count. "
-                "Set the count before creating the model, then omit num_threads when measuring."
-            )
-        try:
-            torch.set_num_threads(threads)
-            start = clock()
-            workload()
-            first_call = clock() - start
-            for _ in range(warmup):
-                workload()
-            timer = timer_type(stmt="workload()", globals={"workload": workload}, timer=clock, num_threads=threads)
-            measurement = timer.blocked_autorange(min_run_time=min_run_time)
-            samples = list(measurement.raw_times)
-            while len(samples) < min_repeats:
-                samples.extend(timer.timeit(measurement.number_per_run).raw_times)
-            measurement = measurement_type(
-                number_per_run=measurement.number_per_run, raw_times=samples, task_spec=measurement.task_spec
-            )
-        finally:
-            torch.set_num_threads(previous_threads)
+    first_call, measurement, threads = _run_timing(
+        workload, synchronize, num_threads, warmup, min_run_time, min_repeats
+    )
+    samples = measurement.raw_times
 
     if any(not _positive_finite(value) for value in [first_call, *samples]):
         raise RuntimeError("Timing must produce positive finite durations.")

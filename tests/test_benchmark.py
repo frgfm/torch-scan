@@ -1,3 +1,4 @@
+import builtins
 import json
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
@@ -52,13 +53,14 @@ def test_cpu_first_call_warm_timing_and_metadata(monkeypatch):
     assert json.loads(json.dumps(report, allow_nan=False)) == report
 
 
-@pytest.mark.parametrize("device", ["cuda:1", "mps:0"])
+@pytest.mark.parametrize("device", ["cuda", "cuda:1", "mps:0"])
 def test_selected_device_synchronization_and_block_statistics(monkeypatch, device):
     events = []
     threads = torch.get_num_threads()
     if device.startswith("cuda"):
         monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
         monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+        monkeypatch.setattr(torch.cuda, "current_device", lambda: 1)
         monkeypatch.setattr(torch.cuda, "get_device_name", lambda _device: "test GPU")
         monkeypatch.setattr(torch.cuda, "synchronize", lambda device: events.append(("sync", str(device))))
         expected_device = "cuda:1"
@@ -155,7 +157,7 @@ def test_non_restorable_thread_change_rejected_before_mutation(monkeypatch):
     workload.assert_not_called()
 
 
-def test_missing_native_benchmark_dependencies_leave_analysis_usable():
+def test_missing_native_benchmark_dependencies_leave_analysis_usable(monkeypatch):
     script = """
 import builtins
 original_import = builtins.__import__
@@ -168,19 +170,73 @@ import torch
 import torchscan
 report = torchscan.crawl_module(torch.nn.Linear(4, 2), (4,))
 assert report["totals"]["parameters"]["value"] == 10
-calls = []
-try:
-    torchscan.measure_latency(lambda: calls.append(1), device="cpu")
-except ImportError as error:
-    assert "upgrade PyTorch" in str(error)
-else:
-    raise AssertionError("expected an actionable benchmark import error")
-assert not calls
 """
     result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stderr
+    original_import = builtins.__import__
+
+    def import_without_benchmark(name, *args, **kwargs):
+        if name == "torch.utils.benchmark":
+            raise ImportError("missing native benchmark dependency")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_benchmark)
+    workload = Mock()
+    with pytest.raises(ImportError, match="upgrade PyTorch"):
+        measure_latency(workload, device="cpu")
+    workload.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("system", "available"),
+    [
+        ("darwin", True),
+        ("darwin", False),
+        ("linux", True),
+        ("linux", False),
+        ("win32", False),
+    ],
+)
+def test_hardware_identity_and_unavailable_os_queries(monkeypatch, system, available):
+    monkeypatch.setattr(benchmark_module.sys, "platform", system)
+    monkeypatch.setattr(benchmark_module.platform, "processor", lambda: "fallback CPU")
+    cpu_query = Mock(return_value="test CPU\n") if available else Mock(side_effect=OSError("not available"))
+    monkeypatch.setattr(benchmark_module.subprocess, "check_output", cpu_query)
+    cpu_file = Mock(return_value="processor: 0\nmodel name: test CPU\n") if available else Mock(side_effect=OSError())
+    monkeypatch.setattr(benchmark_module.Path, "read_text", cpu_file)
+    report = measure_latency(lambda: None, device="cpu", warmup=0, min_run_time=0.001, min_repeats=2)
+    expected = "test CPU" if available else "fallback CPU"
+    assert report["context"]["processor"] == expected
+    assert report["context"]["device_name"] == expected
+
+
+def test_non_callable_workload_rejected():
+    with pytest.raises(TypeError, match="callable"):
+        measure_latency(None, device="cpu")
+
+
+@pytest.mark.parametrize("invalid_first_call", [True, False])
+def test_invalid_timing_cannot_produce_a_complete_report(monkeypatch, invalid_first_call):
+    real_timer = Timer(stmt="pass", num_threads=torch.get_num_threads())
+    measurement = Measurement(number_per_run=1, raw_times=[0.01, 0.02], task_spec=real_timer._task_spec)
+
+    class ControlledTimer:
+        def __init__(self, **_kwargs):
+            pass
+
+        def blocked_autorange(self, **_kwargs):
+            return measurement
+
+    monkeypatch.setattr(benchmark_module, "_benchmark_tools", lambda: (ControlledTimer, Measurement))
+    ticks = iter([1.0, 1.0 if invalid_first_call else 1.1])
+    monkeypatch.setattr(benchmark_module.time, "perf_counter", lambda: next(ticks))
+    message = "durations" if invalid_first_call else "Throughput"
+    with pytest.raises(RuntimeError, match=message):
+        measure_latency(
+            lambda: None, device="cpu", warmup=0, min_repeats=2, work_units=1 if invalid_first_call else 1e308
+        )
 
 
 @pytest.mark.parametrize(
@@ -222,6 +278,15 @@ def test_unavailable_device_does_not_execute_workload(monkeypatch, device):
     workload = Mock()
     with pytest.raises(RuntimeError):
         measure_latency(workload, device=device)
+    workload.assert_not_called()
+
+
+def test_unavailable_cuda_index_does_not_execute_workload(monkeypatch):
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    workload = Mock()
+    with pytest.raises(RuntimeError, match="cuda:1"):
+        measure_latency(workload, device="cuda:1")
     workload.assert_not_called()
 
 

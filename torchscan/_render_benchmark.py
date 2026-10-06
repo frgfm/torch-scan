@@ -47,6 +47,7 @@ def _profile(report: Mapping[str, Any]) -> str:
         f"<ul>{notes}</ul><div class='table-scroll'><table><caption>Separate operator diagnostic pass</caption>"
         "<thead><tr><th>Operator</th><th>Input shapes</th><th>Calls</th><th>CPU self ms</th><th>Device self ms</th><th>CPU net bytes</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table></div>"
+        f"<details><summary>Profiler settings and row limits</summary>{_metadata(profile['context'])}</details>"
     )
 
 

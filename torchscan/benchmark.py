@@ -71,10 +71,19 @@ def _benchmark_tools() -> tuple[type[Any], type[Any]]:
         from torch.utils.benchmark import Measurement, Timer
     except ImportError as error:
         raise ImportError(
-            "PyTorch's benchmark utilities could not be imported. Install the build dependencies required by your "
-            "PyTorch version, or upgrade PyTorch. PyTorch 2.1 requires setuptools<70 for these utilities."
+            "PyTorch's benchmark utilities could not be imported. Install the benchmark dependencies required by your "
+            "PyTorch version, or upgrade PyTorch. PyTorch 2.1 requires setuptools<70 and numpy<2 for these utilities."
         ) from error
     return Timer, Measurement
+
+
+def _positive_finite(value: object) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value) and value > 0
+    except OverflowError:
+        return False
 
 
 def measure_latency(
@@ -117,7 +126,7 @@ def measure_latency(
     Raises:
         TypeError: If workload is not callable.
         ValueError: If timing settings or work units are invalid.
-        ImportError: If the installed PyTorch benchmark utilities lack their build dependencies.
+        ImportError: If the installed PyTorch benchmark utilities lack their dependencies.
         RuntimeError: If the device is unavailable or timing produces invalid samples.
         NotImplementedError: If the device backend is unsupported.
 
@@ -129,7 +138,7 @@ def measure_latency(
     if not callable(workload):
         raise TypeError("workload must be callable.")
     for name, value in (("work_units", work_units), ("min_run_time", min_run_time)):
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        if not _positive_finite(value):
             raise ValueError(f"{name} must be a positive finite number.")
     for name, value, minimum in (("warmup", warmup, 0), ("min_repeats", min_repeats, 2)):
         if type(value) is not int or value < minimum:
@@ -174,12 +183,12 @@ def measure_latency(
         finally:
             torch.set_num_threads(previous_threads)
 
-    if any(not math.isfinite(value) or value <= 0 for value in [first_call, *samples]):
+    if any(not _positive_finite(value) for value in [first_call, *samples]):
         raise RuntimeError("Timing must produce positive finite durations.")
     measured_calls = measurement.number_per_run * len(samples)
     throughput = work_units / (sum(samples) / measured_calls)
-    if not math.isfinite(throughput):
-        raise RuntimeError("Throughput must be finite; reduce work_units.")
+    if not _positive_finite(throughput):
+        raise RuntimeError("Throughput must be positive and finite; adjust work_units.")
     return {
         "schema_version": 1,
         "context": {

@@ -188,6 +188,7 @@ assert not calls
     [
         {"work_units": 0},
         {"work_units": float("nan")},
+        {"work_units": 10**1000},
         {"work_units": True},
         {"work_unit": " "},
         {"num_threads": 0},

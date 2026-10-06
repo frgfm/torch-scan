@@ -71,12 +71,9 @@ jobs:
           - name: minimum
             python: "3.11"
             torch: torch==2.1.0
-            # Native benchmark imports legacy pkg_resources.packaging on PyTorch 2.1.
-            setuptools: setuptools<70
           - name: latest
             python: "3.14"
             torch: torch>=2.1.0,<3.0.0
-            setuptools: setuptools>=77.0.3
     name: compatibility (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v7
@@ -85,8 +82,11 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           python-version: ${{ matrix.python }}
+      - name: Install legacy native benchmark dependencies
+        if: matrix.name == 'minimum'
+        run: uv pip install "setuptools<70" "numpy<2"
       - name: Install compatibility environment
-        run: uv pip install -e ".[test]" "${{ matrix.torch }}" "${{ matrix.setuptools }}"
+        run: uv pip install -e ".[test]" "${{ matrix.torch }}"
       - name: Run v0.2 contract tests
         run: >-
           pytest

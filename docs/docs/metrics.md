@@ -76,8 +76,8 @@ The unreleased `measure_latency` API uses
 caller-controlled workload. It synchronizes the selected CPU/CUDA/MPS device explicitly, including on older
 supported PyTorch versions. It returns JSON-serializable first-call time, warmed latency, variability, and throughput:
 
-Prefer a current PyTorch release for timing. PyTorch 2.1's native benchmark imports require compatible legacy build
-dependencies (`setuptools<70`). TorchScan imports these tools only when timing is requested, so this requirement does
+Prefer a current PyTorch release for timing. PyTorch 2.1's native benchmark imports require compatible dependencies
+(`setuptools<70` and `numpy<2`). TorchScan imports these tools only when timing is requested, so this requirement does
 not affect the model inspection APIs. Missing benchmark dependencies raise an actionable import error before execution.
 
 ```python

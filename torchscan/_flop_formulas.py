@@ -9,14 +9,35 @@ These follow the shape-formula contract shared by PyTorch 2.1 and newer releases
 They never register in PyTorch's process-global mapping.
 """
 
+from functools import partial
 from math import prod
 from typing import Any
 
 from torch.utils.flop_counter import sdpa_flop_count
 
+from .modules._primitives import gelu_flops, rmsnorm_rows
 
-def _elementwise(*_args: Any, out_shape: Any, **_kwargs: Any) -> int:
+
+def _elementwise(*_args: Any, out_shape: Any, cost: int = 1, **_kwargs: Any) -> int:
+    return cost * prod(out_shape)
+
+
+def _gelu(*_args: Any, out_shape: Any, approximate: str = "none", **_kwargs: Any) -> int:
+    return gelu_flops(prod(out_shape), approximate)
+
+
+def _square(_input_shape: Any, exponent: Any, *_args: Any, out_shape: Any, **_kwargs: Any) -> int:
+    if not isinstance(exponent, (int, float)) or exponent != 2:
+        raise NotImplementedError("Power FLOPs only cover an explicit scalar exponent of two.")
     return prod(out_shape)
+
+
+def _rms_norm(input_shape: Any, normalized_shape: Any, weight: Any = None, *_args: Any, **_kwargs: Any) -> int:
+    rows = rmsnorm_rows(input_shape, tuple(normalized_shape))
+    if weight is not None and tuple(weight) != tuple(normalized_shape):
+        raise NotImplementedError("RMSNorm FLOPs require a matching weight shape.")
+    elements = prod(input_shape)
+    return (3 + int(weight is not None)) * elements + 2 * rows
 
 
 def _add(*_args: Any, out_shape: Any, alpha: float = 1, **_kwargs: Any) -> int:
@@ -41,7 +62,10 @@ def _sum(input_shape: Any, *_args: Any, out_shape: Any, **_kwargs: Any) -> int:
 
 
 def _mean(input_shape: Any, *_args: Any, out_shape: Any, **_kwargs: Any) -> int:
-    return _sum(input_shape, out_shape=out_shape) + prod(out_shape)
+    outputs = prod(out_shape)
+    if prod(input_shape) == 0 and outputs:
+        raise NotImplementedError("Mean FLOPs require nonempty reduction rows.")
+    return _sum(input_shape, out_shape=out_shape) + outputs
 
 
 def _layer_norm(input_shape: Any, normalized_shape: Any, weight: Any, bias: Any, *_args: Any, **_kwargs: Any) -> int:
@@ -139,6 +163,12 @@ def _cpu_attention(
 
 
 FORMULAS = {
+    **dict.fromkeys(["gelu", "gelu_"], _gelu),
+    **dict.fromkeys(["silu", "silu_", "glu"], partial(_elementwise, cost=5)),
+    **dict.fromkeys(["sigmoid", "sigmoid_"], partial(_elementwise, cost=4)),
+    **dict.fromkeys(["tanh", "tanh_"], partial(_elementwise, cost=6)),
+    **dict.fromkeys(["pow", "pow_"], _square),
+    **dict.fromkeys(["rms_norm", "_fused_rms_norm"], _rms_norm),
     **dict.fromkeys(["add", "add_", "sub", "sub_"], _add),
     **dict.fromkeys(
         [

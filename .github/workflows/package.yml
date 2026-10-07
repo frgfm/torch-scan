@@ -99,6 +99,7 @@ jobs:
           tests/test_crawler.py
           tests/test_custom_transformer.py
           tests/test_flops.py
+          tests/test_primitives.py
           tests/test_inputs.py
           tests/test_report.py
           tests/test_transformer_formulas.py

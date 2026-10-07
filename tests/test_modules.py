@@ -119,8 +119,8 @@ def test_transformer_flops_rejects_unverified_options():
     with pytest.raises(NotImplementedError, match="add_bias_kv or add_zero_attn"):
         modules.module_flops(mod, (query, query, query), None)
 
-    transformer = nn.Transformer(d_model=4, nhead=2, dim_feedforward=8, activation="gelu", batch_first=True)
-    with pytest.raises(NotImplementedError, match="default ReLU"):
+    transformer = nn.Transformer(d_model=4, nhead=2, dim_feedforward=8, activation=torch.sin, batch_first=True)
+    with pytest.raises(NotImplementedError, match="ReLU or GELU"):
         modules.module_flops(transformer, (query, query), None)
 
 

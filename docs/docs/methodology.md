@@ -96,7 +96,8 @@ execution-state details. Target-device acceptance requires real checks on that d
 
 `torchscan_flops_v1` keeps module/operator counts separate. Priority: caller override > native PyTorch > invocation-only
 fallback; no global mutation. N = elements, R = rows, C = channels, A = affine tensors present (0–2).
-Scalar arithmetic, exp/sqrt, comparison, and selection each cost one operation.
+Scalar arithmetic, exp/sqrt/erf, comparison, and selection each cost one operation. Sigmoid expands to four operations
+and tanh to six, as in the existing module formulas. Constant-only arithmetic is excluded.
 
 | Work | Count / boundary |
 | --- | --- |
@@ -108,6 +109,10 @@ Scalar arithmetic, exp/sqrt, comparison, and selection each cost one operation.
 | Broadcast/reduction | Per output; sum: max(N-R,0); mean adds R divides. |
 | Stable/safe softmax | `5N-2R`: max, subtract, exp, sum, divide. Safe adds 2N comparisons/selections. |
 | LayerNorm/GroupNorm | `6N+2R+AN`: mean N, variance 3N, normalize 2N, eps/sqrt 2R, affine AN. |
+| GELU | Exact: `5N`; tanh approximation: `14N`, including two multiplies for the cube and the six-operation tanh expansion. |
+| SiLU / GLU | `5N`: four sigmoid operations plus a multiply. Here N is **output** elements; GLU halves its split dimension. |
+| SwiGLU arithmetic | SiLU plus a separate multiply: `6N` output operations, excluding projections. |
+| RMSNorm | `(3+W)N+2R`: square N, mean N, normalize N, eps/rsqrt 2R, affine WN; W is 1 when a weight is present. |
 | Rows | LayerNorm: `N/prod(normalized_shape)`; GroupNorm: batch × groups. Empty rows/groups unsupported; zero batches supported. |
 | BatchNorm | Saved stats: `2N+2C+AN`; batch stats add 4N. Actual buffers select the path; passed mean/variance updates add 3C/5C. Empty modules: zero; empty native calls unsupported. |
 | Dropout | Eval/p=0: zero; training mask/rescale: 2N, or N at p=1. RNG excluded. |
@@ -129,9 +134,25 @@ stay incomplete without explicit caller overrides; native complex counts remain 
 complex multiply and two per complex add, with separate MAC and logical DMA conventions. Such overrides are scoped to
 one analysis and are the caller's responsibility. Mixed-call diagnostics and strict mode are preserved.
 
+Exact native GELU, SiLU, GLU, GroupNorm, and optional RMSNorm require unchanged forwards, dense real inputs, and native
+parameter shapes. Empty batches count zero; empty normalized rows/groups are unsupported. PyTorch 2.1 omits RMSNorm.
+Scalar-power operator formulas cover only exponent two.
+
+Activation MACs are zero; norm MACs are `N(1+W)` for square-sum and optional affine terms. P=parameter elements.
+DMAs count staged logical reads/writes, including in-place writes, not hardware traffic. Nonempty calls use:
+
+| Primitive | Logical DMAs |
+| --- | --- |
+| GELU / SiLU / GLU | Input + output elements, including output writes for in-place SiLU. |
+| RMSNorm | `3N+4R+1+W(2N+P)`: mean-square reads N/writes R; eps/rsqrt reads R plus epsilon/writes R; normalize reads N+R/writes N; optional affine reads N+P/writes N. |
+| GroupNorm | `4N+5R+1+P+2N` when affine tensors are present; omit the final 2N without affine. R is batch × groups. This uses the existing LayerNorm staged convention. |
+
+GLU and these norms mark spatial metrics `not_applicable`, which alone does not fail strict analysis. GELU/SiLU are
+pointwise. Model-wide dependency graphs are not inferred; custom composites need handlers. SwiGLU has operator coverage.
+
 Remaining FLOP gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused operator MHA/encoder, specialized attention,
 unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered activations/pooling.
-Transformer requires native stacks, ReLU, final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
+Transformer requires native stacks, `activation="relu"` / `"gelu"` or exact `F.relu` / `F.gelu`, and final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
 approximations. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
 
 Native Transformer MAC/DMA boundaries include ReLU/GELU and dense masks, while token dependencies support the

@@ -14,6 +14,7 @@ from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 from ._pooling import adaptive_kernel_size
+from ._primitives import PRIMITIVE_TYPES, primitive_macs
 from ._transformer import _norm_macs
 
 __all__ = ["module_macs"]
@@ -29,6 +30,8 @@ def module_macs(module: Module, inp: Tensor, out: Tensor) -> int:
     Returns:
         int: number of MACs
     """
+    if isinstance(module, PRIMITIVE_TYPES):
+        return primitive_macs(module, inp)
     if isinstance(module, nn.Linear):
         return macs_linear(module, inp, out)
     if type(module) is nn.LayerNorm:

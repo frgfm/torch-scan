@@ -147,7 +147,13 @@ class _OperatorRecorder(TorchDispatchMode):
             self.complex_operators.add(packet)
         if packet in {torch.ops.aten.div, torch.ops.aten.div_} and (kwargs or {}).get("rounding_mode") is None:
             self.floating[packet] = True  # True division promotes integer inputs.
-        if packet in {torch.ops.aten.exp, torch.ops.aten.sqrt, torch.ops.aten.rsqrt}:
+        if packet in {
+            torch.ops.aten.exp,
+            torch.ops.aten.sqrt,
+            torch.ops.aten.rsqrt,
+            torch.ops.aten.sigmoid,
+            torch.ops.aten.tanh,
+        }:
             self.floating[packet] = True  # Transcendentals also promote integer inputs.
         if packet in {torch.ops.aten.masked_fill, torch.ops.aten.masked_fill_}:
             self.floating[packet] = args[0].is_floating_point() or args[0].is_complex()

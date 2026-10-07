@@ -6,6 +6,8 @@ These changes require the development version on `main`. They are not in the 0.2
 
 ### Added
 
+- Native GELU, SiLU, GLU, and optional RMSNorm module/operator estimates; GroupNorm MAC/DMA estimates and native
+  Transformer GELU FLOPs. Functional gating and scalar squares retain per-analysis coverage and diagnostics.
 - Checked workload comparisons with `compare_benchmarks` and offline HTML timing/memory/profile reports.
 - Per-child Linux/macOS peak RSS and separate native operator profiles with optional Chrome traces.
 - Workload timing with `measure_latency`: first-call time, warmed block-average latency/IQR, explicit work-unit

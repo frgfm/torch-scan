@@ -14,6 +14,7 @@ from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 from ._pooling import adaptive_kernel_size
+from ._primitives import PRIMITIVE_TYPES, primitive_dmas
 from ._transformer import _norm_dmas
 
 __all__ = ["module_dmas"]
@@ -30,6 +31,8 @@ def module_dmas(module: Module, inp: Tensor, out: Tensor) -> int:
     Returns:
         int: number of DMAs
     """
+    if isinstance(module, PRIMITIVE_TYPES):
+        return primitive_dmas(module, inp, out)
     if isinstance(module, nn.Identity):
         return dmas_identity(module, inp, out)
     if isinstance(module, nn.Flatten):

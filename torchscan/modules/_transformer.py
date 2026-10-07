@@ -56,7 +56,7 @@ def _dense_tensor(value: Any) -> Tensor:
         or not value.is_floating_point()
         or value.is_complex()
     ):
-        raise NotImplementedError("Transformer estimates require real floating-point dense strided tensors.")
+        raise NotImplementedError("Module estimates require real floating-point dense strided tensors.")
     return value
 
 

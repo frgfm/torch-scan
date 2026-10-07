@@ -43,6 +43,8 @@ def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, f
             nn.ReLU6,
             nn.Tanh,
             nn.Sigmoid,
+            nn.GELU,
+            nn.SiLU,
             _BatchNorm,
             nn.Dropout,
             nn.Linear,

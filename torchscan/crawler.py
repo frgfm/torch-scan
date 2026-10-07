@@ -28,6 +28,7 @@ from .extensions import (
 )
 from .flops import FlopReport, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
+from .modules._primitives import PRIMITIVE_TYPES
 from .modules._token_dependencies import module_token_dependencies
 from .modules._transformer import dmas_attention, macs_attention, validate_native_attention, validate_native_call
 from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
@@ -50,7 +51,21 @@ _SPATIAL_METRICS = {"receptive_field", "effective_stride", "effective_padding"}
 def _builtin_module_handlers() -> Mapping[type[Module], ModuleHandler]:
     """Supply complete-call built-in handlers without a mutable public registry."""
     handler = ModuleHandler(_native_module_estimates, subtree_metrics=frozenset(_METRIC_UNITS))
-    return dict.fromkeys(_NATIVE_TRANSFORMERS, handler)
+    handlers: dict[type[Module], ModuleHandler] = dict.fromkeys(_NATIVE_TRANSFORMERS, handler)
+    # Gates and norms have no scalar spatial field; activations are pointwise.
+    nonspatial = (kind for kind in PRIMITIVE_TYPES if kind not in (nn.GELU, nn.SiLU))
+    handlers.update(dict.fromkeys(nonspatial, ModuleHandler(_nonspatial_estimates)))
+    return handlers
+
+
+def _nonspatial_estimates(_call: ModuleCall) -> ModuleEstimates:
+    return cast(
+        ModuleEstimates,
+        {
+            name: metric_result(status="unavailable", unit="elements", scope="module_call", method="not_applicable")
+            for name in _SPATIAL_METRICS
+        },
+    )
 
 
 def _native_module_estimates(

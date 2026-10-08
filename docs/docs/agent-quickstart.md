@@ -1,31 +1,24 @@
 # Agent quickstart
 
-TorchScan gives coding agents a bounded, machine-readable way to inspect a PyTorch model. It does not decide whether
-a model is acceptable, fast, or deployable.
+Use TorchScan to inspect model cost, measure the owner's workload, check one optimization, and save the evidence.
+Install [the development version](installing.md) for timing, process RSS, profiler diagnostics, and workload reports.
+The owner defines acceptable output quality and resource budgets.
 
 ## Default workflow
 
 1. Import the existing model and construct representative inputs without downloading weights unless authorized.
 2. Use `crawl_module(..., args=..., kwargs=...)` for a real call or `input_shape` for a simple tensor input.
-3. Serialize the returned report as JSON; do not scrape `summary` text.
-4. Check metric status and diagnostics before using any number.
-5. Ask the owner for a threshold when the task involves a budget or pass/fail decision.
-6. Preserve the report, model revision, and input configuration with the conclusion.
+3. Define a zero-argument workload that owns evaluation/training state, gradient mode, precision, transfers, and inputs.
+   Configure device placement and threads before measurement. Timing repeats the callable; training must manage its state.
+4. Use `measure_workload` to assemble selected FLOPs, clean timing, tensor/allocator memory, and optional profiler passes. Measure RSS with an
+   explicit fresh-process command that reconstructs the same configuration.
+5. Compare baseline and candidate with `compare_benchmarks(..., check=...)`; preserve a failed check and withheld deltas.
+6. Serialize reports as JSON and use `render_report` for offline HTML. Check status and diagnostics before numbers;
+   never scrape `summary` or workload terminal text.
+7. Preserve model/input revisions, seeds, hardware/software, execution mode, precision, threads, and measurement boundaries.
+   Use owner-supplied thresholds for budgets or pass/fail decisions.
 
-Prefer strict analysis when incomplete metrics must stop the task:
-
-```python
-import json
-
-from torchscan import IncompleteAnalysisError, crawl_module
-
-try:
-    report = crawl_module(model, args=(inputs,), kwargs=model_kwargs, strict=True)
-except IncompleteAnalysisError as error:
-    raise RuntimeError(f"TorchScan could not complete the requested analysis: {error}") from error
-
-print(json.dumps(report, sort_keys=True))
-```
+Use `strict=True` when incomplete model metrics must stop the task; it raises `IncompleteAnalysisError`.
 
 ## Pick one API
 
@@ -34,12 +27,20 @@ print(json.dumps(report, sort_keys=True))
 | Inspect module structure and formula metrics | `crawl_module` |
 | Show a table to a person and retain the report | `summary` |
 | Inspect shapes and parameters with less overhead | `crawl_module(..., mode="structure")` or `summary(..., mode="structure")` |
+| Assemble selected workload resources and print a readable summary | `measure_workload` |
 | Count operator FLOPs for arbitrary code | `measure_flops` |
 | Measure one workload's PyTorch peak memory | `measure_peak_memory` |
-| Compare two compatible reports | `compare_reports` |
+| Measure warmed latency/IQR and declared work-unit throughput | `measure_latency` |
+| Measure imports, loading, and execution in a fresh child | `measure_peak_rss(command)` |
+| Investigate operators in a separate instrumented pass | `profile_workload` |
+| Compare model cost estimates | `compare_reports` |
+| Check workload performance with an output callback | `compare_benchmarks` |
+| Consume a saved model or workload report offline | `render_report` |
 
-Do not create a parser around terminal output, a second report schema, a baseline database, or a project-specific
-wrapper unless the project already requires one.
+`summary` returns an `AnalysisReport` from an evaluation forward with gradients disabled, restoring original training
+flags. `measure_workload` and `measure_latency` return `BenchmarkReport` evidence and preserve callable side effects.
+Model storage and formula counts do not predict latency or process RSS. Keep the two reports together;
+do not add module and operator FLOPs or use `compare_reports` for timing.
 
 ## Trust rules
 
@@ -50,21 +51,19 @@ wrapper unless the project already requires one.
 - Module FLOPs and operator FLOPs are separate methods; never add or average them.
 - Peak PyTorch memory is not process RSS or total accelerator use.
 - A skipped or mocked CUDA/MPS check is not device validation.
+- First-call latency excludes imports/loading; warmed block-average latency is not individual-request p95.
+- Throughput uses the work completed by one call, such as 32 samples. It is not queued-service throughput.
+- RSS, CPU tracked-tensor peaks, and accelerator allocated/reserved peaks have distinct scopes. Do not sum them.
+- Profiler self times include instrumentation and may overlap. They are not clean latency.
+- An output check establishes only its declared tolerance, not task accuracy. IQR labels are descriptive.
+
+Reuse the [checked experiment](benchmark-comparison.md) and its repository scripts. Locally initialized CNN/Transformer
+weights can validate runtime behavior without downloads; they cannot validate task accuracy or another device's speed.
 
 ## Owner-controlled budgets
 
-TorchScan reports measurements. The owner supplies policy:
-
-```python
-memory = measure_peak_memory(workload, device=device)
-
-if owner_budget_bytes is None:
-    raise ValueError("Ask the model owner for a memory budget")
-if memory["peak_bytes"] > owner_budget_bytes:
-    raise RuntimeError("Owner-approved memory budget exceeded")
-```
-
-Record the hardware and workload state with accelerator results. Do not invent a default budget.
+The owner supplies memory budgets and quality thresholds. Compare them with complete metrics of the matching scope;
+record hardware and workload state with accelerator results. Do not invent a default budget.
 
 ## When an operator is uncounted
 

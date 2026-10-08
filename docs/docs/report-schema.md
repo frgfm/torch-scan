@@ -1,7 +1,8 @@
 # Report schema
 
 TorchScan reports are JSON-serializable public `TypedDict` values. `schema_version` versions their wire shape
-independently of the package version.
+independently of the package version. Use `AnalysisReport` for model cost and `BenchmarkReport` for workload resources.
+Serialize mappings directly; `render_report` consumes saved evidence without remeasurement.
 
 ## `AnalysisReport`
 
@@ -204,8 +205,21 @@ for same-schema reports and migrate stored reports explicitly when a future sche
 
 ## `BenchmarkReport`
 
-`measure_workload` extends the schema-v1 timing report with `totals.operator_flops`, `totals.peak_memory`, and
-`totals.process_peak_rss`. Optional `operator_flops`, `memory`, and `profile` fields retain raw collector evidence.
-`diagnostics` explains incomplete values; `context.profile_status` is complete, partial, unavailable, or not_requested.
-Omitted totals remain unavailable with method `not_requested`; omitted timing has an empty `measurement`.
-JSON retains seconds and bytes. Terminal output converts these to ms and MiB. The report works with `render_report`.
+`measure_latency` and `measure_workload` return schema-v1 `context`, recursive `inputs` metadata, `totals` of
+`MetricResult` values, and `measurement` timing blocks (`number_per_run`, `raw_times_seconds`, `measured_calls`).
+JSON retains seconds and bytes; terminal output converts to ms and MiB. Latency/IQR describes block averages.
+`context` preserves hardware/software, threads, timing options, and work-unit definitions; `inputs` is metadata.
+
+`measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. Optional
+`operator_flops`, `memory`, and `profile` fields retain full collector evidence. `diagnostics` explains incomplete
+values; `context.profile_status` is `complete`, `partial`, `unavailable`, or `not_requested`.
+Omitted totals stay unavailable with method `not_requested`; omitted timing has empty `measurement`.
+Workload errors propagate. `render_report` consumes this JSON-serializable evidence without remeasurement.
+
+## `BenchmarkComparison`
+
+`compare_benchmarks(before, after, check=...)` retains both reports, `output_check`, `totals` differences,
+`context_changes`, and the descriptive `latency_change`. Compatible complete metrics receive `after - before` deltas
+only when the output check passes. Failed checks preserve measurements and withhold deltas. Saved comparisons render
+the recorded check without rerunning it. See [checked experiments](benchmark-comparison.md) for compatibility and IQR
+rules; use `compare_reports` for model estimates.

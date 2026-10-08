@@ -1,6 +1,6 @@
 site_name: TorchScan
 site_url: https://frgfm.github.io/torch-scan
-site_description: PyTorch model summaries with parameter, memory, FLOP, MAC, DMA, and receptive-field estimates
+site_description: Inspect PyTorch model cost, measure workload resources, check optimizations, and save offline reports
 site_author: François-Guillaume Fernandez
 copyright: Copyright &copy; François-Guillaume Fernandez
 

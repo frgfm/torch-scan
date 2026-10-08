@@ -3,17 +3,16 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
+from collections.abc import Callable, Sequence
 from typing import Any, Literal, cast
 
 import torch
-from torch import nn
 
 from .benchmark import BenchmarkReport, _benchmark_context, _synchronizer, _validate_timing_settings, measure_latency
 from .crawler import _describe
 from .flops import measure_flops
 from .process import measure_peak_memory, measure_peak_rss
+from .process.memory import _NoMemoryEventsError
 from .profiler import profile_workload
 from .report import Diagnostic, MetricResult, metric_result
 
@@ -41,7 +40,7 @@ def _collect(
 
     try:
         return collector(call)
-    except (RuntimeError, NotImplementedError, ImportError) as error:
+    except (_NoMemoryEventsError, NotImplementedError, ImportError) as error:
         if error is workload_error:
             raise
         diagnostics.append({
@@ -101,71 +100,41 @@ def measure_workload(
     warmup: int = 5,
     min_run_time: float = 0.2,
     min_repeats: int = 5,
-    modules: nn.Module | list[nn.Module] | None = None,
-    custom_mapping: Mapping[Any, Callable[..., int | float]] | None = None,
     profile: bool = False,
-    trace_path: str | Path | None = None,
-    profile_limit: int = 20,
     rss_command: Sequence[str] | None = None,
-    rss_cwd: str | Path | None = None,
     print_summary: bool = True,
 ) -> BenchmarkReport:
-    """Measure a PyTorch workload and print a compact terminal summary.
+    """Collect selected workload evidence and print ms, work units/s, and MiB.
 
     Args:
-        workload: Zero-argument callable. It owns model state, gradient mode,
-            precision, device placement, and inputs. All workload exceptions propagate.
-        device: Device on which the workload already runs; selects synchronization and memory APIs.
-        inputs: Optional caller-supplied input metadata, not arguments passed to the workload.
-        metrics: Selected measurements. Timing runs if latency or throughput is selected.
-            Omitted metrics remain unavailable with method ``not_requested``.
-        work_units: Number of samples (or other work units) per call. Set this to your batch size;
-            TorchScan does not infer it from inputs. Defaults to one sample per call.
-        work_unit: Throughput unit name; defaults to ``samples``.
-        warmup: Explicit calls before warmed timing, in addition to timer calibration.
-        min_run_time: Minimum warmed timing duration in seconds, not a total runtime limit.
-        min_repeats: Minimum number of timed blocks, at least two.
-        modules: Optional module attribution passed to measure_flops.
-        custom_mapping: Per-call operator FLOP overrides passed to measure_flops.
-        profile: Collect a separate operator profile after the other in-process passes.
-        trace_path: Optional Chrome trace file. Requires profile=True; existing files are rejected.
-        profile_limit: Positive maximum number of grouped profiler rows.
-        rss_command: Explicit executable and arguments for a fresh-process RSS measurement.
-            The command owns model loading and configuration and must exit. No shell is used.
-        rss_cwd: Optional working directory for rss_command. Requires rss_command.
-        print_summary: Print times in ms, throughput in work units/s, and memory in MiB.
+        workload: Repeatable zero-argument callable; owns state, gradients, precision, and placement.
+        device: Device on which the workload already executes.
+        inputs: Optional input metadata, never forwarded to the workload.
+        metrics: Selected measurements; omitted totals stay unavailable with method not_requested.
+        work_units: Samples (or other units) per call, such as batch size; never inferred.
+        work_unit: Throughput unit name, defaulting to samples.
+        warmup: Explicit calls before timing, in addition to timer calibration.
+        min_run_time: Minimum warmed timing duration in seconds, not a deadline.
+        min_repeats: Minimum timed blocks, at least two.
+        profile: Collect a separate operator profile after FLOPs and memory.
+        rss_command: Executable and arguments for fresh-process lifetime RSS; must exit.
+        print_summary: Print a terminal summary in addition to returning the report.
 
     Returns:
-        A BenchmarkReport accepted by JSON serialization and render_report. Raw timing,
-        FLOP, memory, and optional profiler evidence retain their methods and scopes.
-        Collector limitations produce unavailable metrics and diagnostics.
-
-    Raises:
-        ValueError: If options are invalid or contradict the selected passes.
-        TypeError: If workload is not callable.
-        Exception: Workload errors and RSS command failures propagate unchanged.
+        A JSON-serializable BenchmarkReport accepted by render_report. Partial and unavailable
+        results retain diagnostics. Workload errors and failed RSS commands propagate.
 
     Notes:
-        Timing runs first. FLOPs, memory, and profiling each call the workload once more.
-        Passes share caller state; TorchScan does not reset state or random generators.
-        Use a repeatable callable and manage gradients and mutable state yourself.
-        Configure threads before building the model and keep them fixed during measurement.
-        First-call time excludes model loading and fresh-process startup. Warmed latency
-        describes block averages, not request percentiles. PyTorch memory is backend-specific;
-        RSS covers the separate command's whole lifetime, including imports and loading.
+        Timing runs first; each diagnostic pass invokes the same callable once more.
+        Caller state and random generators are not reset. Keep threads fixed during all passes.
+        First-call time includes all callable work; warmed latency describes block averages, not request
+        percentiles. PyTorch peak memory and whole-process RSS have different scopes.
+        Use the individual collectors for custom FLOP formulas or trace export.
     """
     _validate_timing_settings(workload, work_units, work_unit, warmup, min_run_time, min_repeats)
     if isinstance(metrics, (str, bytes)) or any(name not in _METRICS for name in metrics):
         raise ValueError(f"metrics must be a sequence of names from {_METRICS}.")
     selected = set(metrics)
-    if trace_path is not None and not profile:
-        raise ValueError("trace_path requires profile=True.")
-    if profile and (type(profile_limit) is not int or profile_limit < 1):
-        raise ValueError("profile_limit must be a positive integer.")
-    if trace_path is not None and Path(trace_path).exists():
-        raise FileExistsError(f"Trace destination already exists: {trace_path}")
-    if rss_cwd is not None and rss_command is None:
-        raise ValueError("rss_cwd requires rss_command.")
     if rss_command is not None and (
         isinstance(rss_command, (str, bytes)) or not rss_command or any(not isinstance(arg, str) for arg in rss_command)
     ):
@@ -215,12 +184,7 @@ def measure_workload(
                 status="unavailable", unit=unit, scope=scope, method="unavailable" if requested else "not_requested"
             )
     if "flops" in selected:
-        flops = _collect(
-            lambda call: measure_flops(call, modules=modules, custom_mapping=custom_mapping),
-            workload,
-            "operator_flops",
-            diagnostics,
-        )
+        flops = _collect(measure_flops, workload, "operator_flops", diagnostics)
         if flops is not None:
             report["operator_flops"] = flops
             report["totals"]["operator_flops"] = flops["total"]
@@ -245,7 +209,7 @@ def measure_workload(
     report["context"]["profile_status"] = "not_requested"
     if profile:
         evidence = _collect(
-            lambda call: profile_workload(call, device=normalized, trace_path=trace_path, limit=profile_limit),
+            lambda call: profile_workload(call, device=normalized),
             workload,
             "profile",
             diagnostics,
@@ -258,7 +222,7 @@ def measure_workload(
             diagnostics.extend(evidence["diagnostics"])
     if rss_command is not None:
         try:
-            report["totals"]["process_peak_rss"] = measure_peak_rss(rss_command, cwd=rss_cwd)
+            report["totals"]["process_peak_rss"] = measure_peak_rss(rss_command)
         except NotImplementedError as error:
             diagnostics.append({
                 "code": "measurement_unavailable",

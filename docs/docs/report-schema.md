@@ -204,15 +204,8 @@ for same-schema reports and migrate stored reports explicitly when a future sche
 
 ## `BenchmarkReport`
 
-`measure_latency` and `measure_workload` return schema-v1 reports with `context`, recursive `inputs` metadata,
-`totals` of `MetricResult` values, and raw timing blocks under `measurement`. Timing values stay in seconds in JSON.
-The terminal summary converts them to milliseconds and memory bytes to MiB.
-
-`measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. The optional
-`operator_flops` field retains the full `FlopReport`; `memory` retains the collector's baseline, peak, delta, and any
-allocated peak in bytes. The optional `profile` field retains the separate `ProfileReport`. `diagnostics` explains
-partial or unavailable evidence, and `context.profile_status` is `complete`, `partial`, `unavailable`, or `not_requested`.
-
-All timing totals remain present when timing is omitted; they are unavailable with method `not_requested`, and
-`measurement` is empty. Other omitted totals follow the same rule. Workload errors still propagate.
-Reports remain directly JSON-serializable and work with `render_report` without another workload call.
+`measure_workload` extends the schema-v1 timing report with `totals.operator_flops`, `totals.peak_memory`, and
+`totals.process_peak_rss`. Optional `operator_flops`, `memory`, and `profile` fields retain raw collector evidence.
+`diagnostics` explains incomplete values; `context.profile_status` is complete, partial, unavailable, or not_requested.
+Omitted totals remain unavailable with method `not_requested`; omitted timing has an empty `measurement`.
+JSON retains seconds and bytes. Terminal output converts these to ms and MiB. The report works with `render_report`.

@@ -108,6 +108,8 @@ and tanh to six, as in the existing module formulas. Constant-only arithmetic is
 | Fixed pooling, K values/window | Max: K-1; average: K. Nominal dense padding/ceil windows. |
 | Broadcast/reduction | Per output; sum: max(N-R,0); mean adds R divides. |
 | Stable/safe softmax | `5N-2R`: max, subtract, exp, sum, divide. Safe adds 2N comparisons/selections. |
+| LogSoftmax / Softmin | Stable LogSoftmax: `4N-R`; Softmin: negate N, then stable softmax. |
+| Native activations | Symbolic expansions per element: Hardtanh/ReLU6/Threshold 2; Hardshrink/Softsign 3; LeakyReLU/PReLU/RReLU(eval)/Hardsigmoid 4; Hardswish/Softshrink 5; ELU 6; CELU/SELU/LogSigmoid/Softplus/Tanhshrink 7; Mish 10. Counts expand both branches; they do not depend on tensor values. |
 | LayerNorm/GroupNorm | `6N+2R+AN`: mean N, variance 3N, normalize 2N, eps/sqrt 2R, affine AN. |
 | GELU | Exact: `5N`; tanh approximation: `14N`, including two multiplies for the cube and the six-operation tanh expansion. |
 | SiLU / GLU | `5N`: four sigmoid operations plus a multiply. Here N is **output** elements; GLU halves its split dimension. |
@@ -134,7 +136,7 @@ stay incomplete without explicit caller overrides; native complex counts remain 
 complex multiply and two per complex add, with separate MAC and logical DMA conventions. Such overrides are scoped to
 one analysis and are the caller's responsibility. Mixed-call diagnostics and strict mode are preserved.
 
-Exact native GELU, SiLU, GLU, GroupNorm, and optional RMSNorm require unchanged forwards, dense real inputs, and native
+Exact native activation/softmax classes, GroupNorm, and optional RMSNorm require unchanged forwards, dense real inputs, and native
 parameter shapes. Empty batches count zero; empty normalized rows/groups are unsupported. PyTorch 2.1 omits RMSNorm.
 Scalar-power operator formulas cover only exponent two.
 
@@ -144,6 +146,8 @@ DMAs count staged logical reads/writes, including in-place writes, not hardware 
 | Primitive | Logical DMAs |
 | --- | --- |
 | GELU / SiLU / GLU | Input + output elements, including output writes for in-place SiLU. |
+| Other pointwise activations | Input + output elements; PReLU adds reads of its learned weights. |
+| Softmax / LogSoftmax / Softmin | Staged logical accesses: `8N+4R` / `8N+6R` / `10N+4R`. Activation MACs remain zero. |
 | RMSNorm | `3N+4R+1+W(2N+P)`: mean-square reads N/writes R; eps/rsqrt reads R plus epsilon/writes R; normalize reads N+R/writes N; optional affine reads N+P/writes N. |
 | GroupNorm | `4N+5R+1+P+2N` when affine tensors are present; omit the final 2N without affine. R is batch × groups. This uses the existing LayerNorm staged convention. |
 

@@ -12,7 +12,34 @@ from torch import Tensor, nn
 
 from ._transformer import _dense_tensor
 
-PRIMITIVE_TYPES: tuple[type[nn.Module], ...] = (nn.GELU, nn.SiLU, nn.GLU, nn.GroupNorm)
+ACTIVATION_COSTS: dict[type[nn.Module], int] = {
+    nn.Hardtanh: 2,
+    nn.ReLU6: 2,
+    nn.Hardsigmoid: 4,
+    nn.Hardswish: 5,
+    nn.Mish: 10,
+    nn.Softplus: 7,
+    nn.PReLU: 4,
+    nn.CELU: 7,
+    nn.SELU: 7,
+    nn.LogSigmoid: 7,
+    nn.Hardshrink: 3,
+    nn.Softshrink: 5,
+    nn.Softsign: 3,
+    nn.Tanhshrink: 7,
+    nn.Threshold: 2,
+    nn.RReLU: 4,
+}
+SOFTMAX_TYPES = (nn.Softmax, nn.Softmax2d, nn.LogSoftmax, nn.Softmin)
+POINTWISE_TYPES = (nn.GELU, nn.SiLU, *ACTIVATION_COSTS)
+PRIMITIVE_TYPES: tuple[type[nn.Module], ...] = (
+    nn.GELU,
+    nn.SiLU,
+    nn.GLU,
+    nn.GroupNorm,
+    *ACTIVATION_COSTS,
+    *SOFTMAX_TYPES,
+)
 if (rmsnorm := getattr(nn, "RMSNorm", None)) is not None:
     PRIMITIVE_TYPES += (rmsnorm,)
 _NATIVE_FORWARDS = {kind: kind.forward for kind in PRIMITIVE_TYPES}
@@ -37,6 +64,20 @@ def rmsnorm_rows(input_shape: tuple[int, ...], shape: tuple[int, ...]) -> int:
     return math.prod(input_shape) // math.prod(shape)
 
 
+def softmax_counts(shape: tuple[int, ...], dim: int, *, logarithmic: bool = False) -> tuple[int, int]:
+    """Count stable row arithmetic and staged logical accesses."""
+    elements = math.prod(shape)
+    width = shape[dim] if shape else 1
+    if not elements or not width:
+        return 0, 0
+    rows = elements // width
+    return (
+        (4 * elements - rows, 8 * elements + 6 * rows)
+        if logarithmic
+        else (5 * elements - 2 * rows, 8 * elements + 4 * rows)
+    )
+
+
 def validate_primitive(module: nn.Module, inp: Tensor) -> tuple[int, int]:
     """Validate the native call boundary and return element and normalization-row counts."""
     kind = type(module)
@@ -48,6 +89,16 @@ def validate_primitive(module: nn.Module, inp: Tensor) -> tuple[int, int]:
         raise NotImplementedError("Primitive estimates require exact native types with unchanged forward methods.")
     inp = _dense_tensor(inp)
     elements = inp.numel()
+    if kind in ACTIVATION_COSTS:
+        if kind is nn.RReLU and module.training:
+            raise NotImplementedError("RReLU estimates cover evaluation calls only.")
+        if kind is nn.PReLU:
+            _dense_tensor(module.weight)
+        return elements, 0
+    if kind in SOFTMAX_TYPES:
+        dim = -3 if kind is nn.Softmax2d else module.dim
+        dim = (0 if inp.ndim in (0, 1, 3) else 1) if dim is None else dim
+        return elements, dim
     if kind is nn.GELU:
         gelu_flops(elements, module.approximate)
         return elements, 0
@@ -92,6 +143,11 @@ def validate_primitive(module: nn.Module, inp: Tensor) -> tuple[int, int]:
 def primitive_flops(module: nn.Module, inp: Tensor) -> int:
     """Count native primitive arithmetic, independently from operator estimates."""
     elements, rows = validate_primitive(module, inp)
+    if type(module) in ACTIVATION_COSTS:
+        return elements * ACTIVATION_COSTS[type(module)]
+    if type(module) in SOFTMAX_TYPES:
+        count, _ = softmax_counts(tuple(inp.shape), rows, logarithmic=type(module) is nn.LogSoftmax)
+        return count + elements * int(type(module) is nn.Softmin)
     if type(module) is nn.GELU:
         return gelu_flops(elements, module.approximate)
     if type(module) in (nn.SiLU, nn.GLU):
@@ -104,7 +160,11 @@ def primitive_flops(module: nn.Module, inp: Tensor) -> int:
 def primitive_macs(module: nn.Module, inp: Tensor) -> int:
     """Count norm square-sum and affine terms; activation arithmetic adds no MACs."""
     elements, _ = validate_primitive(module, inp)
-    return elements * (1 + int(module.weight is not None)) if type(module) not in (nn.GELU, nn.SiLU, nn.GLU) else 0
+    return (
+        0
+        if type(module) in (*POINTWISE_TYPES, nn.GLU, *SOFTMAX_TYPES)
+        else elements * (1 + int(module.weight is not None))
+    )
 
 
 def primitive_dmas(module: nn.Module, inp: Tensor, out: Tensor) -> int:
@@ -112,6 +172,11 @@ def primitive_dmas(module: nn.Module, inp: Tensor, out: Tensor) -> int:
     elements, rows = validate_primitive(module, inp)
     if elements == 0:
         return 0
+    if type(module) in ACTIVATION_COSTS:
+        return 2 * elements + (module.weight.numel() if type(module) is nn.PReLU else 0)
+    if type(module) in SOFTMAX_TYPES:
+        _, count = softmax_counts(tuple(inp.shape), rows, logarithmic=type(module) is nn.LogSoftmax)
+        return count + 2 * elements * int(type(module) is nn.Softmin)
     if type(module) in (nn.GELU, nn.SiLU, nn.GLU):
         return elements + _dense_tensor(out).numel()
     parameters = (module.weight, module.bias) if type(module) is nn.GroupNorm else (module.weight,)

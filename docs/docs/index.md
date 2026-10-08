@@ -77,8 +77,8 @@ Follow [checked experiments](benchmark-comparison.md) to compare a baseline with
 `compare_benchmarks(..., check=...)`. Failed output checks withhold deltas; passing checks do not establish task accuracy.
 Use `compare_reports` for model estimates. Serialize the returned mappings and render saved evidence without rerunning it.
 
-Warmed latency/IQR describes block averages, not request p95; IQR labels are descriptive. First-call time excludes
-imports/loading. RSS covers a fresh child's lifetime; CPU tensor and accelerator allocator peaks have separate scopes
+Warmed latency/IQR describes block averages, not request p95; IQR labels are descriptive. First-call time includes
+all callable work. RSS covers a fresh child's lifetime; CPU tensor and accelerator allocator peaks have separate scopes
 and must not be summed with RSS. Profiler times include instrumentation. CUDA/MPS claims require real matching hardware.
 See [measurement boundaries](workload-diagnostics.md) and [metric meanings](metrics.md).
 

@@ -108,7 +108,7 @@ print(json.dumps(report, indent=2))
 
 | `totals` metric | Meaning |
 | --- | --- |
-| `first_call_latency` | One completed call before warmup, in seconds. Not model loading or fresh-process startup. |
+| `first_call_latency` | One completed call before warmup, including all callable work, in seconds. |
 | `latency` | Median seconds per call, computed from warmed block averages. |
 | `latency_iqr` | Interquartile range of the same block averages, in seconds. |
 | `throughput` | Declared work units completed across timed blocks, divided by their total elapsed seconds. |

@@ -106,7 +106,7 @@ examples, including fresh-process RSS and separate diagnostic passes.
 - `partial`: `known_value` is a lower bound; preserve diagnostics and never treat missing work as zero.
 - `unavailable`: no measurement was produced. Unrequested evidence is also explicit.
 - Keep module and operator FLOPs separate. Do not add or average them.
-- Warmed latency/IQR describes block averages, not individual-request p95. First-call time excludes imports/loading.
+- Warmed latency/IQR describes block averages, not individual-request p95. First-call time includes all callable work.
 - Process RSS covers a fresh child's whole lifetime on Linux/macOS. CPU tracked-tensor and accelerator allocator
   peaks have different scopes; do not add them together or equate them to total device use.
 - Profiler time includes instrumentation and can overlap. MPS profiles describe CPU dispatch, not GPU execution.

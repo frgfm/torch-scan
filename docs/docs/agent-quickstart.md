@@ -51,7 +51,7 @@ do not add module and operator FLOPs or use `compare_reports` for timing.
 - Module FLOPs and operator FLOPs are separate methods; never add or average them.
 - Peak PyTorch memory is not process RSS or total accelerator use.
 - A skipped or mocked CUDA/MPS check is not device validation.
-- First-call latency excludes imports/loading; warmed block-average latency is not individual-request p95.
+- First-call latency includes all callable work; warmed block-average latency is not individual-request p95.
 - Throughput uses the work completed by one call, such as 32 samples. It is not queued-service throughput.
 - RSS, CPU tracked-tensor peaks, and accelerator allocated/reserved peaks have distinct scopes. Do not sum them.
 - Profiler self times include instrumentation and may overlap. They are not clean latency.

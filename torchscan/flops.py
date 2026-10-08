@@ -60,6 +60,9 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.unbind",
             "aten.unsqueeze",
             "aten.view",
+            "aten.as_strided_",
+            "aten.transpose_",
+            "aten.unsafe_split",
         ],
         "Metadata-only tensor view.",
     ),
@@ -75,11 +78,38 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.to",
             "aten.fill_",
             "aten.zero_",
+            "aten.embedding",
+            "aten.gather",
+            "aten.index",
+            "aten.index_select",
+            "aten.masked_select",
+            "aten.repeat",
+            "aten.repeat_interleave",
+            "aten.roll",
+            "aten.stack",
+            "aten.constant_pad_nd",
+            "aten._local_scalar_dense",
+            "aten.pixel_shuffle",
+            "aten.pixel_unshuffle",
+            "aten.channel_shuffle",
+            "aten.native_channel_shuffle",
+            "aten.im2col",
+            "aten._pad_circular",
+            "aten.tril",
+            "aten.tril_",
+            "aten.triu",
+            "aten.triu_",
+            *[
+                f"aten.{prefix}{rank}d"
+                for prefix in ("reflection_pad", "replication_pad", "upsample_nearest", "_upsample_nearest_exact")
+                for rank in (1, 2, 3)
+            ],
         ],
         "Data movement is excluded from FLOPs.",
     ),
     **dict.fromkeys(
-        ["aten.empty", "aten.empty_strided", "aten.empty_like"], "Tensor allocation is excluded from FLOPs."
+        ["aten.empty", "aten.empty_strided", "aten.empty_like", "aten.new_empty", "aten.new_empty_strided"],
+        "Tensor allocation is excluded from FLOPs.",
     ),
     **dict.fromkeys(
         [
@@ -92,6 +122,8 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.scalar_tensor",
             "aten.zeros",
             "aten.zeros_like",
+            "aten.arange",
+            "aten.eye",
         ],
         "Tensor creation is excluded from FLOPs.",
     ),

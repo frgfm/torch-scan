@@ -119,6 +119,9 @@ and tanh to six, as in the existing module formulas. Constant-only arithmetic is
 | Rows | LayerNorm: `N/prod(normalized_shape)`; GroupNorm: batch × groups. Empty rows/groups unsupported; zero batches supported. |
 | BatchNorm | Saved stats: `2N+2C+AN`; batch stats add 4N. Actual buffers select the path; passed mean/variance updates add 3C/5C. Empty modules: zero; empty native calls unsupported. |
 | Dropout | Eval/p=0: zero; training mask/rescale: 2N, or N at p=1. RNG excluded. |
+| Embedding lookup | Zero FLOPs/MACs; logical accesses read one ID and one weight row, then write one output row per lookup. Repeated IDs are counted again. `max_norm` renormalization stays unsupported. |
+| Layout / padding | Views cost zero FLOPs and accesses. Copy/gather operations cost zero FLOPs and read/write each output element; constant padding reads the uncropped input and writes the output. Unfold uses nominal dense-padding reads. Spatial fields are not applicable to these shape-changing calls. |
+| Interpolation | Nearest copies values, including integer inputs. Weighted module estimates require floating inputs. Non-antialiased linear/bilinear/trilinear/bicubic use K=2/4/8/16 neighbors: `(2K-1)N` value FLOPs, KN MACs, `(K+1)N` accesses. Coordinate/weight construction is excluded. Area uses exact adaptive pooling. |
 
 Transpose example: `(2,4,3)`, Cout=6, groups=2, kernel=3, stride=2, padding=output_padding=1:
 `24×3×3×2 + 72 biases = 504 module FLOPs`. Shape options add no scatter MACs.
@@ -162,7 +165,7 @@ GLU and these norms mark spatial metrics `not_applicable`, which alone does not 
 pointwise. Model-wide dependency graphs are not inferred; custom composites need handlers. SwiGLU has operator coverage.
 
 Remaining FLOP gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, specialized attention,
-unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered operators.
+unknown normalization/softmax backward, RNG/optimizer/embedding renormalization, and unregistered operators.
 Transformer requires native stacks, `activation="relu"` / `"gelu"` or exact `F.relu` / `F.gelu`, and final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
 spatial approximations for receptive fields. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
 

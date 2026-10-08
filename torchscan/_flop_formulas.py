@@ -312,6 +312,24 @@ def _clamp(_input_shape: Any, minimum: Any = None, maximum: Any = None, *, out_s
 
 
 FORMULAS = {
+    **{
+        f"{prefix}{rank}d": partial(_elementwise, cost=0)
+        for prefix in ("upsample_nearest", "_upsample_nearest_exact")
+        for rank in (1, 2, 3)
+    },
+    **{
+        name: partial(_elementwise, cost=cost)
+        for name, cost in {
+            "upsample_linear1d": 3,
+            "upsample_bilinear2d": 7,
+            "upsample_trilinear3d": 15,
+            "upsample_bicubic2d": 31,
+        }.items()
+    },
+    **dict.fromkeys(
+        [name + suffix for name in ("eq", "ne", "ge", "gt", "le", "lt") for suffix in ("", "_")], _elementwise
+    ),
+    **dict.fromkeys(["all", "any"], partial(_activation, cost=1)),
     "_native_multi_head_attention": _native_mha,
     "_transformer_encoder_layer_fwd": _native_encoder,
     **dict.fromkeys(["cumsum", "cumsum_"], _cumsum),

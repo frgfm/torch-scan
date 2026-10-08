@@ -97,14 +97,10 @@ The optional models use the existing `model-test` dependencies (`uv pip install 
 `weights=None` with four `3 × 32 × 32` images; BERT uses the small configuration in `tests/test_model_zoo.py` with
 four eight-token sequences and an all-visible attention mask. Both use seed 0, float32, eval/inference mode, and
 locally initialized weights. Throughput means images/s for ResNet18 and **input** tokens/s for the BERT encoder;
-it is not autoregressive generation throughput. The output check covers CNN logits, or BERT hidden states and
-pooled outputs, at `rtol=1e-4`, `atol=1e-5`, and records shapes, finiteness, and maximum absolute error. This checks
-runtime equivalence, not task accuracy.
+it is not autoregressive generation throughput. The output check requires finite CNN logits, or BERT hidden states
+and pooled outputs, at `rtol=1e-4`, `atol=1e-5`. This checks runtime equivalence, not task accuracy.
 
 The controlled change replaces per-sample forwards and output concatenation with one batch forward on identical
-resident inputs. Timing excludes loading, transfers, and output checks. Both timings finish before the separate
-FLOP, memory, RSS, and profiler passes. CPU tensor peaks include observed resident tensors; allocator peaks retain
-the cache state after timing. Compare only like scopes. Threads, model/library versions, precision, input metadata,
-measurement boundaries, raw blocks, and output evidence are saved in the comparison. Use `--reverse` in a fresh
-process to check order effects. Use `--device mps` or `--device cuda:0` only on available real hardware, and keep
-generated JSON/HTML outside the checkout, as in the commands above.
+resident inputs. Timing excludes loading, transfers, and output checks and finishes before diagnostic passes.
+Configuration and measurement boundaries are saved in the comparison. Use `--reverse` in a fresh process to check
+order effects, and keep generated JSON/HTML outside the checkout, as in the commands above.

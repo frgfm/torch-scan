@@ -31,21 +31,18 @@ def build_model(name, device):
     elif name == "bert":
         from transformers import BertConfig, BertModel
 
-        bert_config = BertConfig(
-            vocab_size=32,
-            hidden_size=16,
-            num_hidden_layers=1,
-            num_attention_heads=2,
-            intermediate_size=32,
-            max_position_embeddings=16,
-        )
-        model = BertModel(bert_config)
+        config = {
+            "vocab_size": 32,
+            "hidden_size": 16,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "intermediate_size": 32,
+            "max_position_embeddings": 16,
+        }
+        model = BertModel(BertConfig(**config))
         input_ids = torch.arange(32).reshape(4, 8)
         inputs = {"input_ids": input_ids, "attention_mask": torch.ones_like(input_ids)}
-        # Native config dictionaries can have integer label keys; reports require JSON object keys.
-        config = json.loads(bert_config.to_json_string(use_diff=False)) | {
-            "transformers_version": version("transformers")
-        }
+        config["transformers_version"] = version("transformers")
         work_units, work_unit = input_ids.numel(), "input_tokens"
     else:
         model = torch.nn.Linear(128, 128)
@@ -53,13 +50,9 @@ def build_model(name, device):
         config = {"architecture": "Linear", "in_features": 128, "out_features": 128}
         work_units, work_unit = 32, "samples"
     # Initialize on CPU before placement so the seed describes identical tensors on every backend.
-    return (
-        model.eval().to(device),
-        {key: value.to(device) for key, value in inputs.items()},
-        config,
-        work_units,
-        work_unit,
-    )
+    model = model.eval().to(device)
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+    return model, inputs, config, work_units, work_unit
 
 
 def main():
@@ -137,7 +130,7 @@ def main():
             matmul_precision=torch.get_float32_matmul_precision(),
             execution_mode="eval/inference_mode",
             execution_order=list(order),
-            timing_boundary="resident inputs -> forward(s) -> concatenated outputs; excludes loading/transfers/checks",
+            timing_boundary="resident forward(s), including per-sample output concatenation; excludes loading/transfers/checks",
             rss_boundary="fresh process imports, model/input construction and placement, 100 calls; no instrumentation",
             memory_boundary="separate single call after timing; includes observed resident tensors/allocator state",
             output_tolerance={"rtol": 1e-4, "atol": 1e-5},
@@ -190,23 +183,15 @@ def main():
         report["profile"] = profile_workload(workload, device=options.device, limit=10)
 
     before, after = reports["per_sample"], reports["batched"]
-    check_evidence = {}
 
     def check():
         reference, candidate = per_sample(), batched()
-        check_evidence.update(
-            shapes=[list(value.shape) for value in reference],
-            max_abs_error=max(
-                (left - right).abs().max().item() for left, right in zip(reference, candidate, strict=True)
-            ),
-            finite=all(value.isfinite().all().item() for value in (*reference, *candidate)),
-        )
-        assert check_evidence["finite"]
+        if not all(value.isfinite().all().item() for value in (*reference, *candidate)):
+            return False
         torch.testing.assert_close(reference, candidate, rtol=1e-4, atol=1e-5)
+        return True
 
     comparison = compare_benchmarks(before, after, check=check)
-    for report in (comparison["before"], comparison["after"]):
-        report["context"]["output_check_evidence"] = check_evidence
     options.output.mkdir(parents=True, exist_ok=True)
     (options.output / "comparison.json").write_text(json.dumps(comparison, indent=2) + "\n", encoding="utf-8")
     (options.output / "comparison.html").write_text(
@@ -219,16 +204,13 @@ def main():
     for name, report in reports.items():
         totals = report["totals"]
         rss = totals.get("process_peak_rss")
-        rss_text = (
-            f"{rss['value'] / 1024**2:.2f}" if rss and rss["status"] == "complete" else "unavailable/not requested"
-        )
+        rss_text = f"{rss['value'] / 1024**2:.2f}" if rss else "not requested"
         print(
             f"{name} | {totals['first_call_latency']['value'] * 1000:.4f} | "
             f"{totals['latency']['value'] * 1000:.4f} | {totals['latency_iqr']['value'] * 1000:.4f} | "
             f"{totals['throughput']['value']:.0f} | {rss_text}"
         )
     print(f"Output check: {comparison['output_check']}; latency change: {comparison['latency_change']}")
-    print(f"Output evidence: {check_evidence}")
     print(f"Saved {options.output.resolve()}/comparison.json and comparison.html")
     if comparison["output_check"] != "passed":
         raise SystemExit("Output check failed; deltas withheld. Inspect the saved evidence.")

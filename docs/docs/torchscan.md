@@ -4,8 +4,8 @@ This reference covers development APIs, including the #176 preview; [installatio
 stable 0.2.0. Start with the [runnable quickstart](index.md) to inspect cost, measure a workload, check a change, and
 consume the report. Read [Model and input support](model-support.md) for non-trivial calls.
 
-`summary` and `crawl_module` return an `AnalysisReport` for an evaluation forward. Workload APIs preserve the callable's
-execution state and produce separate `BenchmarkReport` evidence. Timing is clean; FLOPs, scoped memory, and profiler
+`summary` and `crawl_module` return an `AnalysisReport` for an evaluation forward. `measure_workload` and `measure_latency`
+return `BenchmarkReport` evidence while preserving callable state. Timing is clean; FLOPs, scoped memory, and profiler
 evidence use separate passes. Check statuses, methods, and scopes before comparing or consuming numbers.
 
 ## Model analysis

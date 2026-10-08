@@ -19,8 +19,7 @@
 </p>
 
 TorchScan helps you **inspect model cost, measure actual resource use, check an optimization, and consume the report**.
-Use your own PyTorch model and representative inputs. Save JSON for automation or offline HTML for inspection.
-Every metric carries a method, scope, and `complete`, `partial`, or `unavailable` status.
+Use your own model and inputs. Save JSON or offline HTML; metrics carry a method, scope, and completeness status.
 
 ## Measure your workload
 
@@ -81,11 +80,7 @@ consume the JSON directly; terminal text is a view, not a data format.
 
 ## How this relates to `summary()`
 
-```python
-from torchscan import summary
-
-model_report = summary(model, args=(inputs,))
-```
+Use `summary(model, args=(inputs,))` to inspect the same model call.
 
 `summary` prints the familiar module table and returns an `AnalysisReport`: shapes, parameters, storage,
 module-formula counts, and separate operator FLOPs for an evaluation forward. It disables gradients temporarily and
@@ -101,18 +96,9 @@ batch of one and excludes the batch dimension.
 
 Measure a baseline and one controlled change on the same hardware. Use
 `compare_benchmarks(before, after, check=...)` with your output tolerance; a failed check preserves evidence and
-withholds numeric deltas. Save the comparison with `json.dumps` and `render_report` for offline HTML. Use
-`compare_reports` for model cost estimates. Model HTML/SVG shows module costs, shapes, methods, and diagnostics.
-
-Run the existing complete experiment from a checkout:
-
-```shell
-python scripts/benchmark_comparison.py --device cpu --rss --output /tmp/torchscan-cpu
-```
-
-It compares per-sample and batched inference and records clean timing, separate FLOP/memory/profiler passes,
-fresh-process RSS, and an output check. See [checked experiments](docs/docs/benchmark-comparison.md) and
-[workload diagnostics](docs/docs/workload-diagnostics.md) for measurement boundaries and available device options.
+withholds numeric deltas. Save JSON and offline HTML with `render_report`. Use `compare_reports` for model estimates.
+The [checked experiment guide](docs/docs/benchmark-comparison.md) reuses the existing linear, CNN, and Transformer
+examples, including fresh-process RSS and separate diagnostic passes.
 
 ## Read the limits with the numbers
 
@@ -130,9 +116,8 @@ fresh-process RSS, and an output check. See [checked experiments](docs/docs/benc
 ## Install and continue
 
 Stable model inspection: `python -m pip install torchscan==0.2.0`. Requirements are Python ≥3.11,<4 and PyTorch ≥2.1,<3.
-The [installation guide](https://frgfm.github.io/torch-scan/installing.html) distinguishes stable and development APIs,
-PyTorch backend selection, and compatibility checks. Prefer current PyTorch; timing on 2.1 also needs
-`setuptools<70` and `numpy<2`.
+See [installation](https://frgfm.github.io/torch-scan/installing.html) for backend selection, development APIs,
+compatibility checks, and timing dependencies on PyTorch 2.1.
 
 - [Getting started](https://frgfm.github.io/torch-scan/)
 - [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html) and the repository

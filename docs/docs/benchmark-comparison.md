@@ -104,9 +104,10 @@ python scripts/benchmark_comparison.py --model bert --device cpu --threads 2 --m
 One recorded CPU run used an AMD EPYC 9V74 VM, Linux, Python 3.11.16, PyTorch 2.13.0+cpu,
 torchvision 0.28.0+cpu, transformers 5.15.1, FP32 without autocast, two intra-op threads and one inter-op thread.
 Weights were locally initialized with seed 0; both variants used the same resident inputs in eval/inference mode.
-The candidate ran first to check execution-order sensitivity. Both orders favored batching.
+Both timings complete all four samples; the baseline loops over individual forwards and concatenates their outputs.
+The candidate ran first to check order sensitivity; both orders favored batching.
 
-| Workload | Per-sample median / IQR ms | Batched median / IQR ms | Throughput before → after | RSS MiB before → after | CPU tensor peak MiB before → after |
+| Workload | Loop median / IQR ms | Batched median / IQR ms | Throughput before → after | RSS MiB before → after | CPU tensor peak MiB before → after |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | ResNet18, four `[3,32,32]` images | 24.7072 / 1.2594 | 7.6609 / 0.7181 | 156.99 → 519.59 images/s | 318.69 → 329.12 | 44.89 → 53.72 |
 | BERT, four sequences of eight input tokens | 1.5963 / 0.2735 | 0.4485 / 0.0184 | 18,876.47 → 67,674.99 input tokens/s | 310.47 → 310.07 | 0.0187 → 0.0273 |

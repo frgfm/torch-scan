@@ -51,7 +51,7 @@ print(json.dumps(report, sort_keys=True))
 | Consume a saved model or workload report offline | `render_report` |
 
 `summary` returns an `AnalysisReport` from an evaluation forward with gradients disabled, restoring original training
-flags. Workload collectors return `BenchmarkReport` evidence for the callable you supply and preserve its side effects.
+flags. `measure_workload` and `measure_latency` return `BenchmarkReport` evidence and preserve callable side effects.
 Model storage and formula counts do not predict latency or process RSS. Keep the two reports together;
 do not add module and operator FLOPs or use `compare_reports` for timing.
 

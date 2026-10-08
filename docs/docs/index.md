@@ -55,45 +55,32 @@ Workload on cpu (1 PyTorch threads)
   flops: aten.linear was observed 1 time(s), but no FLOP formula is registered.
 ```
 
-Read `workload.html` in a browser or load the JSON directly. Shapes/dtypes are retained as metadata, not tensor values.
-`work_units=32` says one invocation completes 32 samples; tokens or other units must count actual completed work.
-Numbers depend on your machine, inputs, software, precision, and thread settings.
+Open `workload.html` in a browser or load the JSON; never scrape terminal text. `work_units=32` declares the samples
+completed by one call. `inputs` records metadata, not tensor values or arguments forwarded to the callable.
+Your numbers depend on hardware, software, inputs, precision, and threads.
 
-## How this relates to `summary()`
+## Inspect cost and check a change
 
-`summary(model, args=(inputs,))` prints a module table and returns an `AnalysisReport`: parameters, storage, shapes,
-module-formula counts, and a separate operator FLOP view for an evaluation forward. It disables gradients temporarily
-and restores each module's original training flag. Use `mode="structure"` for shapes and parameters alone, and
-`strict=True` when incomplete requested model metrics must stop automation.
+`summary(model, args=(inputs,))` prints a table and returns an `AnalysisReport` for an evaluation forward: shapes,
+parameters, storage, module estimates, and separate operator FLOPs. It disables gradients temporarily and restores
+training flags. `crawl_module` returns the same report quietly; `mode="structure"` skips compute estimates.
+Model storage is not peak memory, and theoretical FLOPs do not predict latency or RSS. Never add module/operator FLOPs.
 
-Workload collectors measure the callable you supply and return `BenchmarkReport` evidence. You own model state,
-gradient mode, precision, inputs, device placement, preprocessing, and transfers. Timing repeats the callable;
-training steps must manage changing state themselves. Configure threads before model construction.
+`measure_workload` returns a `BenchmarkReport` for your callable. You own model state, precision, gradients, placement,
+transfers, and preprocessing. Timing repeats it; diagnostic passes share its state. Configure threads before building
+models and manage changing training state yourself. Use `metrics` to select passes and `print_summary=False` for automation.
 
-Model storage is not peak memory, and theoretical FLOPs do not predict latency or RSS. Keep model inspection and
-workload measurements together, with their distinct methods and boundaries. Never add module and operator FLOPs.
+Use `value` only for `complete` metrics, `known_value` as a lower bound for `partial`, and preserve diagnostics.
+`unavailable` is missing evidence, not zero. `strict=True` rejects incomplete requested **model** metrics.
 
-## Choose the next action
+Follow [checked experiments](benchmark-comparison.md) to compare a baseline with one controlled change using
+`compare_benchmarks(..., check=...)`. Failed output checks withhold deltas; passing checks do not establish task accuracy.
+Use `compare_reports` for model estimates. Serialize the returned mappings and render saved evidence without rerunning it.
 
-| Outcome | Use |
-| --- | --- |
-| Inspect model cost | `summary` for a table; `crawl_module` for JSON only. Use real `args`/`kwargs` for masks or nested inputs. |
-| Measure actual resource use | Workload timing, separate operator FLOPs and scoped memory, explicit fresh-process RSS, optional profiler evidence. |
-| Check one optimization | `compare_benchmarks(before, after, check=...)`; your callback defines output tolerance. Use `compare_reports` for model estimates. |
-| Consume the evidence | Serialize the mapping as JSON; `render_report` creates offline HTML. Model reports also support SVG. |
+Warmed latency/IQR describes block averages, not request p95; IQR labels are descriptive. First-call time excludes
+imports/loading. RSS covers a fresh child's lifetime; CPU tensor and accelerator allocator peaks have separate scopes
+and must not be summed with RSS. Profiler times include instrumentation. CUDA/MPS claims require real matching hardware.
+See [measurement boundaries](workload-diagnostics.md) and [metric meanings](metrics.md).
 
-Use `value` only for `complete` metrics. A `partial` metric exposes `known_value` as a lower bound; preserve its
-diagnostics. An `unavailable` result is missing evidence, not zero. Do not scrape terminal text.
-
-Clean warmed latency/IQR describes block averages, not request p95. First-call timing excludes imports and loading.
-Process RSS includes the fresh child's whole lifetime. CPU tensor peaks and accelerator allocator peaks cover
-separate scopes; do not sum them with RSS. Profiler timings include instrumentation. A passing output check is not
-task accuracy, and IQR labels do not establish statistical significance. CUDA/MPS claims require real matching hardware.
-
-## Continue with your model
-
-- [Installation](installing.md): stable 0.2.0, development features, and supported compatibility checks.
-- [Checked performance experiments](benchmark-comparison.md): run a baseline and controlled change, check outputs, save evidence.
-- [Workload memory and bottlenecks](workload-diagnostics.md): fresh-process RSS and separate profiler passes.
-- [Agent quickstart](agent-quickstart.md): automate the same workflow using metric status and owner-supplied budgets.
-- [Model and input support](model-support.md), [Understanding results](metrics.md), and [API reference](torchscan.md).
+Continue with [installation](installing.md), [agent quickstart](agent-quickstart.md),
+[model/input support](model-support.md), [report schema](report-schema.md), and [API reference](torchscan.md).

@@ -1,11 +1,8 @@
 # Report schema
 
 TorchScan reports are JSON-serializable public `TypedDict` values. `schema_version` versions their wire shape
-independently of the package version.
-
-Use `AnalysisReport` for model structure and cost estimates, `BenchmarkReport` for measured workload resource use,
-and `BenchmarkComparison` for a checked optimization. Save these mappings with `json.dumps`; terminal text is a view,
-not a data interchange format. `render_report` consumes saved evidence without rerunning the workload.
+independently of the package version. Use `AnalysisReport` for model cost and `BenchmarkReport` for workload resources.
+Serialize mappings directly; `render_report` consumes saved evidence without remeasurement.
 
 ## `AnalysisReport`
 
@@ -201,23 +198,16 @@ Added and removed layer snapshots preserve optional `token_dependencies`. A chan
 `token_dependencies: {"before": ..., "after": ...}` even when its numeric metrics are unchanged. Relations are
 compared structurally and have no numeric delta.
 
+## Compatibility rule
+
+Reject an unknown `schema_version` rather than guessing its meaning. Use [`compare_reports`](#reportdiff)
+for same-schema reports and migrate stored reports explicitly when a future schema changes.
+
 ## `BenchmarkReport`
 
-`measure_workload` and `measure_latency` return a separate report, without model layer rows:
-
-| Field | Meaning |
-| --- | --- |
-| `schema_version` | `1` for the current workload wire shape. |
-| `context` | Hardware/software, device, threads, work units, timing settings, and whether input metadata was supplied. |
-| `inputs` | Caller-supplied recursive metadata; never forwarded to the callable or retained as tensor values. |
-| `totals` | `MetricResult` values: first-call latency, warmed latency/IQR in seconds, and declared work-unit throughput. Separate resource passes can add scoped byte/FLOP metrics. |
-| `measurement` | `number_per_run`, `raw_times_seconds` for timed blocks, and `measured_calls`. |
-| `profile` | Optional separate instrumented `ProfileReport`; operator rows, context, and diagnostics. |
-
-Warmed latency and IQR describe block averages, not individual-request percentiles. Retain raw blocks and caller
-configuration with every conclusion. Missing, partial, and unavailable resource evidence is not a zero.
-
-Timing values stay in seconds in JSON. The terminal summary converts them to milliseconds and memory bytes to MiB.
+`measure_latency` and `measure_workload` return schema-v1 reports with `context`, recursive `inputs` metadata,
+`totals` of `MetricResult` values, and raw timing blocks under `measurement`. Timing values stay in seconds in JSON.
+The terminal summary converts them to milliseconds and memory bytes to MiB.
 
 `measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. The optional
 `operator_flops` field retains the full `FlopReport`; `memory` retains the collector's baseline, peak, delta, and any
@@ -228,17 +218,14 @@ All timing totals remain present when timing is omitted; they are unavailable wi
 `measurement` is empty. Other omitted totals follow the same rule. Workload errors still propagate.
 Reports remain directly JSON-serializable and work with `render_report` without another workload call.
 
+`measurement` contains `number_per_run`, `raw_times_seconds` for timed blocks, and `measured_calls`. Warmed latency/IQR
+uses block averages, not request percentiles. `context` preserves hardware/software, threads, timing options, and
+caller-supplied work-unit definitions; `inputs` records metadata, never arguments forwarded to the workload.
+
 ## `BenchmarkComparison`
 
-`compare_benchmarks(before, after, check=...)` retains both reports, `output_check`, per-metric comparisons,
-changed settings, and the descriptive `latency_change` label. Compatible complete metrics receive `after - before`
-deltas only when the caller's output check passes. Failed checks preserve measurements and withhold all deltas.
-The check does not establish task accuracy; saved reports render the recorded check without rerunning it.
-
-See [checked performance experiments](benchmark-comparison.md) for compatibility rules, callback semantics, and
-the IQR heuristic. Use `compare_reports` for model estimates and `compare_benchmarks` for measured workloads.
-
-## Compatibility rule
-
-Reject an unknown `schema_version` rather than guessing its meaning. Use [`compare_reports`](#reportdiff)
-for same-schema reports and migrate stored reports explicitly when a future schema changes.
+`compare_benchmarks(before, after, check=...)` retains both reports, `output_check`, `totals` differences,
+`context_changes`, and the descriptive `latency_change`. Compatible complete metrics receive `after - before` deltas
+only when the output check passes. Failed checks preserve measurements and withhold deltas. Saved comparisons render
+the recorded check without rerunning it. See [checked experiments](benchmark-comparison.md) for compatibility and IQR
+rules; use `compare_reports` for model estimates.

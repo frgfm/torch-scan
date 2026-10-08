@@ -2,7 +2,7 @@
 
 ## 0.3.0 (proposed, unreleased)
 
-These changes require the development version on `main`. They are not in the 0.2.0 package.
+These changes require development builds or the linked previews. They are not in the 0.2.0 package.
 Version 0.3.0 is the proposed next release, not a published package.
 
 ### Added

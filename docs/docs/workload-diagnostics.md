@@ -6,7 +6,7 @@ These APIs require the development version.
 
 [`measure_workload`](torchscan.md#torchscan.measure_workload) collects FLOPs, latency, throughput, and PyTorch peak
 memory. It prints ms, samples/s, and MiB and returns a `BenchmarkReport` for `json.dumps` and `render_report`.
-See the [runnable example](https://github.com/frgfm/torch-scan#workload-measurements).
+See the [runnable example](index.md#start-with-your-workload).
 
 Set `work_units` to samples per call; batch size is never inferred. Use `work_unit="tokens"` for tokens/s,
 `metrics=("latency", "throughput")` for timing only, or `print_summary=False` for quiet collection.

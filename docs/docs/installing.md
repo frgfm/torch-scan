@@ -10,9 +10,7 @@ it does not move your model or provision hardware. Choose the stable release or 
 | Development (`main`) | Unreleased changes after 0.2.0 | ≥3.11,<4 | ≥2.1,<3 |
 
 Version 0.2.0 was released on October 3, 2026. Use the [migration guide](migration-v02.md) when moving from 0.1.
-The API reference covers development APIs, including the #176 preview, and includes unreleased features. The next proposed release is **0.3.0**;
-it has not been published. Until then, install `main` for workload timing, process RSS, profiler diagnostics, and
-offline workload reports.
+The API reference covers unreleased development APIs, including the #176 preview. **0.3.0** is proposed and unpublished.
 
 | Feature | Available in |
 | --- | --- |
@@ -30,13 +28,9 @@ See the [changelog](changelog.md) for other changes after 0.2.0.
 
 ## Stable release
 
-Install the current PyPI release:
-
 ```shell
 python -m pip install torchscan==0.2.0
 ```
-
-This installs v0.2.0 with the structured report contract. Install `main` for the unreleased features listed above.
 
 ## Development version
 

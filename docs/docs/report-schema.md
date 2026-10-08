@@ -205,22 +205,16 @@ for same-schema reports and migrate stored reports explicitly when a future sche
 
 ## `BenchmarkReport`
 
-`measure_latency` and `measure_workload` return schema-v1 reports with `context`, recursive `inputs` metadata,
-`totals` of `MetricResult` values, and raw timing blocks under `measurement`. Timing values stay in seconds in JSON.
-The terminal summary converts them to milliseconds and memory bytes to MiB.
+`measure_latency` and `measure_workload` return schema-v1 `context`, recursive `inputs` metadata, `totals` of
+`MetricResult` values, and `measurement` timing blocks (`number_per_run`, `raw_times_seconds`, `measured_calls`).
+JSON retains seconds and bytes; terminal output converts to ms and MiB. Latency/IQR describes block averages.
+`context` preserves hardware/software, threads, timing options, and work-unit definitions; `inputs` is metadata.
 
-`measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. The optional
-`operator_flops` field retains the full `FlopReport`; `memory` retains the collector's baseline, peak, delta, and any
-allocated peak in bytes. The optional `profile` field retains the separate `ProfileReport`. `diagnostics` explains
-partial or unavailable evidence, and `context.profile_status` is `complete`, `partial`, `unavailable`, or `not_requested`.
-
-All timing totals remain present when timing is omitted; they are unavailable with method `not_requested`, and
-`measurement` is empty. Other omitted totals follow the same rule. Workload errors still propagate.
-Reports remain directly JSON-serializable and work with `render_report` without another workload call.
-
-`measurement` contains `number_per_run`, `raw_times_seconds` for timed blocks, and `measured_calls`. Warmed latency/IQR
-uses block averages, not request percentiles. `context` preserves hardware/software, threads, timing options, and
-caller-supplied work-unit definitions; `inputs` records metadata, never arguments forwarded to the workload.
+`measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. Optional
+`operator_flops`, `memory`, and `profile` fields retain full collector evidence. `diagnostics` explains incomplete
+values; `context.profile_status` is `complete`, `partial`, `unavailable`, or `not_requested`.
+Omitted totals stay unavailable with method `not_requested`; omitted timing has empty `measurement`.
+Workload errors propagate. `render_report` consumes this JSON-serializable evidence without remeasurement.
 
 ## `BenchmarkComparison`
 

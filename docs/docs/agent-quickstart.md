@@ -18,20 +18,7 @@ The owner defines acceptable output quality and resource budgets.
 7. Preserve model/input revisions, seeds, hardware/software, execution mode, precision, threads, and measurement boundaries.
    Use owner-supplied thresholds for budgets or pass/fail decisions.
 
-Prefer strict analysis when incomplete metrics must stop the task:
-
-```python
-import json
-
-from torchscan import IncompleteAnalysisError, crawl_module
-
-try:
-    report = crawl_module(model, args=(inputs,), kwargs=model_kwargs, strict=True)
-except IncompleteAnalysisError as error:
-    raise RuntimeError(f"TorchScan could not complete the requested analysis: {error}") from error
-
-print(json.dumps(report, sort_keys=True))
-```
+Use `strict=True` when incomplete model metrics must stop the task; it raises `IncompleteAnalysisError`.
 
 ## Pick one API
 
@@ -55,9 +42,6 @@ flags. `measure_workload` and `measure_latency` return `BenchmarkReport` evidenc
 Model storage and formula counts do not predict latency or process RSS. Keep the two reports together;
 do not add module and operator FLOPs or use `compare_reports` for timing.
 
-Do not create a parser around terminal output, a second report schema, a baseline database, or a project-specific
-wrapper unless the project already requires one.
-
 ## Trust rules
 
 - `complete`: use `value` with the report's method and context.
@@ -78,18 +62,8 @@ weights can validate runtime behavior without downloads; they cannot validate ta
 
 ## Owner-controlled budgets
 
-TorchScan reports measurements. The owner supplies policy:
-
-```python
-memory = measure_peak_memory(workload, device=device)
-
-if owner_budget_bytes is None:
-    raise ValueError("Ask the model owner for a memory budget")
-if memory["peak_bytes"] > owner_budget_bytes:
-    raise RuntimeError("Owner-approved memory budget exceeded")
-```
-
-Record the hardware and workload state with accelerator results. Do not invent a default budget.
+The owner supplies memory budgets and quality thresholds. Compare them with complete metrics of the matching scope;
+record hardware and workload state with accelerator results. Do not invent a default budget.
 
 ## When an operator is uncounted
 

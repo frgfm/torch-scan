@@ -9,7 +9,6 @@ Version 0.3.0 is the proposed next release, not a published package.
 
 - `measure_workload`: one-call selected resource measurements, readable ms/work-units per second/MiB output,
   optional separate profiler evidence, and explicit fresh-process RSS (prepared in #176).
-
 - Checked workload comparisons with `compare_benchmarks` and offline HTML timing/memory/profile reports.
 - Reusable, no-download ResNet18 and small BERT performance experiments with an output check and explicit resource
   boundaries (prepared in #175; CPU evidence, CUDA/MPS unavailable).

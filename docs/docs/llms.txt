@@ -2,12 +2,10 @@
 
 > Inspect PyTorch model cost, measure a workload, check an optimization, and consume JSON or offline HTML evidence with explicit metric status.
 
-TorchScan v0.2 requires Python 3.11+ and PyTorch 2.1+. Use reports for model structure, parameters, module estimates,
-operator FLOPs, and peak PyTorch memory. The development version adds workload timing/throughput, fresh-process RSS,
-operator diagnostics, checked benchmark comparisons, and offline reports. Always check metric status, methods,
-scopes, and diagnostics. Hardware measurements apply to the recorded workload and machine; the owner supplies budgets
-and output-quality requirements. `measure_workload` assembles selected resources in one report; it is preview PR #176
-until merged. Install the preview as described in the installation guide.
+Requires Python ≥3.11,<4 and PyTorch ≥2.1,<3. Stable 0.2.0 inspects model cost; development APIs measure workload
+resources, check comparisons, and render offline reports. `measure_workload` is preview PR #176 until merged;
+follow the installation guide. Check status, methods, scopes, and diagnostics. Hardware results apply to the recorded
+workload and machine; the owner supplies budgets and quality thresholds.
 
 ## Documentation
 

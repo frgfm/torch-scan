@@ -15,6 +15,7 @@ from typing import Any
 
 from torch.utils.flop_counter import sdpa_flop_count
 
+from .modules._pooling import adaptive_visits
 from .modules._primitives import gelu_flops, rmsnorm_rows, softmax_counts
 
 
@@ -30,6 +31,22 @@ def _square(_input_shape: Any, exponent: Any, *_args: Any, out_shape: Any, **_kw
     if not isinstance(exponent, (int, float)) or exponent != 2:
         raise NotImplementedError("Power FLOPs only cover an explicit scalar exponent of two.")
     return prod(out_shape)
+
+
+def _pool(
+    _input_shape: Any, kernel_size: Any, *_args: Any, out_shape: Any, rank: int, maximum: bool, **_kwargs: Any
+) -> int:
+    output = out_shape[0] if maximum else out_shape
+    kernel = (kernel_size,) if isinstance(kernel_size, int) else kernel_size
+    volume = kernel[0] ** rank if len(kernel) == 1 else prod(kernel)
+    return prod(output) * (volume - int(maximum))
+
+
+def _adaptive_pool(
+    input_shape: Any, output_size: Any, *_args: Any, out_shape: Any, maximum: bool, **_kwargs: Any
+) -> int:
+    output = out_shape[0] if maximum else out_shape
+    return adaptive_visits(input_shape, output, len(output_size)) - prod(output) * int(maximum)
 
 
 def _rms_norm(input_shape: Any, normalized_shape: Any, weight: Any = None, *_args: Any, **_kwargs: Any) -> int:
@@ -189,6 +206,10 @@ def _cpu_attention(
 
 
 FORMULAS = {
+    **{f"max_pool{rank}d_with_indices": partial(_pool, rank=rank, maximum=True) for rank in (2, 3)},
+    **{f"avg_pool{rank}d": partial(_pool, rank=rank, maximum=False) for rank in (2, 3)},
+    **{f"adaptive_max_pool{rank}d": partial(_adaptive_pool, maximum=True) for rank in (2, 3)},
+    **{f"_adaptive_avg_pool{rank}d": partial(_adaptive_pool, maximum=False) for rank in (2, 3)},
     **{
         name + suffix: partial(_activation, cost=cost)
         for name, cost in {

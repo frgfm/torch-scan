@@ -5,7 +5,7 @@
 
 import math
 import warnings
-from typing import Any, Callable, Tuple, cast
+from typing import Any, Callable, Tuple
 
 import torch
 from torch import Tensor, nn
@@ -15,7 +15,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
-from ._pooling import adaptive_kernel_size
+from ._pooling import adaptive_visits, pool_kernel_volume, pool_rank
 from ._primitives import PRIMITIVE_TYPES, gelu_flops, primitive_flops
 
 __all__ = ["module_flops"]
@@ -188,46 +188,26 @@ def flops_bn(module: _BatchNorm, inputs: Tuple[Tensor, ...]) -> int:
     return bn_flops + tracking_flops
 
 
-def _pool_kernel_volume(module: _MaxPoolNd | _AvgPoolNd) -> int:
-    kernel_size = cast(int | Tuple[int, ...] | list[int], module.kernel_size)
-    rank = 1
-    if isinstance(module, (nn.MaxPool2d, nn.AvgPool2d)):
-        rank = 2
-    elif isinstance(module, (nn.MaxPool3d, nn.AvgPool3d)):
-        rank = 3
-    if isinstance(kernel_size, int):
-        return kernel_size**rank
-    return kernel_size[0] ** rank if len(kernel_size) == 1 else math.prod(kernel_size)
-
-
 def flops_maxpool(module: _MaxPoolNd, _: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
     # for each spatial output element, check max element in kernel scope
-    return out.numel() * (_pool_kernel_volume(module) - 1)
+    return out.numel() * (pool_kernel_volume(module) - 1)
 
 
 def flops_avgpool(module: _AvgPoolNd, _inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * _pool_kernel_volume(module)
+    return out.numel() * pool_kernel_volume(module)
 
 
-def flops_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def flops_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = adaptive_kernel_size(inputs[0], out)
-
-    # for each spatial output element, check max element in kernel scope
-    return out.numel() * (math.prod(kernel_size) - 1)
+    return adaptive_visits(inputs[0].shape, out.shape, pool_rank(module)) - out.numel()
 
 
-def flops_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
+def flops_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inputs: Tuple[Tensor, ...], out: Tensor) -> int:
     """FLOPs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = adaptive_kernel_size(inputs[0], out)
-
-    # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (math.prod(kernel_size) - 1 + len(kernel_size))
+    return adaptive_visits(inputs[0].shape, out.shape, pool_rank(module))
 
 
 def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:

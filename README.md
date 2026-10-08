@@ -135,56 +135,16 @@ def workload():
         return model(inputs)
 
 
-report = measure_workload(workload, device="cpu", inputs=inputs, work_units=8)
+workload_report = measure_workload(workload, device="cpu", inputs=inputs, work_units=8)
 ```
 
-This prints FLOPs, latency in ms, throughput in samples/s, and PyTorch peak memory in MiB. `work_units` is the number
-of samples per call. The report works with `json.dumps` and `render_report`. Use `metrics=("latency", "throughput")`
-to select timing only. Add `profile=True` for a separate operator profile. RSS requires an explicit
-`rss_command=[sys.executable, "my_workload.py"]`; it covers that new process's whole lifetime.
+Get FLOPs, latency in ms, throughput in samples/s, and PyTorch peak memory in MiB. Set `work_units` to samples per
+call. Select measurements with `metrics=("latency", "throughput")`, or add `profile=True` for operator evidence.
+The report works with `json.dumps` and `render_report`; incomplete values stay explicit. You control model state,
+placement, precision, gradients, and threads. See the [workload guide](docs/docs/workload-diagnostics.md) for pass
+order and fresh-process RSS through an explicit `rss_command`.
 
-You control model state, device placement, precision, gradient mode, and threads. Timing runs first; FLOPs, memory,
-and the optional profile each call the workload again. Use a repeatable callable. Partial and unavailable values stay
-visible. See the [workload guide](docs/docs/workload-diagnostics.md) for saved reports and measurement scopes.
-
-The individual collectors are also available:
-
-```python
-import json
-
-import torch
-from torchscan import measure_flops
-from torchscan.process import measure_peak_memory
-
-inputs = torch.ones(8)
-flops = measure_flops(lambda: torch.sin(inputs))
-print(json.dumps(flops["total"], indent=2))
-print("uncounted operator:", flops["diagnostics"][0]["operator"])
-
-memory = measure_peak_memory(lambda: torch.cos(inputs), device=inputs.device)
-print(memory["device"], memory["metric"])
-```
-
-`measure_flops` uses PyTorch's operator dispatch. `measure_peak_memory` invokes the workload exactly once and reports
-backend-specific PyTorch memory—not process RSS or total device memory.
-
-Here, PyTorch has no built-in `aten.sin` formula, so TorchScan shows a lower bound instead of a false zero:
-
-```text
-{
-  "status": "partial",
-  "value": null,
-  "known_value": 0,
-  "unit": "FLOPs",
-  "scope": "workload",
-  "method": "torch.utils.flop_counter.FlopCounterMode"
-}
-uncounted operator: aten.sin
-cpu pytorch_tensor_bytes
-```
-
-Peak byte values are intentionally omitted because they depend on the workload, allocator, PyTorch version, and
-hardware; the returned mapping includes `baseline_bytes`, `peak_bytes`, and `delta_bytes`.
+The individual FLOP, timing, memory, and profiler collectors remain available in the [API reference](docs/docs/torchscan.md).
 
 ## Before/after comparison
 

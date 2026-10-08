@@ -5,7 +5,6 @@
 
 import math
 import warnings
-from typing import Tuple, cast
 
 from torch import Tensor, nn
 from torch.nn import Module
@@ -13,7 +12,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
-from ._pooling import adaptive_kernel_size
+from ._pooling import adaptive_visits, pool_kernel_volume, pool_rank
 from ._primitives import PRIMITIVE_TYPES, primitive_macs
 from ._transformer import _norm_macs
 
@@ -106,35 +105,25 @@ def macs_bn(module: _BatchNorm, inp: Tensor, _: Tensor) -> int:
 
 def macs_maxpool(module: _MaxPoolNd, _: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._MaxPoolNd`"""
-    kernel_size = module.kernel_size
-    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
+    k_size = pool_kernel_volume(module)
 
     # for each spatial output element, check max element in kernel scope
     return out.numel() * (k_size - 1)
 
 
-def macs_avgpool(module: _AvgPoolNd, inp: Tensor, out: Tensor) -> int:
+def macs_avgpool(module: _AvgPoolNd, _inp: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AvgPoolNd`"""
-    kernel_size = cast(int | Tuple[int, ...], module.kernel_size)
-    k_size = math.prod(kernel_size) if isinstance(kernel_size, tuple) else kernel_size
+    k_size = pool_kernel_volume(module)
 
     # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (k_size - 1 + inp.ndim - 2)
+    return out.numel() * (k_size - 1 + pool_rank(module))
 
 
-def macs_adaptive_maxpool(_: _AdaptiveMaxPoolNd, inp: Tensor, out: Tensor) -> int:
+def macs_adaptive_maxpool(module: _AdaptiveMaxPoolNd, inp: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AdaptiveMaxPoolNd`"""
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = adaptive_kernel_size(inp, out)
-
-    # for each spatial output element, check max element in kernel scope
-    return out.numel() * (math.prod(kernel_size) - 1)
+    return adaptive_visits(inp.shape, out.shape, pool_rank(module)) - out.numel()
 
 
-def macs_adaptive_avgpool(_: _AdaptiveAvgPoolNd, inp: Tensor, out: Tensor) -> int:
+def macs_adaptive_avgpool(module: _AdaptiveAvgPoolNd, inp: Tensor, out: Tensor) -> int:
     """MACs estimation for `torch.nn.modules.pooling._AdaptiveAvgPoolNd`"""
-    # Approximate kernel_size using ratio of spatial shapes between input and output
-    kernel_size = adaptive_kernel_size(inp, out)
-
-    # for each spatial output element, sum elements in kernel scope and div by kernel size
-    return out.numel() * (math.prod(kernel_size) - 1 + len(kernel_size))
+    return adaptive_visits(inp.shape, out.shape, pool_rank(module)) + out.numel() * (pool_rank(module) - 1)

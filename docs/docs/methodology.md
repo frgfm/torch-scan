@@ -106,6 +106,7 @@ and tanh to six, as in the existing module formulas. Constant-only arithmetic is
 | Grouped convolution | Outputs × `Cin/groups × kernel_volume` terms; dense padded work. |
 | Transposed convolution | `2 × input_elements × Cout/groups × kernel_volume`, plus module bias; cropped scatter products included. |
 | Fixed pooling, K values/window | Max: K-1; average: K. Nominal dense padding/ceil windows. |
+| Adaptive pooling | Exact overlapping floor/ceil windows: each spatial axis visits `L+O-gcd(L,O)` values over all output positions. Multiply axis sums and batch/channels. Max subtracts output elements; average adds one divide/window. Logical DMAs add output writes and optional max indices. Legacy pooling MAC conventions are retained with corrected geometry. |
 | Broadcast/reduction | Per output; sum: max(N-R,0); mean adds R divides. |
 | Stable/safe softmax | `5N-2R`: max, subtract, exp, sum, divide. Safe adds 2N comparisons/selections. |
 | LogSoftmax / Softmin | Stable LogSoftmax: `4N-R`; Softmin: negate N, then stable softmax. |
@@ -155,9 +156,9 @@ GLU and these norms mark spatial metrics `not_applicable`, which alone does not 
 pointwise. Model-wide dependency graphs are not inferred; custom composites need handlers. SwiGLU has operator coverage.
 
 Remaining FLOP gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused operator MHA/encoder, specialized attention,
-unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered activations/pooling.
+unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered operators.
 Transformer requires native stacks, `activation="relu"` / `"gelu"` or exact `F.relu` / `F.gelu`, and final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
-approximations. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
+spatial approximations for receptive fields. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.
 
 Native Transformer MAC/DMA boundaries include ReLU/GELU and dense masks, while token dependencies support the
 documented canonical mask patterns. Fused module execution uses subtree formulas without claiming a fused hardware

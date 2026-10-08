@@ -41,8 +41,8 @@ def test_module_flops_warning():
         (nn.AvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32),
         (nn.AdaptiveMaxPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
         (nn.AdaptiveMaxPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 3 * 32),
-        (nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
-        (nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 5 * 32),
+        (nn.AdaptiveAvgPool2d((2, 2)), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32),
+        (nn.AdaptiveAvgPool2d(2), (1, 8, 4, 4), (1, 8, 2, 2), 4 * 32),
         # Dropout
         (nn.Dropout(), (1, 8), (1, 8), 16),
         (nn.Dropout(p=0), (1, 8), (1, 8), 0),
@@ -208,9 +208,9 @@ def test_module_rf_conv_transpose():
 @pytest.mark.parametrize(
     ("dimension", "input_shape", "output_shape", "max_ops", "avg_ops", "dmas"),
     [
-        (1, (2, 4, 7), (2, 4, 3), 24, 48, 72),
-        (2, (2, 4, 7, 8), (2, 4, 3, 4), 288, 480, 480),
-        (3, (2, 4, 7, 8, 5), (2, 4, 3, 4, 2), 1344, 1920, 1728),
+        (1, (2, 4, 7), (2, 4, 3), 48, 72, 96),
+        (2, (2, 4, 7, 8), (2, 4, 3, 4), 480, 576, 672),
+        (3, (2, 4, 7, 8, 5), (2, 4, 3, 4, 2), 3264, 3456, 3648),
     ],
 )
 def test_adaptive_pool_metrics_for_non_divisible_spatial_shapes(
@@ -221,5 +221,7 @@ def test_adaptive_pool_metrics_for_non_divisible_spatial_shapes(
     expected_ops = max_ops if kind == "Max" else avg_ops
 
     assert modules.module_flops(module, (inp,), out) == expected_ops
-    assert modules.module_macs(module, inp, out) == expected_ops
+    assert modules.module_macs(module, inp, out) == expected_ops + (
+        out.numel() * (dimension - 1) if kind == "Avg" else 0
+    )
     assert modules.module_dmas(module, inp, out) == dmas

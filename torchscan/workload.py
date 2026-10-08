@@ -3,7 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Literal, cast
 
 import torch
@@ -15,11 +15,21 @@ from .process import measure_peak_memory, measure_peak_rss
 from .process.memory import _NoMemoryEventsError
 from .profiler import profile_workload
 from .report import Diagnostic, MetricResult, metric_result
+from .utils import _display_unit
 
 __all__ = ["measure_workload"]
 
 _WorkloadMetric = Literal["flops", "latency", "throughput", "memory"]
 _METRICS: tuple[_WorkloadMetric, ...] = ("flops", "latency", "throughput", "memory")
+_LABELS = {
+    "first_call_latency": "First call",
+    "latency": "Latency (block median)",
+    "latency_iqr": "Latency IQR",
+    "throughput": "Throughput",
+    "operator_flops": "Operator FLOPs",
+    "peak_memory": "PyTorch peak memory",
+    "process_peak_rss": "Process peak RSS",
+}
 
 
 def _collect(
@@ -53,8 +63,7 @@ def _collect(
 
 
 def _value(metric: MetricResult) -> str:
-    unit = metric["unit"]
-    scale, display_unit = (1000, "ms") if unit == "seconds" else (1 / 1024**2, "MiB") if unit == "bytes" else (1, unit)
+    scale, display_unit = _display_unit(metric["unit"])
     if metric["status"] == "unavailable":
         reason = "not requested" if metric["method"] == "not_requested" else "see diagnostics"
         return f"unavailable ({reason})"
@@ -63,18 +72,14 @@ def _value(metric: MetricResult) -> str:
     return f"partial (known lower bound: {text})" if metric["status"] == "partial" else text
 
 
-def _summary(report: BenchmarkReport) -> str:
+def _summary(report: Mapping[str, Any]) -> str:
     context = report["context"]
-    lines = [f"Workload on {context['device']} ({context['num_threads']} PyTorch threads)"]
-    for name, label in (
-        ("first_call_latency", "First call"),
-        ("latency", "Latency (block median)"),
-        ("latency_iqr", "Latency IQR"),
-        ("throughput", "Throughput"),
-        ("operator_flops", "Operator FLOPs"),
-        ("peak_memory", "PyTorch peak memory"),
-        ("process_peak_rss", "Process peak RSS"),
-    ):
+    lines = [
+        f"Workload on {context.get('device', 'unknown')} ({context.get('num_threads', 'unknown')} PyTorch threads)"
+    ]
+    for name, label in _LABELS.items():
+        if name not in report["totals"]:
+            continue
         metric = report["totals"][name]
         lines.append(f"  {label}: {_value(metric)}")
         if name in {"peak_memory", "process_peak_rss"} and metric["status"] != "unavailable":
@@ -84,7 +89,16 @@ def _summary(report: BenchmarkReport) -> str:
                 "child_process_lifetime": "fresh child process lifetime",
             }.get(metric["scope"], metric["scope"])
             lines.append(f"    Scope: {scope}")
-    lines.append(f"  Profiler: {context['profile_status'].replace('_', ' ')} (separate instrumented pass)")
+    profile_status = context.get("profile_status", "supplied" if report.get("profile") else "not_requested")
+    lines.extend((
+        f"  Profiler: {str(profile_status).replace('_', ' ')} (separate instrumented pass)",
+        "Latency is the median of per-call block averages. IQR shows the spread of the middle half.",
+        "Throughput uses total work / total timed duration; slow blocks can lower it despite a lower median.",
+    ))
+    if report["totals"].get("operator_flops", {}).get("status") == "partial":
+        lines.append(
+            "Partial FLOPs: coverage is unverified, even if known counts match. Execution mode can change observed operators."
+        )
     lines.extend(f"  {item['metric']}: {item['message']}" for item in report.get("diagnostics", []))
     return "\n".join(lines)
 

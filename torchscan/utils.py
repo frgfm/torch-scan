@@ -10,6 +10,10 @@ from typing import Any
 from .report import AnalysisReport, LayerReport, MetricResult, TokenDependency
 
 
+def _display_unit(unit: str) -> tuple[float, str]:
+    return (1000, "ms") if unit == "seconds" else (1 / 1024**2, "MiB") if unit == "bytes" else (1, unit)
+
+
 def format_name(name: str, depth: int = 0) -> str:
     """Format a layer name for nested summary output."""
     if depth == 0:
@@ -201,13 +205,13 @@ def format_info(
         "Layer",
         "Type",
         "Output Shape",
-        "Param #",
+        "Params + buffers",
         "Trainable",
         "Receptive field",
         "Effective stride",
         "Effective padding",
     ]
-    max_w = [27, 20, 25, 15, 9, 15, 16, 17]
+    max_w = [27, 20, 25, 16, 9, 15, 16, 17]
     col_w = [len(header) for header in headers]
     for layer in module_info["layers"]:
         col_w = [
@@ -245,8 +249,9 @@ def format_info(
         f"Trainable params: {int(totals['trainable_parameters']['value'] or 0):,}",
         f"Non-trainable params: {int(totals['frozen_parameters']['value'] or 0):,}",
         f"Total params: {int(totals['parameters']['value'] or 0):,}",
+        "Layer counts assign shared tensors once, in call order; zero can mean counted in an earlier row.",
         dot_line,
-        f"Model size (params + buffers): {(float(totals['parameter_bytes']['value'] or 0) + float(totals['buffer_bytes']['value'] or 0)) / 1024**2:.2f} Mb",
+        f"Model size (params + buffers): {(float(totals['parameter_bytes']['value'] or 0) + float(totals['buffer_bytes']['value'] or 0)) / 1024**2:.2f} MiB",
         dot_line,
         _format_total("Module-formula forward FLOPs", totals["module_flops"]),
         _format_total("Multiply-Accumulations", totals["macs"]),

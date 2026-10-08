@@ -1,7 +1,68 @@
 # Workload memory and bottlenecks
 
-These APIs require the development version. Keep diagnostic runs separate from clean
-[`measure_latency`](metrics.md#latency-and-throughput) measurements.
+These APIs require the development version.
+
+## Measure a workload in one call
+
+`measure_workload` collects FLOPs, latency, throughput, and PyTorch peak memory. It prints a short summary and returns
+the same evidence as a `BenchmarkReport`. Choose which measurements to run with `metrics`.
+
+```python
+import json
+from pathlib import Path
+
+import torch
+from torchscan import measure_workload, render_report
+
+model = torch.nn.Linear(64, 16).eval()
+inputs = torch.ones(8, 64)
+
+
+def workload():
+    with torch.inference_mode():
+        return model(inputs)
+
+
+report = measure_workload(workload, device="cpu", inputs=inputs, work_units=8)
+Path("workload.json").write_text(json.dumps(report))
+Path("workload.html").write_text(render_report(report))
+```
+
+The summary uses milliseconds, samples/s, and MiB. Set `work_units` to the number of samples per call. TorchScan does
+not guess the batch size. Set `work_unit="tokens"` for tokens/s. Set `print_summary=False` to return evidence quietly.
+
+For timing only, use `metrics=("latency", "throughput")`. For FLOPs and memory only, use
+`metrics=("flops", "memory")`. Unrequested metrics have `status="unavailable"` and `method="not_requested"`.
+Unsupported collector results also stay unavailable and have a diagnostic. Partial FLOPs retain a known lower bound
+and the uncounted operator names. Workload errors propagate; they are not converted into missing measurements.
+
+Timing runs first. FLOPs and memory each invoke the callable once more. Add `profile=True` for one further operator
+pass; use `trace_path="profile.json"` to save its trace. Profiler times are kept separate from clean latency.
+All passes share caller state. Use a repeatable callable and manage gradients, caches, and random state yourself.
+TorchScan does not set evaluation mode, move tensors, select precision, or choose thread counts. Configure threads
+before building the model and keep them fixed. Latency is a median of block averages, not a request percentile.
+First-call time excludes imports and model loading. PyTorch peak memory retains its backend-specific scope.
+
+RSS is collected only when you supply a fresh-process command:
+
+```python
+import sys
+
+report = measure_workload(
+    workload,
+    device="cpu",
+    inputs=inputs,
+    work_units=8,
+    rss_command=[sys.executable, "my_workload.py"],
+)
+```
+
+That script must use the configuration you want to measure. Its RSS covers its whole process lifetime. The command
+must exit; TorchScan adds no deadline. RSS and PyTorch memory have different scopes. The separate command's inputs
+and settings cannot be inferred from the in-process callable.
+
+See the [`measure_workload`](torchscan.md#torchscan.measure_workload) API reference. The individual collectors remain
+available when you need a single measurement.
 
 ## Whole-process peak RSS
 

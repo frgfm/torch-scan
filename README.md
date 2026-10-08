@@ -120,7 +120,34 @@ See the [copyable extension tutorial](docs/docs/extensions.md), including a comp
 
 ## Workload measurements
 
-Use zero-argument callables when the owner needs full control over execution:
+Measure a workload in one call with the development version:
+
+```python
+import torch
+from torchscan import measure_workload
+
+model = torch.nn.Linear(64, 16).eval()
+inputs = torch.ones(8, 64)
+
+
+def workload():
+    with torch.inference_mode():
+        return model(inputs)
+
+
+report = measure_workload(workload, device="cpu", inputs=inputs, work_units=8)
+```
+
+This prints FLOPs, latency in ms, throughput in samples/s, and PyTorch peak memory in MiB. `work_units` is the number
+of samples per call. The report works with `json.dumps` and `render_report`. Use `metrics=("latency", "throughput")`
+to select timing only. Add `profile=True` for a separate operator profile. RSS requires an explicit
+`rss_command=[sys.executable, "my_workload.py"]`; it covers that new process's whole lifetime.
+
+You control model state, device placement, precision, gradient mode, and threads. Timing runs first; FLOPs, memory,
+and the optional profile each call the workload again. Use a repeatable callable. Partial and unavailable values stay
+visible. See the [workload guide](docs/docs/workload-diagnostics.md) for saved reports and measurement scopes.
+
+The individual collectors are also available:
 
 ```python
 import json

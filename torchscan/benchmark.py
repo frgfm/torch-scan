@@ -16,11 +16,12 @@ from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 import torch
 
 from .crawler import _describe, _package_version
-from .report import MetricResult, metric_result
+from .report import Diagnostic, MetricResult, metric_result
 
 if TYPE_CHECKING:
     from torch.utils.benchmark import Measurement, Timer
 
+    from .flops import FlopReport
     from .profiler import ProfileReport
 
 __all__ = ["BenchmarkReport", "measure_latency"]
@@ -39,6 +40,9 @@ class BenchmarkReport(TypedDict):
     totals: dict[str, MetricResult]
     measurement: dict[str, Any]
     profile: NotRequired["ProfileReport"]
+    operator_flops: NotRequired["FlopReport"]
+    memory: NotRequired[dict[str, str | int]]
+    diagnostics: NotRequired[list[Diagnostic]]
 
 
 def _processor() -> str:
@@ -123,6 +127,59 @@ def _run_timing(
     return first_call, measurement, threads
 
 
+def _validate_timing_settings(
+    workload: Callable[[], object],
+    work_units: float,
+    work_unit: str,
+    warmup: int,
+    min_run_time: float,
+    min_repeats: int,
+) -> None:
+    if not callable(workload):
+        raise TypeError("workload must be callable.")
+    for name, value in (("work_units", work_units), ("min_run_time", min_run_time)):
+        if not _positive_finite(value):
+            raise ValueError(f"{name} must be a positive finite number.")
+    for name, value, minimum in (("warmup", warmup, 0), ("min_repeats", min_repeats, 2)):
+        if type(value) is not int or value < minimum:
+            raise ValueError(f"{name} must be an integer >= {minimum}.")
+    if not isinstance(work_unit, str) or not work_unit.strip():
+        raise ValueError("work_unit must be a non-empty string.")
+
+
+def _benchmark_context(
+    device: torch.device,
+    inputs: Any,
+    work_units: float,
+    work_unit: str,
+    warmup: int,
+    min_run_time: float,
+    min_repeats: int,
+    threads: int,
+) -> dict[str, Any]:
+    processor = _processor()
+    device_name = torch.cuda.get_device_name(device) if device.type == "cuda" else processor
+    return {
+        "torchscan_version": _package_version(),
+        "torch_version": str(torch.__version__),
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "processor": processor,
+        "device": str(device),
+        "device_name": device_name,
+        "num_threads": threads,
+        "num_interop_threads": torch.get_num_interop_threads(),
+        "cuda_version": torch.version.cuda,
+        "inputs_source": "caller_supplied" if inputs is not None else "not_provided",
+        "work_units": work_units,
+        "work_unit": work_unit,
+        "warmup": warmup,
+        "min_run_time": min_run_time,
+        "min_repeats": min_repeats,
+    }
+
+
 def measure_latency(
     workload: Callable[[], object],
     *,
@@ -171,21 +228,9 @@ def measure_latency(
         keep it unchanged during the workload. Use one device per workload;
         multi-device/distributed synchronization is not provided.
     """
-    if not callable(workload):
-        raise TypeError("workload must be callable.")
-    for name, value in (("work_units", work_units), ("min_run_time", min_run_time)):
-        if not _positive_finite(value):
-            raise ValueError(f"{name} must be a positive finite number.")
-    for name, value, minimum in (("warmup", warmup, 0), ("min_repeats", min_repeats, 2)):
-        if type(value) is not int or value < minimum:
-            raise ValueError(f"{name} must be an integer >= {minimum}.")
-    if not isinstance(work_unit, str) or not work_unit.strip():
-        raise ValueError("work_unit must be a non-empty string.")
+    _validate_timing_settings(workload, work_units, work_unit, warmup, min_run_time, min_repeats)
     input_metadata = _describe(inputs)
     normalized_device, synchronize = _synchronizer(torch.device(device))
-    processor = _processor()
-    device_name = torch.cuda.get_device_name(normalized_device) if normalized_device.type == "cuda" else processor
-
     first_call, measurement, threads = _run_timing(workload, synchronize, warmup, min_run_time, min_repeats)
     samples = measurement.raw_times
 
@@ -197,25 +242,9 @@ def measure_latency(
         raise RuntimeError("Throughput must be positive and finite; adjust work_units.")
     return {
         "schema_version": 1,
-        "context": {
-            "torchscan_version": _package_version(),
-            "torch_version": str(torch.__version__),
-            "python_version": platform.python_version(),
-            "platform": platform.platform(),
-            "machine": platform.machine(),
-            "processor": processor,
-            "device": str(normalized_device),
-            "device_name": device_name,
-            "num_threads": threads,
-            "num_interop_threads": torch.get_num_interop_threads(),
-            "cuda_version": torch.version.cuda,
-            "inputs_source": "caller_supplied" if inputs is not None else "not_provided",
-            "work_units": work_units,
-            "work_unit": work_unit,
-            "warmup": warmup,
-            "min_run_time": min_run_time,
-            "min_repeats": min_repeats,
-        },
+        "context": _benchmark_context(
+            normalized_device, inputs, work_units, work_unit, warmup, min_run_time, min_repeats, threads
+        ),
         "inputs": input_metadata,
         "totals": {
             name: metric_result(status="complete", value=value, unit=unit, scope=scope, method=method)

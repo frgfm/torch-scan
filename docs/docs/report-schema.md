@@ -201,3 +201,18 @@ compared structurally and have no numeric delta.
 
 Reject an unknown `schema_version` rather than guessing its meaning. Use [`compare_reports`](#reportdiff)
 for same-schema reports and migrate stored reports explicitly when a future schema changes.
+
+## `BenchmarkReport`
+
+`measure_latency` and `measure_workload` return schema-v1 reports with `context`, recursive `inputs` metadata,
+`totals` of `MetricResult` values, and raw timing blocks under `measurement`. Timing values stay in seconds in JSON.
+The terminal summary converts them to milliseconds and memory bytes to MiB.
+
+`measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. The optional
+`operator_flops` field retains the full `FlopReport`; `memory` retains the collector's baseline, peak, delta, and any
+allocated peak in bytes. The optional `profile` field retains the separate `ProfileReport`. `diagnostics` explains
+partial or unavailable evidence, and `context.profile_status` is `complete`, `partial`, `unavailable`, or `not_requested`.
+
+All timing totals remain present when timing is omitted; they are unavailable with method `not_requested`, and
+`measurement` is empty. Other omitted totals follow the same rule. Workload errors still propagate.
+Reports remain directly JSON-serializable and work with `render_report` without another workload call.

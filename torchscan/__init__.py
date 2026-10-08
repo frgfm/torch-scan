@@ -10,5 +10,6 @@ from torchscan.flops import *
 from torchscan.profiler import *
 from torchscan.render import *
 from torchscan.report import *
+from torchscan.workload import *
 
 __version__ = version("torchscan")

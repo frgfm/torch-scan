@@ -77,7 +77,10 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
         changes = _context_changes(before, after)
         if report.get("context_changes") != changes:
             raise ValueError("Context changes do not match the stored measurements.")
+    diagnostics = after.get("diagnostics", [])
+    _diagnostics(diagnostics, "benchmark.diagnostics")
     body = _metric_table(after["totals"])
+    body += "<ul>" + "".join(f"<li>{escape(item['message'])}</li>" for item in diagnostics) + "</ul>"
     verdict = "Single workload measurement"
     if before is not None:
         verdict = (

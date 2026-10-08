@@ -13,6 +13,7 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
+from ._layout import LAYOUT_TYPES, layout_counts
 from ._pooling import adaptive_visits, pool_kernel_volume, pool_rank
 from ._primitives import PRIMITIVE_TYPES, primitive_dmas
 from ._transformer import _norm_dmas
@@ -33,6 +34,8 @@ def module_dmas(module: Module, inp: Tensor, out: Tensor) -> int:
     """
     if isinstance(module, PRIMITIVE_TYPES):
         return primitive_dmas(module, inp, out)
+    if isinstance(module, LAYOUT_TYPES):
+        return layout_counts(module, inp, out)[2]
     if isinstance(module, nn.Identity):
         return dmas_identity(module, inp, out)
     if isinstance(module, nn.Flatten):

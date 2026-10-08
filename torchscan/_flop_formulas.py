@@ -13,8 +13,6 @@ from functools import partial
 from math import prod
 from typing import Any
 
-from torch.utils.flop_counter import sdpa_flop_count
-
 from .modules._pooling import adaptive_visits
 from .modules._primitives import gelu_flops, rmsnorm_rows, softmax_counts
 
@@ -181,12 +179,14 @@ def _cpu_attention(
         len(query) != 4
         or len(key) != 4
         or len(value) != 4
-        or query[:2] != key[:2]
+        or query[0] != key[0]
+        or key[1] <= 0
+        or query[1] % key[1] != 0
         or key[:3] != value[:3]
         or query[3] != key[3]
     ):
         raise NotImplementedError(
-            "CPU attention formula requires matching batch/head counts, Q/K widths, and K/V lengths."
+            "CPU attention formula requires matching batches, divisible query/KV heads, Q/K widths, and K/V lengths."
         )
     if dropout_p != 0:
         raise NotImplementedError("CPU attention formula does not cover dropout.")
@@ -197,7 +197,7 @@ def _cpu_attention(
         return 0
     scores = rows * key[2]
     return (
-        sdpa_flop_count(query, key, value)
+        2 * scores * (query[3] + value[3])
         + scores
         + 5 * scores
         - 2 * rows
@@ -205,7 +205,122 @@ def _cpu_attention(
     )
 
 
+def _native_mha(
+    query: Any,
+    key: Any,
+    value: Any,
+    embed_dim: int,
+    num_head: int,
+    _qkv_weight: Any,
+    _qkv_bias: Any,
+    _proj_weight: Any,
+    _proj_bias: Any,
+    mask: Any = None,
+    need_weights: bool = True,
+    average_attn_weights: bool = True,
+    *_args: Any,
+    **_kwargs: Any,
+) -> int:
+    if len(query) != 3 or query != key or key != value or query[-1] != embed_dim:
+        raise NotImplementedError("Fused MHA counts require dense batched self-attention with matching widths.")
+    batch, length, width = query
+    rows = batch * num_head * length
+    scores = rows * length
+    # Four dense projections, Q scaling, two products, stable softmax, masks,
+    # and optional returned-weight averaging. Bias follows native 2K dot counts.
+    return (
+        8 * batch * length * width**2
+        + batch * length * width
+        + 4 * batch * length**2 * width
+        + 5 * scores
+        - 2 * rows
+        + scores * (int(mask is not None) + int(need_weights and average_attn_weights))
+    )
+
+
+def _native_encoder(
+    src: Any,
+    embed_dim: int,
+    num_head: int,
+    qkv_weight: Any,
+    qkv_bias: Any,
+    proj_weight: Any,
+    proj_bias: Any,
+    use_gelu: bool,
+    _norm_first: bool,
+    _eps: float,
+    _norm1_weight: Any,
+    _norm1_bias: Any,
+    _norm2_weight: Any,
+    _norm2_bias: Any,
+    ff1_weight: Any,
+    _ff1_bias: Any,
+    _ff2_weight: Any,
+    _ff2_bias: Any,
+    mask: Any = None,
+    *_args: Any,
+    **_kwargs: Any,
+) -> int:
+    attention = _native_mha(
+        src, src, src, embed_dim, num_head, qkv_weight, qkv_bias, proj_weight, proj_bias, mask, False, False
+    )
+    rows = prod(src[:-1])
+    elements = prod(src)
+    hidden = rows * ff1_weight[0]
+    return attention + 4 * hidden * embed_dim + (gelu_flops(hidden) if use_gelu else hidden) + 18 * elements + 4 * rows
+
+
+def _cumsum(input_shape: Any, dim: int, *_args: Any, **_kwargs: Any) -> int:
+    width = input_shape[dim] if input_shape else 1
+    return prod(input_shape) - prod(input_shape) // width if width else 0
+
+
+def _extremum(input_shape: Any, *args: Any, out_shape: Any, **_kwargs: Any) -> int:
+    if args and isinstance(args[0], (list, tuple)):
+        return prod(out_shape)  # Elementwise max/min with a second tensor.
+    output = out_shape[0] if out_shape and isinstance(out_shape[0], (list, tuple)) else out_shape
+    return max(0, prod(input_shape) - prod(output))
+
+
+def _norm(input_shape: Any, order: Any = 2, *_args: Any, out_shape: Any, **kwargs: Any) -> int:
+    order = kwargs.get("ord", kwargs.get("p", order))
+    if order is None or order == 2:
+        return 2 * prod(input_shape)  # Squares, sum, square root.
+    if order in (1, float("inf"), -float("inf")):
+        return max(0, 2 * prod(input_shape) - prod(out_shape))
+    raise NotImplementedError("Norm FLOPs cover only orders 1, 2, and +/-infinity.")
+
+
+def _dot(input_shape: Any, *_args: Any, **_kwargs: Any) -> int:
+    return 2 * prod(input_shape)
+
+
+def _grouped_mm(input_shape: Any, weight: Any, *_args: Any, **_kwargs: Any) -> int:
+    if len(input_shape) != 2 or len(weight) != 3 or input_shape[-1] != weight[-2]:
+        raise NotImplementedError("Grouped matmul counts cover packed rows and equal-width expert matrices only.")
+    return 2 * prod(input_shape) * weight[-1]
+
+
+def _add_product(*_args: Any, out_shape: Any, value: Any = 1, **_kwargs: Any) -> int:
+    if len(_args) > 3:
+        value = _args[3]
+    return prod(out_shape) * (2 + int(value != 1))
+
+
+def _clamp(_input_shape: Any, minimum: Any = None, maximum: Any = None, *, out_shape: Any, **kwargs: Any) -> int:
+    return prod(out_shape) * (int(kwargs.get("min", minimum) is not None) + int(kwargs.get("max", maximum) is not None))
+
+
 FORMULAS = {
+    "_native_multi_head_attention": _native_mha,
+    "_transformer_encoder_layer_fwd": _native_encoder,
+    **dict.fromkeys(["cumsum", "cumsum_"], _cumsum),
+    **dict.fromkeys(["max", "min"], _extremum),
+    **dict.fromkeys(["norm", "linalg_vector_norm"], _norm),
+    **dict.fromkeys(["dot", "vdot", "mv"], _dot),
+    "_grouped_mm": _grouped_mm,
+    **dict.fromkeys(["addcmul", "addcmul_", "addcdiv", "addcdiv_"], _add_product),
+    **dict.fromkeys(["clamp", "clamp_"], _clamp),
     **{f"max_pool{rank}d_with_indices": partial(_pool, rank=rank, maximum=True) for rank in (2, 3)},
     **{f"avg_pool{rank}d": partial(_pool, rank=rank, maximum=False) for rank in (2, 3)},
     **{f"adaptive_max_pool{rank}d": partial(_adaptive_pool, maximum=True) for rank in (2, 3)},
@@ -254,6 +369,21 @@ FORMULAS = {
             "masked_fill_",
             "where",
             "abs",
+            "abs_",
+            "sin",
+            "sin_",
+            "cos",
+            "cos_",
+            "log",
+            "log_",
+            "reciprocal",
+            "reciprocal_",
+            "clamp_min",
+            "clamp_min_",
+            "clamp_max",
+            "clamp_max_",
+            "maximum",
+            "minimum",
         ],
         _elementwise,
     ),

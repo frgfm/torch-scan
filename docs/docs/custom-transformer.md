@@ -86,14 +86,13 @@ The module view and operator view answer different questions. Do not add their F
 | View | Result in this example | How to use it |
 | --- | --- | --- |
 | Module estimates | `complete` | Read `value` under the documented formulas. |
-| Operator FLOPs | `partial` | Read `known_value` as a lower bound. Check diagnostics for missing work. |
+| Operator FLOPs | `complete` on covered dense CPU paths | Read `value` under the operator convention. |
 | Encoder token dependencies | `complete`, relation `all` | Each encoder output token can depend on all three input tokens. |
 | Encoder spatial receptive field | `unavailable`, not applicable | Use token dependencies instead. |
 
-The head formula does not register an operator formula for `aten.sin`. This missing operator keeps operator FLOPs
-partial. Fused attention can add other gaps; the list depends on your PyTorch version. `strict=True` raises
-`IncompleteAnalysisError` and preserves the report, even when module estimates are complete. An operator override
-for sine can fill that operator's gap, but it cannot fill unrelated gaps.
+TorchScan counts `aten.sin` and dense CPU attention independently of the head handler. Other backends or
+uncounted operations can still make operator FLOPs partial. Check diagnostics; `strict=True` raises
+`IncompleteAnalysisError` and preserves the report when applicable work is incomplete.
 
 The head's receptive-field value of 1 describes its own token-local call. It does not mean that the final output
 depends on only one original input token. The encoder has already mixed information across tokens.

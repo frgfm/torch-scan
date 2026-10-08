@@ -592,7 +592,7 @@ def test_custom_registration_is_scoped_to_one_analysis_and_does_not_mutate_mappi
 def test_operator_overrides_are_scoped_to_one_analysis():
     def formula(input_shape, *, out_shape):
         assert input_shape == out_shape
-        return prod(out_shape)
+        return 2 * prod(out_shape)
 
     model = Sine()
     inputs = torch.ones(3)
@@ -602,10 +602,10 @@ def test_operator_overrides_are_scoped_to_one_analysis():
     after = _analyze(model, args=(inputs,), custom_modules=module_mapping)
 
     assert custom["totals"]["operator_flops"]["status"] == "complete"
-    assert custom["totals"]["operator_flops"]["value"] == 3
-    assert after["totals"]["operator_flops"]["status"] == "partial"
-    assert after["operator_flops"]["by_operator"] == {}
-    assert _diagnostics(after, operator="aten.sin")
+    assert custom["totals"]["operator_flops"]["value"] == 6
+    assert after["totals"]["operator_flops"]["status"] == "complete"
+    assert after["operator_flops"]["by_operator"] == {"aten.sin": 3}
+    assert not _diagnostics(after, operator="aten.sin")
     assert operator_mapping == {torch.ops.aten.sin: formula}
 
 

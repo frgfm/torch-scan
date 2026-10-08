@@ -135,7 +135,7 @@ def test_measure_flops_reports_uncounted_operator_as_partial():
     left = torch.ones(2, 3)
     right = torch.ones(3, 4)
 
-    report = measure_flops(lambda: torch.sin(left @ right))
+    report = measure_flops(lambda: torch.atan(left @ right))
 
     assert report["total"]["status"] == "partial"
     assert report["total"]["value"] is None
@@ -146,8 +146,8 @@ def test_measure_flops_reports_uncounted_operator_as_partial():
             "code": "uncounted_operator",
             "severity": "warning",
             "metric": "flops",
-            "operator": "aten.sin",
-            "message": "aten.sin was observed 1 time(s), but no FLOP formula is registered.",
+            "operator": "aten.atan",
+            "message": "aten.atan was observed 1 time(s), but no FLOP formula is registered.",
         }
     ]
 
@@ -805,13 +805,13 @@ def test_mixed_supported_and_unsupported_division_remains_partial():
 def test_unknown_functional_work_and_strict_mode():
     class Unsupported(nn.Module):
         def forward(self, inputs):
-            return torch.sin(inputs @ inputs)
+            return torch.atan(inputs @ inputs)
 
     model = Unsupported()
     report = crawl_module(model, args=(torch.ones(2, 2),))
     assert report["totals"]["operator_flops"]["status"] == "partial"
     assert report["totals"]["operator_flops"]["known_value"] == 16
-    assert any(item.get("operator") == "aten.sin" for item in report["diagnostics"])
+    assert any(item.get("operator") == "aten.atan" for item in report["diagnostics"])
     with pytest.raises(IncompleteAnalysisError):
         crawl_module(model, args=(torch.ones(2, 2),), strict=True)
 

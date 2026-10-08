@@ -126,12 +126,15 @@ Transpose example: `(2,4,3)`, Cout=6, groups=2, kernel=3, stride=2, padding=outp
 | Attention | Included work / limits |
 | --- | --- |
 | Batched MHA | Both layouts, unequal widths: projections/bias, Q scale, dense products, softmax, masks, dropout, optional head averaging. |
-| CPU SDPA fallback | Dense 4D, matching batch/heads and Q/K widths, equal K/V lengths, no dropout: native matrix work + score scale + softmax + masks. |
+| CPU SDPA fallback | Dense 4D, matching batches, query heads divisible by KV heads, matching Q/K widths and K/V lengths, no dropout: two dense products + score scale + softmax + masks. GQA uses the query head count. |
+| Native fused MHA | Dense batched self-attention: four native 2K projections, Q scaling, two products, stable softmax, masks and optional head averaging. Module MAC/DMA conventions stay separate. |
+| Native fused encoder | Self-attention plus two feed-forward projections, ReLU/exact GELU, two affine LayerNorm calls and two residual additions. |
 | Masks/math | Each explicit/causal mask costs one operation/score; boolean conversion counts stored entries. Dense products unchanged. Math can scale Q/K separately and use safe softmax; explicit scale changes values only. |
 | Native fused attention | Matrix core only; ancillary gaps keep counts partial, including PyTorch 2.1 CPU. |
 
 Reduction dtype: `dtype` > `out.dtype` > input. Fallback integer/boolean arithmetic, views/copies/fills/allocation, and
-Python constants are excluded. Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
+Python constants are excluded. For `addcmul` and `addcdiv`, tensor operands set the arithmetic dtype;
+the scalar coefficient and output buffer do not. Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
 stay incomplete without explicit caller overrides; native complex counts remain partial. The
 [extension tutorial](extensions.md#a-complete-custom-call) demonstrates a caller convention of six real FLOPs per
 complex multiply and two per complex add, with separate MAC and logical DMA conventions. Such overrides are scoped to
@@ -139,7 +142,10 @@ one analysis and are the caller's responsibility. Mixed-call diagnostics and str
 
 Exact native activation/softmax classes, GroupNorm, and optional RMSNorm require unchanged forwards, dense real inputs, and native
 parameter shapes. Empty batches count zero; empty normalized rows/groups are unsupported. PyTorch 2.1 omits RMSNorm.
-Scalar-power operator formulas cover only exponent two.
+Scalar-power operator formulas cover only exponent two. Sine/cosine/log/reciprocal cost one operation per value.
+Unary math and cumulative sums include in-place calls. Cumulative sums cost N minus row count.
+Norm orders 1/2/+inf/-inf cover absolute values or squares, reductions,
+and a square root for order 2; other orders remain partial. Packed-row grouped matmul counts `2 × input_elements × output_width`.
 
 Activation MACs are zero; norm MACs are `N(1+W)` for square-sum and optional affine terms. P=parameter elements.
 DMAs count staged logical reads/writes, including in-place writes, not hardware traffic. Nonempty calls use:
@@ -155,7 +161,7 @@ DMAs count staged logical reads/writes, including in-place writes, not hardware 
 GLU and these norms mark spatial metrics `not_applicable`, which alone does not fail strict analysis. GELU/SiLU are
 pointwise. Model-wide dependency graphs are not inferred; custom composites need handlers. SwiGLU has operator coverage.
 
-Remaining FLOP gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, fused operator MHA/encoder, specialized attention,
+Remaining FLOP gaps: MHA unbatched/empty sequences, `add_bias_kv`/`add_zero_attn`, specialized attention,
 unknown normalization/softmax backward, RNG/optimizer/embedding/gather, and unregistered operators.
 Transformer requires native stacks, `activation="relu"` / `"gelu"` or exact `F.relu` / `F.gelu`, and final LayerNorm/Identity/None. Adaptive/other pooling metrics retain legacy
 spatial approximations for receptive fields. Normalization kernel algorithms can differ; CPU/meta checks do not validate CUDA/MPS or latency.

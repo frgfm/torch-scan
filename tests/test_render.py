@@ -571,11 +571,11 @@ def test_svg_missing_metric_experiment_links_use_the_synthetic_group():
 @pytest.mark.parametrize("removed", [False, True])
 @pytest.mark.parametrize("output_format", ["html", "svg"])
 def test_comparison_visibly_preserves_baseline_diagnostics(removed, output_format):
-    class Sine(nn.Module):
+    class Arctangent(nn.Module):
         def forward(self, inputs):
-            return inputs.sin()
+            return inputs.atan()
 
-    before = crawl_module(nn.Sequential(nn.Linear(4, 4, bias=False), Sine()), (4,))
+    before = crawl_module(nn.Sequential(nn.Linear(4, 4, bias=False), Arctangent()), (4,))
     after = crawl_module(nn.Sequential() if removed else nn.Sequential(nn.Identity(), nn.Identity()), (4,))
     diagnostics = before["diagnostics"] + [
         item for item in before["operator_flops"]["diagnostics"] if item not in before["diagnostics"]
@@ -595,8 +595,8 @@ def test_comparison_visibly_preserves_baseline_diagnostics(removed, output_forma
     svg = ET.fromstring(source)  # ruff: ignore[suspicious-xml-element-tree-usage]
     visible = " ".join(element.text or "" for element in svg.iter() if element.tag.endswith("}text"))
     assert "Before diagnostics" in visible
-    assert "Module type not supported: Sine" in visible
-    assert "aten.sin was observed" in visible
+    assert "Module type not supported: Arctangent" in visible
+    assert "aten.atan was observed" in visible
     assert all(diagnostic["message"] in visible for diagnostic in diagnostics)
     if removed:
         assert "Before measurement diagnostics" in visible
@@ -838,13 +838,13 @@ def test_reused_module_is_one_tile_with_both_calls_and_parameters_counted_once()
 
 
 def test_partial_positive_tile_is_hatched_and_partial_zero_keeps_unscaled_visible_card():
-    class Sine(nn.Module):
+    class Arctangent(nn.Module):
         def forward(self, inputs):
-            return inputs.sin()
+            return inputs.atan()
 
-    report = crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Linear(8, 2, bias=False), Sine()), (4,))
+    report = crawl_module(nn.Sequential(nn.Linear(4, 8, bias=False), nn.Linear(8, 2, bias=False), Arctangent()), (4,))
     # Preserve a positive recorded lower bound while declaring its formula
-    # incomplete. The unsupported Sine gives a real partial-zero measurement.
+    # incomplete. The unsupported Arctangent gives a real partial-zero measurement.
     report["layers"][1]["metrics"]["module_flops"] = metric_result(
         status="partial", known_value=7, unit="FLOPs", scope="module_call", method="torchscan_module_formula"
     )
@@ -860,7 +860,7 @@ def test_partial_positive_tile_is_hatched_and_partial_zero_keeps_unscaled_visibl
     operators = root.find("section", id="operators")[0].text()
     assert "partial" in operators
     assert any(
-        "aten.sin" in item.text() for item in root.find("li") if item.attrs.get("id", "").startswith("diagnostic-")
+        "aten.atan" in item.text() for item in root.find("li") if item.attrs.get("id", "").startswith("diagnostic-")
     )
     for diagram in (_maps(html)[group["id"]], _maps(svg)[group["id"]]):
         positive_anchor = _tile_anchor(diagram, positive)

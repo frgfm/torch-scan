@@ -63,9 +63,9 @@ exclusions. A hint by itself has ambiguous native fast-path behavior and is unav
 These formulas describe evaluation calls; `crawl_module` temporarily selects evaluation mode and restores the
 original training flags.
 
-Existing FLOP formulas remain separate: native layer/stack module FLOPs retain the ReLU-only boundary. GELU can
-therefore have complete MACs/DMAs with unavailable module FLOPs. Operator FLOPs follow the actual dispatcher path
-and may be partial for fused operations. MACs do not come from dividing either FLOP view by two.
+Module FLOPs support `activation="relu"` / `"gelu"` or the exact `F.relu` / `F.gelu` functions. Activation module
+instances and wrapped functions still need overrides. Operator FLOPs follow the actual dispatcher path and may be
+partial for fused operations. MACs do not come from dividing either FLOP view by two.
 
 Unsupported types or configurations produce diagnostics and unavailable affected metrics. A supported dense MAC
 count is exact under this convention; an unsupported sparse/nested call is not assigned its dense upper bound as

@@ -16,6 +16,7 @@ from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
 from ._pooling import adaptive_kernel_size
+from ._primitives import PRIMITIVE_TYPES, gelu_flops, primitive_flops
 
 __all__ = ["module_flops"]
 
@@ -37,6 +38,8 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...]
         for value in (inputs or ())
     ):
         raise NotImplementedError("Module FLOP formulas cover real dense strided tensors only.")
+    if isinstance(module, PRIMITIVE_TYPES):
+        return primitive_flops(module, inputs[0])
     if isinstance(module, nn.Linear):
         return flops_linear(module, inputs)
     if isinstance(module, nn.ReLU):
@@ -71,8 +74,6 @@ def module_flops(module: Module | Callable[..., Tensor], inputs: Tuple[Any, ...]
         return flops_mha(module, inputs, out)
     if isinstance(module, nn.LayerNorm):
         return flops_layernorm(module, inputs)
-    if isinstance(module, nn.GroupNorm):
-        return flops_groupnorm(module, inputs)
     if type(module) is nn.TransformerEncoderLayer:
         return flops_transformer_encoderlayer(module, inputs)
     if type(module) is nn.TransformerDecoderLayer:
@@ -240,11 +241,7 @@ def flops_layernorm(module: nn.LayerNorm, inputs: Tuple[Tensor, ...]) -> int:
 
 def flops_groupnorm(module: nn.GroupNorm, inputs: Tuple[Tensor, ...]) -> int:
     """FLOPs estimation for `torch.nn.GroupNorm`."""
-    numel = inputs[0].numel()
-    if math.prod(inputs[0].shape[1:]) == 0:
-        raise NotImplementedError("GroupNorm FLOPs require a nonempty normalized group.")
-    rows = inputs[0].shape[0] * module.num_groups
-    return 6 * numel + 2 * rows + numel * int(module.weight is not None) + numel * int(module.bias is not None)
+    return primitive_flops(module, inputs[0])
 
 
 def flops_mha(module: nn.MultiheadAttention, inputs: Tuple[Any, ...], out: Any = None) -> int:
@@ -291,14 +288,16 @@ def flops_transformer_feedforward(
     module: nn.TransformerEncoderLayer | nn.TransformerDecoderLayer, inputs: Tuple[Tensor, ...]
 ) -> int:
     """FLOPs estimation for a Transformer layer feed-forward block."""
-    if module.activation is not F.relu:
-        raise NotImplementedError("Transformer FLOPs only support the default ReLU activation.")
-
     num_hidden = math.prod(inputs[0].shape[:-1]) * module.linear1.out_features
+    if module.activation is not F.relu and module.activation is not F.gelu:
+        raise NotImplementedError("Transformer FLOPs support only native ReLU or GELU (exact) activations.")
+    activation_flops = gelu_flops(num_hidden) if module.activation is F.gelu else num_hidden
     dropout_flops = (
         (2 if module.dropout.p < 1 else 1) * num_hidden if module.dropout.training and module.dropout.p > 0 else 0
     )
-    return flops_linear(module.linear1, inputs) + num_hidden + dropout_flops + flops_linear(module.linear2, inputs)
+    return (
+        flops_linear(module.linear1, inputs) + activation_flops + dropout_flops + flops_linear(module.linear2, inputs)
+    )
 
 
 def flops_transformer_encoderlayer(module: nn.TransformerEncoderLayer, inputs: Tuple[Any, ...]) -> int:

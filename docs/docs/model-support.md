@@ -94,6 +94,12 @@ prevent double-counting and cover fused paths that bypass child hooks. See [Nati
 for complete boundaries and a copyable example. Arbitrary custom/einops attention graphs remain outside this native
 support; recognized operator FLOPs alone do not supply their MAC/DMA or dependency estimates.
 
+### Modern activations and normalization
+
+The development version supports GELU (exact/tanh), SiLU, GLU, optional native RMSNorm, and GroupNorm MAC/DMA
+estimates. Use native classes with unchanged forwards; custom composites need handlers. See the
+[counting conventions](methodology.md#flop-conventions) for formulas and spatial limits.
+
 ## Custom formulas
 
 Supply custom operator formulas through `custom_mapping` on `crawl_module`, `summary`, or standalone `measure_flops`.

@@ -262,7 +262,7 @@ def test_layer_options(kind, option, macs, dmas):
     report = crawl_module(module, args=_args(kind, batch_first=batch_first))
     _assert_counts(report, module, macs, dmas)
     if option == "gelu":
-        assert report["totals"]["module_flops"]["status"] == "unavailable"
+        assert report["totals"]["module_flops"]["status"] == "complete"
 
 
 @pytest.mark.parametrize("option", ["add_bias_kv", "add_zero_attn", "unbatched", "empty_source"])

@@ -1,12 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (proposed, unreleased)
 
 These changes require the development version on `main`. They are not in the 0.2.0 package.
+Version 0.3.0 is the proposed next release, not a published package.
 
 ### Added
 
+- `measure_workload`: one-call selected resource measurements, readable ms/work-units per second/MiB output,
+  optional separate profiler evidence, and explicit fresh-process RSS (prepared in #176).
+
 - Checked workload comparisons with `compare_benchmarks` and offline HTML timing/memory/profile reports.
+- Reusable, no-download ResNet18 and small BERT performance experiments with an output check and explicit resource
+  boundaries (prepared in #175; CPU evidence, CUDA/MPS unavailable).
 - Per-child Linux/macOS peak RSS and separate native operator profiles with optional Chrome traces.
 - Workload timing with `measure_latency`: first-call time, warmed block-average latency/IQR, explicit work-unit
   throughput, CPU/CUDA/MPS synchronization, and JSON-serializable hardware/input metadata.
@@ -21,6 +27,8 @@ These changes require the development version on `main`. They are not in the 0.2
 
 ### Changed
 
+- Start documentation with model cost, workload resource use, checked optimization, and saved report consumption.
+- Clarify installation tracks, compatibility checks, and the relationship between model summaries and workload reports.
 - Correct convolution, linear, pooling, normalization, and attention counts. Keep incomplete counts and diagnostics
   visible (#165).
 

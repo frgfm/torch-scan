@@ -89,3 +89,35 @@ it does not include profiling. MPS GPU operator time or allocator peaks can be u
 The report preserves that limit. Omit `--rss` on Windows. Each device needs real matching hardware; results cannot
 predict another machine's latency or service throughput. The example records a microbenchmark, not a production
 speedup promise. Incomplete FLOP counts keep their lower bounds and diagnostics; they do not prevent timing.
+
+## Reuse the CNN and Transformer validation
+
+[Validation PR #175](https://github.com/frgfm/torch-scan/pull/175) extends this same script with torchvision ResNet18
+and the small BERT configuration from the repository's model tests. Until it is merged, run these commands from that
+PR's branch, `codex/validate-measurement-workflow`, with the `model-test` extras installed:
+
+```shell
+python scripts/benchmark_comparison.py --model resnet18 --device cpu --threads 2 --min-run-time 1 --reverse --rss --output /tmp/torchscan-resnet18
+python scripts/benchmark_comparison.py --model bert --device cpu --threads 2 --min-run-time 1 --reverse --rss --output /tmp/torchscan-bert
+```
+
+One recorded CPU run used an AMD EPYC 9V74 VM, Linux, Python 3.11.16, PyTorch 2.13.0+cpu,
+torchvision 0.28.0+cpu, transformers 5.15.1, FP32 without autocast, two intra-op threads and one inter-op thread.
+Weights were locally initialized with seed 0; both variants used the same resident inputs in eval/inference mode.
+The candidate ran first to check execution-order sensitivity. Both orders favored batching.
+
+| Workload | Per-sample median / IQR ms | Batched median / IQR ms | Throughput before → after | RSS MiB before → after | CPU tensor peak MiB before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ResNet18, four `[3,32,32]` images | 24.7072 / 1.2594 | 7.6609 / 0.7181 | 156.99 → 519.59 images/s | 318.69 → 329.12 | 44.89 → 53.72 |
+| BERT, four sequences of eight input tokens | 1.5963 / 0.2735 | 0.4485 / 0.0184 | 18,876.47 → 67,674.99 input tokens/s | 310.47 → 310.07 | 0.0187 → 0.0273 |
+
+The output checks passed at `rtol=1e-4`, `atol=1e-5` with finite outputs. BERT counts **input tokens**, not generated
+tokens. Its roughly 310 MiB RSS includes imports/loading, whereas its tensor peak covers a separate instrumented call.
+ResNet18's batched tensor peak rose with the oneDNN convolution path. Operator FLOPs remained partial for both models,
+so their FLOP deltas stayed unknown. Faster timing does not imply smaller memory use or complete compute coverage.
+
+Latency excludes imports, loading, transfers, and checks. Each RSS child includes initialization and 100 completed
+calls without instrumentation. Tensor peaks include observed resident tensors; profiler passes are separate from
+timing. MPS and real CUDA were unavailable. These results establish CPU runtime behavior and the declared output
+tolerance, not task accuracy, statistical significance, service throughput, or another machine's performance.
+The linked PR preserves exact configurations, raw measurement boundaries, discrepancy findings, and reproduction details.

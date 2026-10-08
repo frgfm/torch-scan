@@ -3,6 +3,15 @@
 The process subpackage exposes explicit workload memory measurement. Legacy `get_process_gpu_ram` was removed in v0.2
 because process snapshots and allocator deltas could not provide a truthful model measurement.
 
+| Resource | Boundary |
+| --- | --- |
+| CPU `pytorch_tensor_bytes` | PyTorch-tracked tensor/operator allocations observed during one callable pass. |
+| CUDA/MPS `pytorch_reserved_bytes` | Process-global PyTorch caching-allocator peak; allocated bytes are reported separately where available. |
+| Process RSS | Fresh child's whole lifetime, including Python/PyTorch imports and loading; Linux/macOS only. |
+
+These scopes can overlap, especially on unified memory. Do not add them together or equate them to total device use.
+Model parameter/buffer storage in `summary()` is a separate cost estimate.
+
 ## Measure one workload's peak memory
 
 `measure_peak_memory` runs an owner-provided callable exactly once. The callable owns the model, tensors, optimizer,

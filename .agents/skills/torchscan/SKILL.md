@@ -15,6 +15,9 @@ Use the smallest API that answers the request:
 - `crawl_module(...)`: JSON-serializable module report.
 - `summary(...)`: printed table plus the same report.
 - `mode="structure"` on either API: hierarchy, shapes, calls, parameters, and buffers with less overhead.
+- `measure_workload(workload, device=..., work_units=...)`: selected FLOPs, latency/throughput, and PyTorch memory
+  in a `BenchmarkReport` with a terminal summary. Optional `profile=True`; RSS needs an explicit `rss_command`.
+  Preview PR #176 until merged. Passes share caller state; use a repeatable workload.
 - `measure_flops(workload)`: operator FLOPs for one zero-argument workload call.
 - `measure_peak_memory(workload, device=...)`: backend-specific PyTorch peak memory.
 - `measure_peak_rss(command)`: Linux/macOS child-process lifetime RSS, including loading and imports.

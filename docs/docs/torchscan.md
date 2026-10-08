@@ -1,7 +1,12 @@
 # `torchscan`
 
-This reference follows the development version on `main`. Read [Model and input support](model-support.md) before
-using non-trivial calls and [Understanding results](metrics.md) before comparing measurements.
+This reference covers development APIs, including the #176 preview; [installation](installing.md) distinguishes it from
+stable 0.2.0. Start with the [runnable quickstart](index.md) to inspect cost, measure a workload, check a change, and
+consume the report. Read [Model and input support](model-support.md) for non-trivial calls.
+
+`summary` and `crawl_module` return an `AnalysisReport` for an evaluation forward. Workload APIs preserve the callable's
+execution state and produce separate `BenchmarkReport` evidence. Timing is clean; FLOPs, scoped memory, and profiler
+evidence use separate passes. Check statuses, methods, and scopes before comparing or consuming numbers.
 
 ## Model analysis
 
@@ -23,14 +28,18 @@ See [the extension tutorial](extensions.md) for complete examples and subtree ow
 
 ::: torchscan.measure_flops
 
-## Report comparison
+## Model cost comparison
 
 ::: torchscan.compare_reports
 
 ## Workload timing
 
-This API requires the unreleased development version. See [Latency and throughput](metrics.md#latency-and-throughput)
-for a runnable example and measurement boundaries.
+`measure_workload` assembles selected FLOPs, timing/throughput, and scoped memory into one report with a readable
+terminal summary. `profile=True` adds a separate instrumented pass; RSS requires an explicit `rss_command`.
+Use `metrics=("latency", "throughput")` for timing only and `print_summary=False` for automation.
+These APIs require the unreleased development version. See [Latency and throughput](metrics.md#latency-and-throughput)
+for work-unit throughput, repeated-call behavior, and measurement boundaries. Configure model state, device placement,
+precision, and threads yourself. The `inputs` argument records metadata; it is not forwarded to the workload.
 
 ::: torchscan.measure_workload
 
@@ -52,7 +61,10 @@ See [workload diagnostics](workload-diagnostics.md) for separate process RAM and
 
 ::: torchscan.ProfileReport
 
-## Offline visual reports
+## Consume saved reports
+
+Serialize returned mappings with `json.dumps`. `render_report` renders model or workload HTML without remeasurement;
+model reports also support SVG. A saved comparison displays its recorded output check without rerunning it.
 
 ::: torchscan.render_report
 

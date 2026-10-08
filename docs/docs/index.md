@@ -1,77 +1,99 @@
-# TorchScan: truthful PyTorch model analysis
+# Inspect cost. Measure your workload. Check the change.
 
-TorchScan produces human-readable summaries and JSON-serializable reports for PyTorch models. Reports include model
-structure, parameters, input metadata, module estimates, and operator FLOPs. Each metric is explicitly marked
-`complete`, `partial`, or `unavailable`.
+TorchScan helps you understand a PyTorch model's cost, measure actual resource use on your hardware, check an
+optimization, and save a report you can inspect or automate. Every metric carries its status, method, and scope.
+Unsupported work stays visible as `partial` or `unavailable`.
 
-## 60-second quickstart
+## Start with your workload
 
-Install the development version documented here:
+The one-call measurement API is prepared in [PR #176](https://github.com/frgfm/torch-scan/pull/176).
+Until it is merged, install this development preview:
 
 ```shell
-pip install git+https://github.com/frgfm/torch-scan.git
+python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@codex/workload-measurement"
 ```
 
-Inspect a model on CPU:
+Use a callable that performs the same work as your application. This small CPU example uses the locally initialized
+linear model from the [checked comparison example](benchmark-comparison.md); it downloads no weights:
 
 ```python
 import json
+from pathlib import Path
 
-import torch.nn as nn
-from torchscan import crawl_module, summary
+import torch
+from torchscan import measure_workload, render_report
 
-model = nn.Sequential(nn.Conv2d(3, 8, 3), nn.ReLU())
+torch.set_num_threads(1)
+torch.manual_seed(0)
+model = torch.nn.Linear(128, 128).eval()
+inputs = torch.randn(32, 128)
 
-report = summary(model, (3, 32, 32))
-json.dumps(report)
 
-# Fail instead if any requested module metric is incomplete.
-strict_report = crawl_module(model, (3, 32, 32), strict=True)
+@torch.inference_mode()
+def workload():
+    return model(inputs)
+
+
+report = measure_workload(workload, device="cpu", inputs=inputs, work_units=32, work_unit="samples")
+Path("workload.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+Path("workload.html").write_text(render_report(report), encoding="utf-8")
 ```
 
-`input_shape` excludes the batch dimension. TorchScan creates a synthetic batch of one, temporarily switches all
-modules to evaluation mode, runs with gradients disabled, and restores each module's original training state.
+One observed run (AMD EPYC 9V74 CPU, Linux, Python 3.11.16, PyTorch 2.13.0+cpu, TorchScan 0.2.0.dev0 (PR #176), FP32, one PyTorch thread):
 
-## Use real calls when shape is not enough
-
-Pass complete positional and keyword arguments for realistic inputs:
-
-```python
-report = crawl_module(
-    model,
-    args=(input_ids,),
-    kwargs={"attention_mask": attention_mask, "return_dict": True},
-)
+```text
+Workload on cpu (1 PyTorch threads)
+  First call: 0.449 ms
+  Latency (block median): 0.018 ms
+  Latency IQR: 0.000 ms
+  Throughput: 1,734,801.967 samples/s
+  Operator FLOPs: partial (known lower bound: 1,048,576.000 FLOPs)
+  PyTorch peak memory: 0.094 MiB
+    Scope: PyTorch tracked CPU tensors
+  Process peak RSS: unavailable (not requested)
+  Profiler: not requested (separate instrumented pass)
+  flops: aten.linear was observed 1 time(s), but no FLOP formula is registered.
 ```
 
-TorchScan forwards values unchanged and records only recursive metadata. Tensor values and local paths are never
-stored in the report.
+Read `workload.html` in a browser or load the JSON directly. Shapes/dtypes are retained as metadata, not tensor values.
+`work_units=32` says one invocation completes 32 samples; tokens or other units must count actual completed work.
+Numbers depend on your machine, inputs, software, precision, and thread settings.
 
-## Choose the right entry point
+## How this relates to `summary()`
 
-| Need | API |
+`summary(model, args=(inputs,))` prints a module table and returns an `AnalysisReport`: parameters, storage, shapes,
+module-formula counts, and a separate operator FLOP view for an evaluation forward. It disables gradients temporarily
+and restores each module's original training flag. Use `mode="structure"` for shapes and parameters alone, and
+`strict=True` when incomplete requested model metrics must stop automation.
+
+Workload collectors measure the callable you supply and return `BenchmarkReport` evidence. You own model state,
+gradient mode, precision, inputs, device placement, preprocessing, and transfers. Timing repeats the callable;
+training steps must manage changing state themselves. Configure threads before model construction.
+
+Model storage is not peak memory, and theoretical FLOPs do not predict latency or RSS. Keep model inspection and
+workload measurements together, with their distinct methods and boundaries. Never add module and operator FLOPs.
+
+## Choose the next action
+
+| Outcome | Use |
 | --- | --- |
-| Printable model table plus structured result | `summary(...)` |
-| Structured module report only | `crawl_module(...)` |
-| Operator FLOPs for an arbitrary forward or training workload | `measure_flops(workload)` |
-| Peak PyTorch memory for one owner-controlled workload | `measure_peak_memory(workload, device=...)` |
-| Pure before/after report comparison | `compare_reports(before, after)` |
+| Inspect model cost | `summary` for a table; `crawl_module` for JSON only. Use real `args`/`kwargs` for masks or nested inputs. |
+| Measure actual resource use | Workload timing, separate operator FLOPs and scoped memory, explicit fresh-process RSS, optional profiler evidence. |
+| Check one optimization | `compare_benchmarks(before, after, check=...)`; your callback defines output tolerance. Use `compare_reports` for model estimates. |
+| Consume the evidence | Serialize the mapping as JSON; `render_report` creates offline HTML. Model reports also support SVG. |
 
-## Read results safely
+Use `value` only for `complete` metrics. A `partial` metric exposes `known_value` as a lower bound; preserve its
+diagnostics. An `unavailable` result is missing evidence, not zero. Do not scrape terminal text.
 
-Do not consume a number without checking its status:
+Clean warmed latency/IQR describes block averages, not request p95. First-call timing excludes imports and loading.
+Process RSS includes the fresh child's whole lifetime. CPU tensor peaks and accelerator allocator peaks cover
+separate scopes; do not sum them with RSS. Profiler timings include instrumentation. A passing output check is not
+task accuracy, and IQR labels do not establish statistical significance. CUDA/MPS claims require real matching hardware.
 
-- `complete` means the documented method covered the requested scope.
-- `partial` exposes only a known lower bound and diagnostics for uncounted work.
-- `unavailable` means the method could not produce the metric for this execution.
+## Continue with your model
 
-These are theoretical measurements for one execution. They are not latency, throughput, process RSS, energy use, or
-proof that a model fits a target device.
-
-## Next steps
-
-- Automating inspection? Start with the [Agent quickstart](agent-quickstart.md).
-- Supplying masks, scalars, or nested inputs? Read [Model and input support](model-support.md).
-- Comparing research results? Read [Methodology](methodology.md) and [Understanding results](metrics.md).
-- Upgrading from 0.1? Follow the [v0.2 migration guide](migration-v02.md).
-- Need exact fields? Use the [Report schema](report-schema.md) and [API reference](torchscan.md).
+- [Installation](installing.md): stable 0.2.0, development features, and supported compatibility checks.
+- [Checked performance experiments](benchmark-comparison.md): run a baseline and controlled change, check outputs, save evidence.
+- [Workload memory and bottlenecks](workload-diagnostics.md): fresh-process RSS and separate profiler passes.
+- [Agent quickstart](agent-quickstart.md): automate the same workflow using metric status and owner-supplied budgets.
+- [Model and input support](model-support.md), [Understanding results](metrics.md), and [API reference](torchscan.md).

@@ -1,10 +1,9 @@
 import json
 
-import pytest
 import torch
 
 from scripts.custom_transformer import HEAD_HANDLER, CustomTransformer, SineHead, main
-from torchscan import IncompleteAnalysisError, crawl_module
+from torchscan import crawl_module
 
 
 def test_custom_transformer_example(tmp_path, monkeypatch):
@@ -16,18 +15,16 @@ def test_custom_transformer_example(tmp_path, monkeypatch):
     for name, value in (("module_flops", 1278), ("macs", 528), ("dmas", 962), ("parameters", 180)):
         assert report["totals"][name]["status"] == "complete"
         assert report["totals"][name]["value"] == value
-    assert report["totals"]["operator_flops"]["status"] == "partial"
+    assert report["totals"]["operator_flops"]["status"] == "complete"
 
 
 def test_custom_transformer_mask_and_ownership():
-    with pytest.raises(IncompleteAnalysisError) as error:
-        crawl_module(
-            CustomTransformer(),
-            kwargs={"source": torch.ones(1, 3, 4), "src_mask": torch.ones(3, 3, dtype=torch.bool).triu(1)},
-            custom_modules={SineHead: HEAD_HANDLER},
-            strict=True,
-        )
-    report = error.value.report
+    report = crawl_module(
+        CustomTransformer(),
+        kwargs={"source": torch.ones(1, 3, 4), "src_mask": torch.ones(3, 3, dtype=torch.bool).triu(1)},
+        custom_modules={SineHead: HEAD_HANDLER},
+        strict=True,
+    )
     for name, value in (("module_flops", 1296), ("macs", 528), ("dmas", 1007)):
         assert report["totals"][name]["status"] == "complete"
         assert report["totals"][name]["value"] == value
@@ -37,7 +34,5 @@ def test_custom_transformer_mask_and_ownership():
     assert set(rows["head.projection"]["metrics"]) == {"calls"}
     assert rows["head.projection"]["metric_owners"]["macs"] == {"path": "head", "call_index": 0}
     operators = report["totals"]["operator_flops"]
-    assert operators["status"] == "partial"
-    assert operators["value"] is None
-    assert operators["known_value"] is not None
-    assert any(item.get("operator") == "aten.sin" for item in report["diagnostics"])
+    assert operators["status"] == "complete"
+    assert operators["value"] is not None

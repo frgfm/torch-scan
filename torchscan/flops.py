@@ -124,19 +124,29 @@ class _OperatorRecorder(TorchDispatchMode):
         packet = getattr(func, "_overloadpacket", func)
         self.counts[packet] += 1
         leaves = tree_flatten((args, kwargs or {}))[0]
+        # Fused products cast scalar coefficients to the input arithmetic dtype.
+        operands = leaves
+        if packet in {torch.ops.aten.addcmul, torch.ops.aten.addcmul_, torch.ops.aten.addcdiv, torch.ops.aten.addcdiv_}:
+            operands = args[:3]
         self.floating[packet] = any(
             (isinstance(value, torch.Tensor) and (value.is_floating_point() or value.is_complex()))
             or isinstance(value, (float, complex))
             or (isinstance(value, torch.dtype) and (value.is_floating_point or value.is_complex))
-            for value in leaves
+            for value in operands
         )
         self.complex[packet] = any(
             (isinstance(value, torch.Tensor) and value.is_complex())
             or isinstance(value, complex)
             or (isinstance(value, torch.dtype) and value.is_complex)
-            for value in leaves
+            for value in operands
         )
-        if packet in {torch.ops.aten.sum, torch.ops.aten.mean}:
+        if packet in {
+            torch.ops.aten.sum,
+            torch.ops.aten.mean,
+            torch.ops.aten.cumsum,
+            torch.ops.aten.cumsum_,
+            torch.ops.aten.linalg_vector_norm,
+        }:
             # Reductions cast before arithmetic; an out buffer also sets the dtype.
             dtype = (kwargs or {}).get("dtype")
             out = (kwargs or {}).get("out")
@@ -153,6 +163,14 @@ class _OperatorRecorder(TorchDispatchMode):
             torch.ops.aten.rsqrt,
             torch.ops.aten.sigmoid,
             torch.ops.aten.tanh,
+            torch.ops.aten.sin,
+            torch.ops.aten.sin_,
+            torch.ops.aten.cos,
+            torch.ops.aten.cos_,
+            torch.ops.aten.log,
+            torch.ops.aten.log_,
+            torch.ops.aten.reciprocal,
+            torch.ops.aten.reciprocal_,
         }:
             self.floating[packet] = True  # Transcendentals also promote integer inputs.
         if packet in {torch.ops.aten.masked_fill, torch.ops.aten.masked_fill_}:

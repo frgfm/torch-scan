@@ -15,7 +15,7 @@ from typing import Any
 
 from torch.utils.flop_counter import sdpa_flop_count
 
-from .modules._primitives import gelu_flops, rmsnorm_rows
+from .modules._primitives import gelu_flops, rmsnorm_rows, softmax_counts
 
 
 def _elementwise(*_args: Any, out_shape: Any, cost: int = 1, **_kwargs: Any) -> int:
@@ -46,9 +46,35 @@ def _add(*_args: Any, out_shape: Any, alpha: float = 1, **_kwargs: Any) -> int:
     return prod(out_shape) * (1 + int(alpha != 1))
 
 
-def _softmax(input_shape: Any, dim: int, *_args: Any, out_shape: Any, **_kwargs: Any) -> int:
-    width = input_shape[dim] if input_shape else 1
-    return 0 if width == 0 else 5 * prod(out_shape) - 2 * (prod(out_shape) // width)
+def _softmax(input_shape: Any, dim: int, *_args: Any, **_kwargs: Any) -> int:
+    return softmax_counts(tuple(input_shape), dim)[0]
+
+
+def _log_softmax(input_shape: Any, dim: int, *_args: Any, **_kwargs: Any) -> int:
+    return softmax_counts(tuple(input_shape), dim, logarithmic=True)[0]
+
+
+def _activation(input_shape: Any, *_args: Any, cost: int, **_kwargs: Any) -> int:
+    # Input geometry also handles kernels returning auxiliary buffers.
+    return cost * prod(input_shape)
+
+
+def _elu(input_shape: Any, _alpha: Any = 1, scale: Any = 1, input_scale: Any = 1, **_kwargs: Any) -> int:
+    return (6 + int(scale != 1) + int(input_scale != 1)) * prod(input_shape)
+
+
+def _rrelu(
+    input_shape: Any,
+    _noise: Any,
+    _lower: Any = 0.125,
+    _upper: Any = 1 / 3,
+    training: bool = False,
+    *_args: Any,
+    **_kwargs: Any,
+) -> int:
+    if training:
+        raise NotImplementedError("RReLU FLOPs cover evaluation calls only.")
+    return 4 * prod(input_shape)
 
 
 def _safe_softmax(*args: Any, out_shape: Any, **kwargs: Any) -> int:
@@ -163,6 +189,27 @@ def _cpu_attention(
 
 
 FORMULAS = {
+    **{
+        name + suffix: partial(_activation, cost=cost)
+        for name, cost in {
+            "hardtanh": 2,
+            "leaky_relu": 4,
+            "hardsigmoid": 4,
+            "hardswish": 5,
+            "mish": 10,
+            "softplus": 7,
+            "_prelu_kernel": 4,
+            "prelu": 4,
+            "celu": 7,
+            "log_sigmoid_forward": 7,
+            "hardshrink": 3,
+            "softshrink": 5,
+            "threshold": 2,
+        }.items()
+        for suffix in ("", "_")
+    },
+    **dict.fromkeys(["elu", "elu_"], _elu),
+    **dict.fromkeys(["rrelu_with_noise", "rrelu_with_noise_"], _rrelu),
     **dict.fromkeys(["gelu", "gelu_"], _gelu),
     **dict.fromkeys(["silu", "silu_", "glu"], partial(_elementwise, cost=5)),
     **dict.fromkeys(["sigmoid", "sigmoid_"], partial(_elementwise, cost=4)),
@@ -185,12 +232,14 @@ FORMULAS = {
             "masked_fill",
             "masked_fill_",
             "where",
+            "abs",
         ],
         _elementwise,
     ),
     "sum": _sum,
     "mean": _mean,
     "_softmax": _softmax,
+    "_log_softmax": _log_softmax,
     "_safe_softmax": _safe_softmax,
     "native_layer_norm": _layer_norm,
     "native_group_norm": _group_norm,

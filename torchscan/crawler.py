@@ -28,7 +28,7 @@ from .extensions import (
 )
 from .flops import FlopReport, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
-from .modules._primitives import PRIMITIVE_TYPES
+from .modules._primitives import POINTWISE_TYPES, PRIMITIVE_TYPES
 from .modules._token_dependencies import module_token_dependencies
 from .modules._transformer import dmas_attention, macs_attention, validate_native_attention, validate_native_call
 from .report import AnalysisReport, Diagnostic, IncompleteAnalysisError, LayerReport, MetricResult, metric_result
@@ -53,7 +53,7 @@ def _builtin_module_handlers() -> Mapping[type[Module], ModuleHandler]:
     handler = ModuleHandler(_native_module_estimates, subtree_metrics=frozenset(_METRIC_UNITS))
     handlers: dict[type[Module], ModuleHandler] = dict.fromkeys(_NATIVE_TRANSFORMERS, handler)
     # Gates and norms have no scalar spatial field; activations are pointwise.
-    nonspatial = (kind for kind in PRIMITIVE_TYPES if kind not in (nn.GELU, nn.SiLU))
+    nonspatial = (kind for kind in PRIMITIVE_TYPES if kind not in POINTWISE_TYPES)
     handlers.update(dict.fromkeys(nonspatial, ModuleHandler(_nonspatial_estimates)))
     return handlers
 

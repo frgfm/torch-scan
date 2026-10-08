@@ -13,6 +13,8 @@ from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.conv import _ConvNd, _ConvTransposeNd
 from torch.nn.modules.pooling import _AdaptiveAvgPoolNd, _AdaptiveMaxPoolNd, _AvgPoolNd, _MaxPoolNd
 
+from ._primitives import POINTWISE_TYPES
+
 __all__ = ["module_rf"]
 
 
@@ -48,6 +50,7 @@ def module_rf(module: Module, inp: Tensor, out: Tensor) -> Tuple[float, float, f
             _BatchNorm,
             nn.Dropout,
             nn.Linear,
+            *POINTWISE_TYPES,
         ),
     ):
         return 1.0, 1.0, 0.0

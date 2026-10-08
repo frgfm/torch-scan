@@ -4,7 +4,7 @@ import sys
 
 import torch
 
-from torchscan import measure_workload, render_report
+from torchscan import compare_benchmarks, measure_workload, render_report
 
 
 def test_workload_evidence_round_trip(capsys):
@@ -72,3 +72,17 @@ def test_workload_evidence_round_trip(capsys):
         for metric in skipped["totals"].values()
     )
     assert "unavailable" in render_report(skipped)
+
+    def copying_workload():
+        inputs.sin()
+        return inputs.clone()
+
+    options = {"device": "cpu", "inputs": inputs, "min_run_time": 0.001, "min_repeats": 2, "print_summary": False}
+    before = measure_workload(copying_workload, **options)
+    after = measure_workload(lambda: inputs, **options)
+    comparison = compare_benchmarks(before, after, check=lambda: torch.testing.assert_close(copying_workload(), inputs))
+    assert comparison["output_check"] == "passed"
+    assert comparison["totals"]["latency"]["status"] == "complete"
+    assert comparison["totals"]["peak_memory"]["status"] == "unavailable"
+    assert comparison["totals"]["peak_memory"]["delta"] is None
+    assert "aten.sin" in render_report(comparison)

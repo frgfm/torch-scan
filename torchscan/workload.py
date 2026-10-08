@@ -195,17 +195,17 @@ def measure_workload(
         )
         if memory is not None:
             report["memory"] = memory
-            report["totals"]["peak_memory"] = metric_result(
-                status="complete",
-                value=memory["peak_bytes"],
-                unit="bytes",
-                scope=memory["metric"],
-                method="torch.profiler.memory_timeline"
-                if normalized.type == "cpu"
-                else "torch.cuda.max_memory_reserved"
-                if normalized.type == "cuda"
-                else "torch.accelerator.memory.max_memory_reserved",
-            )
+        report["totals"]["peak_memory"] = metric_result(
+            status="unavailable" if memory is None else "complete",
+            value=None if memory is None else memory["peak_bytes"],
+            unit="bytes",
+            scope="pytorch_tensor_bytes" if normalized.type == "cpu" else "pytorch_reserved_bytes",
+            method="torch.profiler.memory_timeline"
+            if normalized.type == "cpu"
+            else "torch.cuda.max_memory_reserved"
+            if normalized.type == "cuda"
+            else "torch.accelerator.memory.max_memory_reserved",
+        )
     report["context"]["profile_status"] = "not_requested"
     if profile:
         evidence = _collect(

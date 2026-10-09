@@ -3,6 +3,9 @@
 The process subpackage exposes explicit workload memory measurement. Legacy `get_process_gpu_ram` was removed in v0.2
 because process snapshots and allocator deltas could not provide a truthful model measurement.
 
+CPU tracked tensors, accelerator allocator peaks, process RSS, and model storage in `summary()` have distinct scopes.
+They can overlap, especially on unified memory; do not sum them or equate them to total device use.
+
 ## Measure one workload's peak memory
 
 `measure_peak_memory` runs an owner-provided callable exactly once. The callable owns the model, tensors, optimizer,

@@ -104,3 +104,29 @@ The controlled change replaces per-sample forwards and output concatenation with
 resident inputs. Timing excludes loading, transfers, and output checks and finishes before diagnostic passes.
 Configuration and measurement boundaries are saved in the comparison. Use `--reverse` in a fresh process to check
 order effects, and keep generated JSON/HTML outside the checkout, as in the commands above.
+
+## Recorded CPU validation
+
+[Validation PR #175](https://github.com/frgfm/torch-scan/pull/175) records this experiment.
+
+One recorded CPU run used an AMD EPYC 9V74 VM, Linux, Python 3.11.16, PyTorch 2.13.0+cpu,
+torchvision 0.28.0+cpu, transformers 5.15.1, FP32 without autocast, two intra-op threads and one inter-op thread.
+Weights were locally initialized with seed 0; both variants used the same resident inputs in eval/inference mode.
+Both timings complete all four samples; the baseline loops over individual forwards and concatenates their outputs.
+The candidate ran first to check order sensitivity; both orders favored batching.
+
+| Workload | Loop median / IQR ms | Batched median / IQR ms | Throughput before → after | RSS MiB before → after | CPU tensor peak MiB before → after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ResNet18, four `[3,32,32]` images | 24.7072 / 1.2594 | 7.6609 / 0.7181 | 156.99 → 519.59 images/s | 318.69 → 329.12 | 44.89 → 53.72 |
+| BERT, four sequences of eight input tokens | 1.5963 / 0.2735 | 0.4485 / 0.0184 | 18,876.47 → 67,674.99 input tokens/s | 310.47 → 310.07 | 0.0187 → 0.0273 |
+
+The output checks passed at `rtol=1e-4`, `atol=1e-5` with finite outputs. BERT counts **input tokens**, not generated
+tokens. Its roughly 310 MiB RSS includes imports/loading, whereas its tensor peak covers a separate instrumented call.
+ResNet18's batched tensor peak rose with the oneDNN convolution path. Operator FLOPs remained partial for both models,
+so their FLOP deltas stayed unknown. Faster timing does not imply smaller memory use or complete compute coverage.
+
+Latency excludes imports, loading, transfers, and checks. Each RSS child includes initialization and 100 completed
+calls without instrumentation. Tensor peaks include observed resident tensors; profiler passes are separate from
+timing. MPS and real CUDA were unavailable. These results establish CPU runtime behavior and the declared output
+tolerance, not task accuracy, statistical significance, service throughput, or another machine's performance.
+The linked PR preserves exact configurations, raw measurement boundaries, discrepancy findings, and reproduction details.

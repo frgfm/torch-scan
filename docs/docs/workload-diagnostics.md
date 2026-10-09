@@ -1,7 +1,26 @@
 # Workload memory and bottlenecks
 
-These APIs require the development version. Keep diagnostic runs separate from clean
-[`measure_latency`](metrics.md#latency-and-throughput) measurements.
+These APIs require the development version.
+
+## Measure a workload in one call
+
+[`measure_workload`](torchscan.md#torchscan.measure_workload) collects FLOPs, latency, throughput, and PyTorch peak
+memory. It prints ms, samples/s, and MiB and returns a `BenchmarkReport` for `json.dumps` and `render_report`.
+See the [runnable example](index.md#start-with-your-workload).
+
+Set `work_units` to samples per call; batch size is never inferred. Use `work_unit="tokens"` for tokens/s,
+`metrics=("latency", "throughput")` for timing only, or `print_summary=False` for quiet collection.
+Unrequested metrics are unavailable with method `not_requested`. Collector limitations retain diagnostics;
+partial FLOPs retain a known lower bound. Workload errors propagate.
+
+Timing runs first; FLOPs, memory, and optional `profile=True` each invoke the same callable once more.
+All passes share caller state. You control evaluation mode, placement, precision, gradients, and threads.
+Use a repeatable callable and keep threads fixed. Latency describes block averages, not request percentiles;
+first-call time includes all callable work. Use the individual collectors for custom formulas or trace export.
+
+RSS requires `rss_command=[sys.executable, "my_workload.py"]`. That fresh command owns its configuration and must
+exit; no deadline is added. RSS covers its whole lifetime, including imports and loading. It has a different scope
+from backend-specific PyTorch peak memory. The command's settings cannot be inferred from the callable.
 
 ## Whole-process peak RSS
 

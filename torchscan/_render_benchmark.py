@@ -12,6 +12,20 @@ from ._render_assets import STYLE
 from .benchmark_compare import _context_changes, _latency_change, _matching_context, _validate_benchmark
 from .compare import _diff_metrics
 from .render import _diagnostics, _json_tree, _metadata, _metric_table, _number, _object, _string
+from .utils import _display_unit
+from .workload import _LABELS, _summary
+
+
+def _measurements(report: Mapping[str, Any]) -> str:
+    diagnostics = report.get("diagnostics", [])
+    _diagnostics(diagnostics, "benchmark.diagnostics")
+    return (
+        f"<pre>{escape(_summary(report))}</pre><details><summary>Exact values, methods, and diagnostics</summary>"
+        + _metric_table(report["totals"])
+        + "<ul>"
+        + "".join(f"<li>{escape(item['message'])}</li>" for item in diagnostics)
+        + "</ul></details>"
+    )
 
 
 def _profile(report: Mapping[str, Any]) -> str:
@@ -77,7 +91,7 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
         changes = _context_changes(before, after)
         if report.get("context_changes") != changes:
             raise ValueError("Context changes do not match the stored measurements.")
-    body = _metric_table(after["totals"])
+    body = _measurements(after)
     verdict = "Single workload measurement"
     if before is not None:
         verdict = (
@@ -88,12 +102,14 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
         rows = []
         for name, difference in report["totals"].items():
             delta = difference["delta"]
-            text = "Unavailable" if delta is None else f"{_number(delta, 'delta'):+.5g}"
-            unit = (difference["after"] or difference["before"])["unit"]
-            rows.append(f"<tr><th scope='row'>{escape(name)}</th><td>{text}</td><td>{escape(unit)}</td></tr>")
+            scale, unit = _display_unit((difference["after"] or difference["before"])["unit"])
+            text = "Unavailable" if delta is None else f"{_number(delta, 'delta') * scale:+.5g}"
+            rows.append(
+                f"<tr><th scope='row'>{escape(_LABELS.get(name, name))}</th><td>{text}</td><td>{escape(unit)}</td></tr>"
+            )
         body = (
             "<h3>Baseline</h3>"
-            + _metric_table(before["totals"])
+            + _measurements(before)
             + "<h3>Candidate</h3>"
             + body
             + "<h3>Measured changes</h3><div class='table-scroll'><table><caption>Candidate minus baseline</caption>"

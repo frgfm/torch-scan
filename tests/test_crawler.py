@@ -35,7 +35,7 @@ def test_crawl_module_report_and_summary(capsys):
     assert returned == report
     output = capsys.readouterr().out
     for line in (
-        "Layer     Type      Output Shape      Param #    Trainable",
+        "Layer     Type      Output Shape      Params + buffers    Trainable",
         "conv2d    Conv2d    (1, 8, 30, 30)    224",
         "Total params: 224",
         "Module-formula forward FLOPs: 388.80 kFLOPs",

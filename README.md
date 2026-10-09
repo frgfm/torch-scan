@@ -18,235 +18,115 @@
   </a>
 </p>
 
-TorchScan inspects a PyTorch model and returns a JSON-serializable report of its structure, parameters, inputs,
-module estimates, and operator FLOPs. Every metric says whether it is complete, partial, or unavailable, so an
-unsupported operation cannot masquerade as zero.
+TorchScan helps you **inspect model cost, measure actual resource use, check an optimization, and consume the report**.
+Use your own model and inputs. Save JSON or offline HTML; metrics carry a method, scope, and completeness status.
 
-## Quickstart
+## Measure your workload
 
-```python
-import torch.nn as nn
-from torchscan import crawl_module, summary
+The workload timing and offline report APIs require the development version. The current PyPI release is **0.2.0**;
+**0.3.0 is proposed and unreleased**. The one-call API is prepared in [PR #176](https://github.com/frgfm/torch-scan/pull/176).
+Until it is merged, install its preview branch after installing PyTorch for your hardware:
 
-model = nn.Conv2d(3, 8, 3)
-
-# Print the human-readable table and receive the same structured report.
-report = summary(model, (3, 32, 32))
-
-# Or collect the report without printing the table.
-report = crawl_module(model, (3, 32, 32), strict=True)
+```shell
+python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@codex/workload-measurement"
 ```
 
-`summary` keeps the familiar terminal UX while returning the structured report:
-
-```text
-__________________________________________________________
-Layer     Type      Output Shape      Param #    Trainable
-==========================================================
-conv2d    Conv2d    (1, 8, 30, 30)    224        True
-==========================================================
-Trainable params: 224
-Non-trainable params: 0
-Total params: 224
-----------------------------------------------------------
-Model size (params + buffers): 0.00 Mb
-----------------------------------------------------------
-Module-formula forward FLOPs: 388.80 kFLOPs
-Multiply-Accumulations: 194.40 kMACs
-Direct memory accesses: 201.82 kDMAs
-Operator forward FLOPs: 388.80 kFLOPs
-__________________________________________________________
-```
-
-`input_shape` excludes the batch dimension. For realistic calls—including masks, scalars, `None`, and nested
-containers—pass complete `args` and `kwargs` instead:
+This short CPU example reuses the model from [the checked comparison example](docs/docs/benchmark-comparison.md).
+It initializes weights locally and downloads nothing:
 
 ```python
 import json
-
-import torch
-from torch import nn
-from torchscan import crawl_module
-
-
-class MaskedModel(nn.Module):
-    def forward(self, input_ids, *, attention_mask):
-        return input_ids * attention_mask
-
-
-transformer_model = MaskedModel()
-input_ids = torch.ones(1, 4)
-attention_mask = torch.tensor([[True, True, False, False]])
-report = crawl_module(
-    transformer_model,
-    args=(input_ids,),
-    kwargs={"attention_mask": attention_mask},
-)
-print(json.dumps(report["inputs"]["kwargs"]["attention_mask"], indent=2))
-```
-
-Only metadata is retained:
-
-```json
-{
-  "kind": "tensor",
-  "shape": [1, 4],
-  "dtype": "torch.bool",
-  "device": "cpu",
-  "requires_grad": false
-}
-```
-
-TorchScan temporarily evaluates the model with gradients disabled and restores every module's original training
-state. It records input metadata, never tensor values.
-
-For shapes and parameter counts, skip compute analysis with one option:
-
-```python
-report = summary(model, (3, 32, 32), mode="structure")
-```
-
-Structure mode collects the same hierarchy, calls, input/output metadata, parameters, and buffers without FLOP
-dispatch or module formulas. Unrequested compute totals have `status="unavailable"` and `method="not_requested"`.
-`strict=True` checks the requested metrics. Full analysis remains the default. Both modes release intermediate
-activations as execution progresses.
-
-Add your own module/model estimates with
-`custom_modules={YourModule: ModuleHandler(your_callback)}` on `crawl_module` or `summary`. Callbacks receive the
-complete actual call and supply FLOPs, MACs, DMAs, or receptive-field fields independently. Explicit subtree ownership
-prevents inclusive parent estimates from double-counting children. Both APIs also accept `custom_mapping` for separate
-operator FLOP overrides. Registrations belong to one analysis and require no TorchScan dependency on your model library.
-See the [copyable extension tutorial](docs/docs/extensions.md), including a complex-valued example and counting conventions.
-
-## Workload measurements
-
-Use zero-argument callables when the owner needs full control over execution:
-
-```python
-import json
-
-import torch
-from torchscan import measure_flops
-from torchscan.process import measure_peak_memory
-
-inputs = torch.ones(8)
-flops = measure_flops(lambda: torch.sin(inputs))
-print(json.dumps(flops["total"], indent=2))
-print("uncounted operator:", flops["diagnostics"][0]["operator"])
-
-memory = measure_peak_memory(lambda: torch.cos(inputs), device=inputs.device)
-print(memory["device"], memory["metric"])
-```
-
-`measure_flops` uses PyTorch's operator dispatch. `measure_peak_memory` invokes the workload exactly once and reports
-backend-specific PyTorch memory—not process RSS or total device memory.
-
-Here, PyTorch has no built-in `aten.sin` formula, so TorchScan shows a lower bound instead of a false zero:
-
-```text
-{
-  "status": "partial",
-  "value": null,
-  "known_value": 0,
-  "unit": "FLOPs",
-  "scope": "workload",
-  "method": "torch.utils.flop_counter.FlopCounterMode"
-}
-uncounted operator: aten.sin
-cpu pytorch_tensor_bytes
-```
-
-Peak byte values are intentionally omitted because they depend on the workload, allocator, PyTorch version, and
-hardware; the returned mapping includes `baseline_bytes`, `peak_bytes`, and `delta_bytes`.
-
-## Before/after comparison
-
-```python
-import torch.nn as nn
-from torchscan import compare_reports, crawl_module
-
-before = crawl_module(nn.Conv2d(3, 8, 3), (3, 32, 32))
-after = crawl_module(nn.Conv2d(3, 12, 3), (3, 32, 32))
-diff = compare_reports(before, after)
-parameters = diff["totals"]["parameters"]
-print(parameters["status"], parameters["delta"])
-```
-
-```text
-complete 112
-```
-
-`compare_reports` propagates incomplete metrics. It does not store baselines or decide whether a model fits a budget;
-the model owner supplies those policies.
-
-## Offline visual report
-
-```python
 from pathlib import Path
-import webbrowser
-from torchscan import render_report
 
-path = Path("torchscan-report.html").resolve()
-path.write_text(render_report(report), encoding="utf-8")
-webbrowser.open(path.as_uri())
+import torch
+from torchscan import measure_workload, render_report
 
-# A static SVG, or an HTML comparison using compare_reports internally:
-Path("torchscan-report.svg").write_text(render_report(report, format="svg"), encoding="utf-8")
-Path("comparison.html").write_text(render_report(after, before=before), encoding="utf-8")
+torch.set_num_threads(1)
+torch.manual_seed(0)
+model = torch.nn.Linear(128, 128).eval()
+inputs = torch.randn(32, 128)
+
+
+@torch.inference_mode()
+def workload():
+    return model(inputs)
+
+
+report = measure_workload(workload, device="cpu", inputs=inputs, work_units=32, work_unit="samples")
+Path("workload.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+Path("workload.html").write_text(render_report(report), encoding="utf-8")
 ```
 
-HTML opens a module cost explorer: nested rectangles show the hierarchy and the concentration of recorded compute or
-first-attributed parameters. Select a module for tensor shapes, repeated-call evidence, methods, and diagnostics.
-An unscaled rail keeps unknown work and tiny/zero contributions visible; comparisons share one hierarchy and scale.
-SVG exports the same visual composition. Reports work offline with no server, CDN, or extra dependencies.
-See [the guide](docs/docs/visual-report.md) for interpretation, comparison rules, and keyboard controls.
-Generate the [local-model examples](examples/visual-report/README.md) to explore incomplete work and a channel comparison.
+One observed run on an AMD EPYC 9V74 CPU, Linux, Python 3.11.16, PyTorch 2.13.0+cpu, TorchScan 0.2.0.dev0 (PR #176), FP32, one PyTorch thread:
 
-## Trust the status, not only the number
-
-- `complete`: the requested scope was counted; `value` is authoritative for the documented method.
-- `partial`: `known_value` is a lower bound and diagnostics identify missing work.
-- `unavailable`: TorchScan cannot produce the metric for this execution.
-
-Use `strict=True` when any incomplete analysis must stop automation. See the
-[report schema](https://frgfm.github.io/torch-scan/report-schema.html) and
-[methodology](https://frgfm.github.io/torch-scan/methodology.html) before comparing results.
-
-## Installation
-
-The stable release is **v0.2.0**. It requires Python ≥3.11,<4 and PyTorch ≥2.1,<3:
-
-```shell
-pip install torchscan
+```text
+Workload on cpu (1 PyTorch threads)
+  First call: 0.449 ms
+  Latency (block median): 0.018 ms
+  Latency IQR: 0.000 ms
+  Throughput: 1,734,801.967 samples/s
+  Operator FLOPs: partial (known lower bound: 1,048,576.000 FLOPs)
+  PyTorch peak memory: 0.094 MiB
+    Scope: PyTorch tracked CPU tensors
+  Process peak RSS: unavailable (not requested)
+  Profiler: not requested (separate instrumented pass)
+  flops: aten.linear was observed 1 time(s), but no FLOP formula is registered.
 ```
 
-The unreleased version on `main` adds `render_report`, the `custom_modules` extension API, `custom_mapping` on
-`crawl_module` and `summary`, and native Transformer MAC, DMA, and token-dependency estimates.
-Install `main` to use these features:
+Your numbers will differ. One call completes 32 samples, so the report uses `samples/s`. Timing repeats the callable;
+it owns model state, gradients, precision, transfers, and preprocessing. `inputs` records metadata rather than supplying
+arguments. Place your model/tensors and configure threads before measuring. Open `workload.html` in a browser or
+consume the JSON directly; terminal text is a view, not a data format.
 
-```shell
-pip install git+https://github.com/frgfm/torch-scan.git
-```
+## How this relates to `summary()`
 
-See the [installation guide](https://frgfm.github.io/torch-scan/installing.html) and
-[v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html).
-For a local development checkout, follow [Contributing](CONTRIBUTING.md).
+Use `summary(model, args=(inputs,))` to inspect the same model call.
 
-## Documentation
+`summary` prints the familiar module table and returns an `AnalysisReport`: shapes, parameters, storage,
+module-formula counts, and separate operator FLOPs for an evaluation forward. It disables gradients temporarily and
+restores each module's original training flag. `crawl_module` returns the same report without printing;
+`mode="structure"` skips compute estimates, and `strict=True` rejects incomplete requested model metrics.
 
-- [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html)
-- [Model and input support](https://frgfm.github.io/torch-scan/model-support.html)
-- [Custom module extensions](https://frgfm.github.io/torch-scan/extensions.html)
-- [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html)
-- [API reference](https://frgfm.github.io/torch-scan/torchscan.html)
+Workload measurement produces `BenchmarkReport` evidence for the callable you supply. Model storage is not peak
+memory, and theoretical FLOPs do not predict latency or process RSS. Keep the two views together with their distinct
+methods and boundaries. Pass real `args`/`kwargs` to inspect masks or nested inputs; `input_shape` makes a synthetic
+batch of one and excludes the batch dimension.
 
-Agents can also load the repository skill at [`.agents/skills/torchscan/SKILL.md`](.agents/skills/torchscan/SKILL.md).
+## Check a change and read the report
 
-## Citation
+Measure a baseline and one controlled change on the same hardware. Use
+`compare_benchmarks(before, after, check=...)` with your output tolerance; a failed check preserves evidence and
+withholds numeric deltas. Save JSON and offline HTML with `render_report`. Use `compare_reports` for model estimates.
+The [checked experiment guide](docs/docs/benchmark-comparison.md) reuses the existing linear, CNN, and Transformer
+examples, including fresh-process RSS and separate diagnostic passes.
 
-Citation metadata is available in [`CITATION.cff`](CITATION.cff).
+## Read the limits with the numbers
 
-## Contributing and license
+- `complete`: use `value` with its documented method and scope. A complete zero is meaningful.
+- `partial`: `known_value` is a lower bound; preserve diagnostics and never treat missing work as zero.
+- `unavailable`: no measurement was produced. Unrequested evidence is also explicit.
+- Keep module and operator FLOPs separate. Do not add or average them.
+- Warmed latency/IQR describes block averages, not individual-request p95. First-call time includes all callable work.
+- Process RSS covers a fresh child's whole lifetime on Linux/macOS. CPU tracked-tensor and accelerator allocator
+  peaks have different scopes; do not add them together or equate them to total device use.
+- Profiler time includes instrumentation and can overlap. MPS profiles describe CPU dispatch, not GPU execution.
+- CUDA/MPS claims need real matching hardware. Mocks and skips provide no hardware evidence.
+- Passing an output check does not establish task accuracy; IQR labels are descriptive, not statistical significance.
 
-Contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md). TorchScan is distributed under the
-[Apache License 2.0](LICENSE).
+## Install and continue
+
+Stable model inspection: `python -m pip install torchscan==0.2.0`. Requirements are Python ≥3.11,<4 and PyTorch ≥2.1,<3.
+See [installation](https://frgfm.github.io/torch-scan/installing.html) for backend selection, development APIs,
+compatibility checks, and timing dependencies on PyTorch 2.1.
+
+- [Getting started](https://frgfm.github.io/torch-scan/)
+- [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html) and the repository
+  [agent skill](.agents/skills/torchscan/SKILL.md)
+- [Model and input support](https://frgfm.github.io/torch-scan/model-support.html) and
+  [custom extensions](https://frgfm.github.io/torch-scan/extensions.html)
+- [Report schema](https://frgfm.github.io/torch-scan/report-schema.html),
+  [API reference](https://frgfm.github.io/torch-scan/torchscan.html), and
+  [changelog](https://frgfm.github.io/torch-scan/changelog.html)
+- [v0.2 migration guide](https://frgfm.github.io/torch-scan/migration-v02.html) and [Contributing](CONTRIBUTING.md)
+
+Citation metadata is in [CITATION.cff](CITATION.cff). TorchScan uses the [Apache License 2.0](LICENSE).

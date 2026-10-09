@@ -18,6 +18,10 @@ __all__ = ["measure_peak_memory"]
 _PEAK_MEMORY_LOCK = threading.Lock()
 
 
+class _NoMemoryEventsError(RuntimeError):
+    """The collector produced no CPU memory events to measure."""
+
+
 def _measure_cpu(workload: Callable[[], object]) -> dict[str, str | int]:
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as timeline_file:
         timeline_path = Path(timeline_file.name)
@@ -43,7 +47,7 @@ def _measure_cpu(workload: Callable[[], object]) -> dict[str, str | int]:
 
         totals = [sum(int(value) for value in point) for point in category_points]
         if not totals:
-            raise RuntimeError(
+            raise _NoMemoryEventsError(
                 f"PyTorch {torch.__version__} exported no memory timeline points for 'cpu'; "
                 "the workload produced no PyTorch-tracked CPU memory events."
             )

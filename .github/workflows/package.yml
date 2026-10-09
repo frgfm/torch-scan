@@ -106,6 +106,7 @@ jobs:
           tests/test_transformers.py
           tests/test_token_dependencies.py
           tests/test_token_consumers.py
+          tests/test_workload.py
 
   model-smoke:
     runs-on: ubuntu-latest
@@ -194,6 +195,7 @@ jobs:
           assert report;
           assert callable(torchscan.summary);
           assert callable(torchscan.measure_flops);
+          assert callable(torchscan.measure_workload);
           inputs = torch.ones(4);
           timing = torchscan.measure_latency(lambda: inputs + 1, device='cpu', inputs=inputs, min_run_time=0.01);
           assert timing['totals']['latency']['status'] == 'complete';

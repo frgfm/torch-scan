@@ -127,6 +127,14 @@ _IGNORED_OPERATOR_REASONS = {
         ],
         "Tensor creation is excluded from FLOPs.",
     ),
+    **dict.fromkeys(
+        ["aten.rand", "aten.rand_like", "aten.bernoulli", "aten.bernoulli_"],
+        "Random sampling is excluded from FLOPs.",
+    ),
+    **dict.fromkeys(
+        ["aten.bitwise_not", "aten.bitwise_not_"],
+        "Integer and boolean bitwise operations are excluded from FLOPs.",
+    ),
 }
 
 
@@ -160,6 +168,8 @@ class _OperatorRecorder(TorchDispatchMode):
         operands = leaves
         if packet in {torch.ops.aten.addcmul, torch.ops.aten.addcmul_, torch.ops.aten.addcdiv, torch.ops.aten.addcdiv_}:
             operands = args[:3]
+        elif packet in {torch.ops.aten.pow, torch.ops.aten.pow_}:
+            operands = args
         self.floating[packet] = any(
             (isinstance(value, torch.Tensor) and (value.is_floating_point() or value.is_complex()))
             or isinstance(value, (float, complex))

@@ -104,11 +104,10 @@ def test_modified_forward_stays_unknown():
         crawl_module(module, args=(torch.ones(2, 4),), strict=True)
 
 
-def test_arbitrary_power_stays_partial():
-    unknown = measure_flops(lambda: torch.ones(2, 4).pow(3))
-    assert unknown["total"]["status"] == "partial"
-    assert unknown["total"]["value"] is None
-    assert any(item["code"] == "unsupported_operator_formula" for item in unknown["diagnostics"])
+def test_arbitrary_power():
+    report = measure_flops(lambda: torch.ones(2, 4).pow(0.5))
+    assert report["total"]["status"] == "complete"
+    assert report["total"]["value"] == 8
 
 
 def test_complex_rmsnorm_weight_stays_unknown():

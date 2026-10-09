@@ -25,10 +25,15 @@ def _gelu(*_args: Any, out_shape: Any, approximate: str = "none", **_kwargs: Any
     return gelu_flops(prod(out_shape), approximate)
 
 
-def _square(_input_shape: Any, exponent: Any, *_args: Any, out_shape: Any, **_kwargs: Any) -> int:
-    if not isinstance(exponent, (int, float)) or exponent != 2:
-        raise NotImplementedError("Power FLOPs only cover an explicit scalar exponent of two.")
-    return prod(out_shape)
+def _weight_norm(input_shape: Any, scale_shape: Any, dim: int = 0, *_args: Any, **_kwargs: Any) -> int:
+    if dim != -1 and not 0 <= dim < len(input_shape):
+        raise NotImplementedError("WeightNorm FLOPs require a valid dimension or -1 for the whole tensor.")
+    rows = 1 if dim == -1 else input_shape[dim]
+    elements = prod(input_shape)
+    if prod(scale_shape) != rows or (rows and elements == 0):
+        raise NotImplementedError("WeightNorm FLOPs require one scale per nonempty norm row.")
+    # Norm: N squares, N-R adds, R roots. Then R divides and N multiplies.
+    return 3 * elements + rows
 
 
 def _pool(
@@ -368,9 +373,10 @@ FORMULAS = {
     **dict.fromkeys(["silu", "silu_", "glu"], partial(_elementwise, cost=5)),
     **dict.fromkeys(["sigmoid", "sigmoid_"], partial(_elementwise, cost=4)),
     **dict.fromkeys(["tanh", "tanh_"], partial(_elementwise, cost=6)),
-    **dict.fromkeys(["pow", "pow_"], _square),
+    **dict.fromkeys(["pow", "pow_"], _elementwise),
+    **dict.fromkeys(["_weight_norm", "_weight_norm_interface"], _weight_norm),
     **dict.fromkeys(["rms_norm", "_fused_rms_norm"], _rms_norm),
-    **dict.fromkeys(["add", "add_", "sub", "sub_"], _add),
+    **dict.fromkeys(["add", "add_", "sub", "sub_", "rsub"], _add),
     **dict.fromkeys(
         [
             "mul",
@@ -392,6 +398,8 @@ FORMULAS = {
             "sin_",
             "cos",
             "cos_",
+            "ceil",
+            "ceil_",
             "log",
             "log_",
             "reciprocal",

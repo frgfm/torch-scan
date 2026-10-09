@@ -116,6 +116,7 @@ and tanh to six, as in the existing module formulas. Constant-only arithmetic is
 | SiLU / GLU | `5N`: four sigmoid operations plus a multiply. Here N is **output** elements; GLU halves its split dimension. |
 | SwiGLU arithmetic | SiLU plus a separate multiply: `6N` output operations, excluding projections. |
 | RMSNorm | `(3+W)N+2R`: square N, mean N, normalize N, eps/rsqrt 2R, affine WN; W is 1 when a weight is present. |
+| Weight normalization | `3N+R`: L2 norms 2N, scale/norm R, weight scaling N. R = scales; rows must be nonempty. Covers native fused calls and public parametrizations at the operator level. |
 | Rows | LayerNorm: `N/prod(normalized_shape)`; GroupNorm: batch × groups. Empty rows/groups unsupported; zero batches supported. |
 | BatchNorm | Saved stats: `2N+2C+AN`; batch stats add 4N. Actual buffers select the path; passed mean/variance updates add 3C/5C. Empty modules: zero; empty native calls unsupported. |
 | Dropout | Eval/p=0: zero; training mask/rescale: 2N, or N at p=1. RNG excluded. |
@@ -137,7 +138,8 @@ Transpose example: `(2,4,3)`, Cout=6, groups=2, kernel=3, stride=2, padding=outp
 
 Reduction dtype: `dtype` > `out.dtype` > input. Fallback integer/boolean arithmetic, views/copies/fills/allocation, and
 Python constants are excluded. For `addcmul` and `addcdiv`, tensor operands set the arithmetic dtype;
-the scalar coefficient and output buffer do not. Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
+the scalar coefficient and output buffer do not. Power dtype comes from its base and exponent, excluding `out`.
+Native matrix counts include integers. Complex module/fallback arithmetic and sparse/nested work
 stay incomplete without explicit caller overrides; native complex counts remain partial. The
 [extension tutorial](extensions.md#a-complete-custom-call) demonstrates a caller convention of six real FLOPs per
 complex multiply and two per complex add, with separate MAC and logical DMA conventions. Such overrides are scoped to
@@ -145,7 +147,9 @@ one analysis and are the caller's responsibility. Mixed-call diagnostics and str
 
 Exact native activation/softmax classes, GroupNorm, and optional RMSNorm require unchanged forwards, dense real inputs, and native
 parameter shapes. Empty batches count zero; empty normalized rows/groups are unsupported. PyTorch 2.1 omits RMSNorm.
-Scalar-power operator formulas cover only exponent two. Sine/cosine/log/reciprocal cost one operation per value.
+Real powers (scalar/tensor, broadcast/in-place) and sine/cosine/log/reciprocal/ceil cost one symbolic operation per
+output value, consistent with exp/sqrt/erf; squaring is unchanged. Reverse subtraction adds a multiply when `alpha != 1`.
+`rand`/`rand_like`/Bernoulli sampling and integer/boolean bitwise inversion are visible exclusions; dropout arithmetic still counts.
 Unary math and cumulative sums include in-place calls. Cumulative sums cost N minus row count.
 Norm orders 1/2/+inf/-inf cover absolute values or squares, reductions,
 and a square root for order 2; other orders remain partial. Packed-row grouped matmul counts `2 × input_elements × output_width`.

@@ -19,7 +19,7 @@ def test_workload_evidence_round_trip(capsys):
         assert model.training
         assert not torch.is_grad_enabled()
         assert torch.get_num_threads() == threads
-        return model(inputs).sin()
+        return model(inputs).sinc()
 
     with torch.no_grad():
         report = measure_workload(
@@ -57,11 +57,11 @@ def test_workload_evidence_round_trip(capsys):
         assert rss["status"] == "unavailable"
         assert rss["value"] is None
     summary = capsys.readouterr().out
-    assert all(text in summary for text in ("ms", "samples/s", "MiB", "partial (known lower bound:", "aten.sin"))
+    assert all(text in summary for text in ("ms", "samples/s", "MiB", "partial (known lower bound:", "aten.sinc"))
     restored = json.loads(json.dumps(report, allow_nan=False))
     assert restored == report
     html = render_report(restored)
-    assert "aten.sin" in html
+    assert "aten.sinc" in html
     assert "lower bound" in html
     assert "pytorch_tensor_bytes" in html
     calls_before = calls
@@ -74,7 +74,7 @@ def test_workload_evidence_round_trip(capsys):
     assert "unavailable" in render_report(skipped)
 
     def copying_workload():
-        inputs.sin()
+        inputs.sinc()
         return inputs.clone()
 
     options = {"device": "cpu", "inputs": inputs, "min_run_time": 0.001, "min_repeats": 2, "print_summary": False}
@@ -85,4 +85,4 @@ def test_workload_evidence_round_trip(capsys):
     assert comparison["totals"]["latency"]["status"] == "complete"
     assert comparison["totals"]["peak_memory"]["status"] == "unavailable"
     assert comparison["totals"]["peak_memory"]["delta"] is None
-    assert "aten.sin" in render_report(comparison)
+    assert "aten.sinc" in render_report(comparison)

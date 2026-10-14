@@ -24,11 +24,10 @@ Use your own model and inputs. Save JSON or offline HTML; metrics carry a method
 ## Measure your workload
 
 The workload timing and offline report APIs require the development version. The current PyPI release is **0.2.0**;
-**0.3.0 is proposed and unreleased**. The one-call API is prepared in [PR #176](https://github.com/frgfm/torch-scan/pull/176).
-Until it is merged, install its preview branch after installing PyTorch for your hardware:
+**0.3.0 is proposed and unreleased**. Install `main` after installing PyTorch for your hardware:
 
 ```shell
-python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@codex/workload-measurement"
+python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
 ```
 
 This short CPU example reuses the model from [the checked comparison example](docs/docs/benchmark-comparison.md).
@@ -57,20 +56,19 @@ Path("workload.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 Path("workload.html").write_text(render_report(report), encoding="utf-8")
 ```
 
-One observed run on an AMD EPYC 9V74 CPU, Linux, Python 3.11.16, PyTorch 2.13.0+cpu, TorchScan 0.2.0.dev0 (PR #176), FP32, one PyTorch thread:
+One observed run on an Apple M3 Pro CPU, macOS 15.7, Python 3.11.13, PyTorch 2.14.1, TorchScan `main`, FP32, one PyTorch thread:
 
 ```text
 Workload on cpu (1 PyTorch threads)
-  First call: 0.449 ms
-  Latency (block median): 0.018 ms
-  Latency IQR: 0.000 ms
-  Throughput: 1,734,801.967 samples/s
-  Operator FLOPs: partial (known lower bound: 1,048,576.000 FLOPs)
+  First call: 0.174 ms
+  Latency (block median): 0.006 ms
+  Latency IQR: 0.001 ms
+  Throughput: 4,191,866.300 samples/s
+  Operator FLOPs: 1,048,576.000 FLOPs
   PyTorch peak memory: 0.094 MiB
     Scope: PyTorch tracked CPU tensors
   Process peak RSS: unavailable (not requested)
   Profiler: not requested (separate instrumented pass)
-  flops: aten.linear was observed 1 time(s), but no FLOP formula is registered.
 ```
 
 Your numbers will differ. One call completes 32 samples, so the report uses `samples/s`. Timing repeats the callable;

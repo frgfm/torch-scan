@@ -2,7 +2,7 @@
 
 ## 0.3.0 (proposed, unreleased)
 
-These changes require development builds or the linked previews. They are not in the 0.2.0 package.
+These changes require development builds. They are not in the 0.2.0 package.
 Version 0.3.0 is the proposed next release, not a published package.
 
 ### Added
@@ -10,7 +10,7 @@ Version 0.3.0 is the proposed next release, not a published package.
 - Native GELU, SiLU, GLU, and optional RMSNorm module/operator estimates; GroupNorm MAC/DMA estimates and native
   Transformer GELU FLOPs. Functional gating and scalar squares retain per-analysis coverage and diagnostics.
 - `measure_workload`: one-call selected resource measurements, readable ms/work-units per second/MiB output,
-  optional separate profiler evidence, and explicit fresh-process RSS (prepared in #176).
+  optional separate profiler evidence, and explicit fresh-process RSS (#176).
 - Checked workload comparisons with `compare_benchmarks` and offline HTML timing/memory/profile reports.
 - Reusable, no-download ResNet18 and small BERT performance experiments with an output check and explicit resource
   boundaries (#175; CPU evidence, CUDA/MPS unavailable).
@@ -32,6 +32,8 @@ Version 0.3.0 is the proposed next release, not a published package.
 - Clarify installation tracks, compatibility checks, and the relationship between model summaries and workload reports.
 - Correct convolution, linear, pooling, normalization, and attention counts. Keep incomplete counts and diagnostics
   visible (#165).
+- Count composite operators such as `aten.linear` under `torch.inference_mode()` instead of reporting
+  `partial` FLOPs.
 
 ## v0.2.0 (2026-10-03)
 

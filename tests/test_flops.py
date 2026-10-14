@@ -36,6 +36,19 @@ def test_measure_flops_matmul_and_module_hierarchy():
     assert json.loads(json.dumps(report)) == report
 
 
+def test_measure_flops_inference_mode_counts_composite_operators():
+    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.Flatten(), nn.Linear(16, 2)).eval()
+    inputs = torch.ones(1, 3, 4, 4)
+    expected = measure_flops(lambda: model(inputs))
+
+    with torch.inference_mode():
+        report = measure_flops(lambda: model(inputs))
+
+    assert report["total"] == expected["total"]
+    assert report["total"]["status"] == "complete"
+    assert report["diagnostics"] == []
+
+
 def test_measure_flops_custom_mapping():
     inputs = torch.ones(5)
 

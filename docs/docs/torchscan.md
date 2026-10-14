@@ -1,6 +1,6 @@
 # `torchscan`
 
-This reference covers development APIs, including the #176 preview; [installation](installing.md) distinguishes it from
+This reference covers unreleased development APIs; [installation](installing.md) distinguishes it from
 stable 0.2.0. Start with the [runnable quickstart](index.md) to inspect cost, measure a workload, check a change, and
 consume the report. Read [Model and input support](model-support.md) for non-trivial calls.
 

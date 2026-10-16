@@ -10,7 +10,7 @@ it does not move your model or provision hardware. Choose the stable release or 
 | Development (`main`) | Unreleased changes after 0.2.0 | ≥3.11,<4 | ≥2.1,<3 |
 
 Version 0.2.0 was released on October 3, 2026. Use the [migration guide](migration-v02.md) when moving from 0.1.
-The API reference covers unreleased development APIs, **0.3.0** is proposed and unpublished.
+The API reference covers unreleased development APIs. **0.3.0** is proposed and unpublished.
 
 | Feature | Available in |
 | --- | --- |

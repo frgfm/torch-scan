@@ -37,7 +37,7 @@ def test_measure_flops_matmul_and_module_hierarchy():
 
 
 def test_measure_flops_inference_mode_counts_composite_operators():
-    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.Flatten(), nn.Linear(16, 2)).eval()
+    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.Flatten(), nn.Dropout(), nn.Linear(16, 2)).eval()
     inputs = torch.ones(1, 3, 4, 4)
     expected = measure_flops(lambda: model(inputs))
 
@@ -45,6 +45,7 @@ def test_measure_flops_inference_mode_counts_composite_operators():
         report = measure_flops(lambda: model(inputs))
 
     assert report["total"] == expected["total"]
+    assert report["by_operator"] == expected["by_operator"]
     assert report["total"]["status"] == "complete"
     assert report["diagnostics"] == []
 

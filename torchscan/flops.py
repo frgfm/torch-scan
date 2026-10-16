@@ -249,6 +249,13 @@ class _OperatorRecorder(TorchDispatchMode):
                     self.registry.pop(func)
                 if suppress_formula:
                     self.registry[packet] = formula
+        if func not in self.registry and packet not in self.registry:
+            # Inference mode dispatches composites such as aten.linear; record their counted parts instead.
+            with self:
+                out = func.decompose(*args, **(kwargs or {}))
+            if out is not NotImplemented:
+                self.counts[packet] -= 1
+                return out
         return func(*args, **(kwargs or {}))
 
 
@@ -343,7 +350,7 @@ def measure_flops(
     by_module = dict(
         sorted((name, int(sum(counts.values()))) for name, counts in raw_counts.items() if name != "Global")
     )
-    observed = sorted((_operator_key(operator), calls) for operator, calls in recorder.counts.items())
+    observed = sorted((_operator_key(operator), calls) for operator, calls in recorder.counts.items() if calls)
 
     ignored_operators: dict[str, IgnoredOperator] = {
         operator: {"calls": calls, "reason": _IGNORED_OPERATOR_REASONS[operator]}

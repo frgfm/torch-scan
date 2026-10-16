@@ -10,7 +10,7 @@ it does not move your model or provision hardware. Choose the stable release or 
 | Development (`main`) | Unreleased changes after 0.2.0 | ≥3.11,<4 | ≥2.1,<3 |
 
 Version 0.2.0 was released on October 3, 2026. Use the [migration guide](migration-v02.md) when moving from 0.1.
-The API reference covers unreleased development APIs, including the #176 preview. **0.3.0** is proposed and unpublished.
+The API reference covers unreleased development APIs. **0.3.0** is proposed and unpublished.
 
 | Feature | Available in |
 | --- | --- |
@@ -20,7 +20,7 @@ The API reference covers unreleased development APIs, including the #176 preview
 | First-call and warmed workload timing with `measure_latency` | `main` only; unreleased |
 | Child process RSS with `measure_peak_rss` and operator diagnostics with `profile_workload` | `main` only; unreleased |
 | Checked benchmark comparisons and offline workload HTML reports | `main` only; unreleased |
-| One-call resource report and terminal summary with `measure_workload` | Preview PR #176; unreleased |
+| One-call resource report and terminal summary with `measure_workload` | `main` only; unreleased |
 | The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
 | New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
 
@@ -34,14 +34,13 @@ python -m pip install torchscan==0.2.0
 
 ## Development version
 
-The one-call `measure_workload` API is prepared in [PR #176](https://github.com/frgfm/torch-scan/pull/176).
-Until it is merged, install this preview without cloning the repository:
+Install `main` without cloning the repository:
 
 ```shell
-python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@codex/workload-measurement"
+python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
 ```
 
-After #176 merges, use `@main`. For repeatable experiments, use the commit you tested and record it with the report. Start with
+For repeatable experiments, use the commit you tested and record it with the report. Start with
 the [quickstart](index.md), then [check an optimization](benchmark-comparison.md).
 
 Python 3.11–3.14 is covered by the repository's installation CI on Linux, macOS, and Windows. PyTorch compatibility

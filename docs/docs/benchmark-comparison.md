@@ -60,6 +60,54 @@ and alternate their order before claiming a small gain. Raw block durations rema
 See the [`compare_benchmarks`](torchscan.md#torchscan.compare_benchmarks) and
 [`BenchmarkComparison`](torchscan.md#torchscan.BenchmarkComparison) API reference.
 
+## Repeat paired trials
+
+Use [`measure_comparison`](torchscan.md#torchscan.measure_comparison) to measure two repeatable zero-argument
+callables with shared `measure_latency` settings. Using the workloads and settings above:
+
+```python
+from torchscan import measure_comparison
+
+experiment = measure_comparison(
+    baseline,
+    candidate,
+    check=lambda: torch.testing.assert_close(baseline(), candidate(), rtol=1e-4, atol=1e-5),
+    trials=4,
+    min_latency_change=0.0001,  # Owner considers changes above 0.1 ms meaningful.
+    **settings,
+)
+Path("experiment.json").write_text(json.dumps(experiment, indent=2), encoding="utf-8")
+for index, trial in enumerate(experiment["trials"]):
+    Path(f"trial-{index + 1}.html").write_text(render_report(trial), encoding="utf-8")
+```
+
+`trials` must be an integer of at least two (default three). Trial one measures baseline then candidate; trial two
+measures candidate then baseline, and that order continues to alternate. Each saved trial is an existing
+`BenchmarkComparison` with baseline as `before` and candidate as `after`, regardless of execution order.
+All first-call, warmup, calibration, and timed calls use the supplied repeatable workloads. The helper runs the
+zero-argument output check once after each measured pair, outside timing; it does not collect or retain outputs.
+The callables and check share caller state. Configure evaluation/gradient mode, precision, placement, inputs, and
+threads yourself. The helper runs sequentially and does not reset state.
+
+The required `min_latency_change` is a positive finite **absolute change in seconds**, chosen by the caller.
+The overall `verdict` follows this descriptive consistency rule:
+
+- `check_failed` if any trial's output check fails. All requested trials still run; failed trials retain their
+  measurements and withhold every delta under the existing `compare_benchmarks` contract.
+- `faster` or `slower` only if **every** trial has that `latency_change` label and an absolute warmed median latency
+  delta **strictly larger** than `min_latency_change`. The existing label also requires the delta to exceed both
+  runs' IQRs.
+- `inconclusive` otherwise, including opposing directions, a change at or below the threshold, a
+  `within_variability` trial, or unavailable latency evidence. A majority or an average cannot override a trial.
+
+This rule does not establish statistical significance or task accuracy, and alternating order does not remove
+thermal drift or background load. Keep the raw blocks and contexts for further analysis. Input metadata and required
+hardware/software/work-unit context must match within and across trials. Workload errors, unexpected check
+exceptions, invalid check returns, and incompatible comparisons propagate; they are not converted into a verdict.
+
+The [`RepeatedBenchmarkComparison`](torchscan.md#torchscan.RepeatedBenchmarkComparison) result is JSON-serializable
+and retains all trials and the threshold. Render individual `trials` with `render_report` as above.
+
 ## Save the complete experiment
 
 `render_report` accepts one `BenchmarkReport` or the checked comparison above. HTML contains timing, any appended

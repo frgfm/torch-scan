@@ -223,3 +223,18 @@ Workload errors propagate. `render_report` consumes this JSON-serializable evide
 only when the output check passes. Failed checks preserve measurements and withhold deltas. Saved comparisons render
 the recorded check without rerunning it. See [checked experiments](benchmark-comparison.md) for compatibility and IQR
 rules; use `compare_reports` for model estimates.
+
+## `RepeatedBenchmarkComparison`
+
+`measure_comparison(baseline, candidate, check=..., min_latency_change=..., device=..., inputs=..., trials=...)`
+returns schema-v1 evidence with `report_type: "repeated_benchmark_comparison"`, `trials` (a list of existing
+`BenchmarkComparison` mappings), `min_latency_change` (the caller's positive absolute threshold in seconds), and
+`verdict` (`faster`, `slower`, `inconclusive`, or `check_failed`). Trials remain in execution sequence; even-indexed
+trials measure baseline first and odd-indexed trials candidate first. Each trial always stores baseline as `before`
+and candidate as `after`, retaining raw timing blocks, contexts, check status, and deltas.
+
+Any failed output check yields `check_failed`, with every requested trial retained and failed-trial deltas withheld.
+Otherwise, `faster`/`slower` requires that direction in every trial and an absolute warmed latency delta strictly
+greater than the recorded threshold in every trial. Per-trial labels also apply the existing IQR rule. Mixed,
+negligible, or unavailable evidence is `inconclusive`; this rule is descriptive, not statistical significance.
+See [repeated paired trials](benchmark-comparison.md#repeat-paired-trials) for measurement and exception behavior.

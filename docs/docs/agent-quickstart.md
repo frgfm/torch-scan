@@ -35,6 +35,7 @@ Use `strict=True` when incomplete model metrics must stop the task; it raises `I
 | Investigate operators in a separate instrumented pass | `profile_workload` |
 | Compare model cost estimates | `compare_reports` |
 | Check workload performance with an output callback | `compare_benchmarks` |
+| Repeat checked timing pairs in alternating order with an owner-supplied minimum change | `measure_comparison` |
 | Consume a saved model or workload report offline | `render_report` |
 
 `summary` returns an `AnalysisReport` from an evaluation forward with gradients disabled, restoring original training

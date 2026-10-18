@@ -9,7 +9,7 @@ from typing import Any, Literal, TypedDict, cast
 
 from .benchmark import BenchmarkReport
 from .compare import _diff_metrics, _MetricDiff
-from .render import _json_tree, _metrics, _object
+from .render import _json_tree, _metric, _metrics, _number, _object
 
 __all__ = ["BenchmarkComparison", "compare_benchmarks"]
 
@@ -94,6 +94,39 @@ def _context_changes(before: BenchmarkReport, after: BenchmarkReport) -> dict[st
         for key in sorted(before["context"].keys() | after["context"].keys())
         if before["context"].get(key) != after["context"].get(key)
     }
+
+
+def _validate_comparison(report: object) -> BenchmarkComparison:
+    report = _object(report, "comparison")
+    _json_tree(report, "comparison")
+    if (
+        type(report.get("schema_version")) is not int
+        or report["schema_version"] != 1
+        or report.get("report_type") != "benchmark_comparison"
+        or report.get("output_check") not in ("passed", "failed")
+    ):
+        raise ValueError("Invalid benchmark comparison.")
+    before = _validate_benchmark(report.get("before"))
+    after = _validate_benchmark(report.get("after"))
+    _matching_context(before, after)
+    for name, difference in _object(report.get("totals"), "comparison.totals").items():
+        difference = _object(difference, f"comparison.totals.{name}")
+        if difference.get("delta") is not None:
+            _number(difference["delta"], f"comparison.totals.{name}.delta")
+        for side in ("before", "after"):
+            if difference.get(side) is not None:
+                _metric(difference[side], f"comparison.totals.{name}.{side}")
+    expected = _diff_metrics(before["totals"], after["totals"])
+    if report["output_check"] == "failed":
+        for difference in expected.values():
+            difference["status"], difference["delta"] = "unavailable", None
+    if report.get("totals") != expected:
+        raise ValueError("Comparison deltas do not match the stored measurements/check status.")
+    if report.get("latency_change") != _latency_change(before, after, expected):
+        raise ValueError("Latency change does not match the stored measurements/check status.")
+    if report.get("context_changes") != _context_changes(before, after):
+        raise ValueError("Context changes do not match the stored measurements.")
+    return cast(BenchmarkComparison, report)
 
 
 def compare_benchmarks(

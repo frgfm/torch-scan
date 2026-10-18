@@ -4,7 +4,7 @@ from copy import deepcopy
 import pytest
 import torch
 
-from torchscan import compare_benchmarks, measure_latency, profile_workload, render_report
+from torchscan import check_performance, compare_benchmarks, measure_latency, profile_workload, render_report
 
 
 def reports():
@@ -118,3 +118,11 @@ def test_latency_variability_labels(latency, label):
     result["latency_change"] = "faster"
     with pytest.raises(ValueError, match="Latency change"):
         render_report(result)
+
+
+def test_check_real_saved_timing():
+    inputs = torch.ones(8)
+    report = measure_latency(lambda: inputs + 1, device="cpu", inputs=inputs, min_run_time=0.001, min_repeats=2)
+    comparison = compare_benchmarks(report, report, check=lambda: True)
+    saved = json.loads(json.dumps(comparison))
+    assert check_performance(saved, max_latency_regression=0)["status"] == "passed"

@@ -35,6 +35,7 @@ Use `strict=True` when incomplete model metrics must stop the task; it raises `I
 | Investigate operators in a separate instrumented pass | `profile_workload` |
 | Compare model cost estimates | `compare_reports` |
 | Check workload performance with an output callback | `compare_benchmarks` |
+| Apply explicit CI limits to a saved checked comparison | `check_performance` or `python -m torchscan check` |
 | Consume a saved model or workload report offline | `render_report` |
 
 `summary` returns an `AnalysisReport` from an evaluation forward with gradients disabled, restoring original training

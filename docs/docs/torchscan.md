@@ -53,6 +53,15 @@ See [checked performance experiments](benchmark-comparison.md) for output checks
 
 ::: torchscan.BenchmarkComparison
 
+See [CI performance checks](benchmark-comparison.md#check-explicit-limits-in-ci) for explicit latency and scoped
+candidate memory limits on saved comparisons. Checking does not execute workloads.
+
+::: torchscan.check_performance
+
+::: torchscan.MemoryLimit
+
+::: torchscan.PerformanceCheck
+
 ## Workload diagnostics
 
 See [workload diagnostics](workload-diagnostics.md) for separate process RAM and profiler passes.

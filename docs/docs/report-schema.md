@@ -223,3 +223,9 @@ Workload errors propagate. `render_report` consumes this JSON-serializable evide
 only when the output check passes. Failed checks preserve measurements and withhold deltas. Saved comparisons render
 the recorded check without rerunning it. See [checked experiments](benchmark-comparison.md) for compatibility and IQR
 rules; use `compare_reports` for model estimates.
+
+`check_performance(comparison, max_latency_regression=..., memory_limit=...)` consumes this same evidence offline.
+Its `PerformanceCheck` contains `status` (`passed`, `failed`, or `inconclusive`) and a list of `reasons`.
+`MemoryLimit` requires the exact candidate totals `metric`, its `scope`, and a nonnegative integer `max_bytes`;
+RSS, tracked tensors, and allocator memory are never substituted. See the
+[minimal CI example](benchmark-comparison.md#check-explicit-limits-in-ci) for inclusive thresholds and exit codes.

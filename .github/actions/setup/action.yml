@@ -16,4 +16,5 @@ runs:
         architecture: x64
     - uses: astral-sh/setup-uv@v10.0.1
       with:
+        version: "0.13.4"
         activate-environment: ${{ inputs.activate-environment }}

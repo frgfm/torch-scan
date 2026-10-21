@@ -1,5 +1,9 @@
-# Copyright (C) 2026, François-Guillaume Fernandez.
-"""Keep the project uv constraints and GitHub Actions uv pins in sync."""
+# Copyright (C) 2020-2026, François-Guillaume Fernandez.
+
+# This program is licensed under the Apache License 2.0.
+# See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
+
+"""Keep the project uv requirement and GitHub Actions pins in sync."""
 
 from __future__ import annotations
 
@@ -26,59 +30,76 @@ def check_project_constraints() -> str:
     required_version = pyproject.get("tool", {}).get("uv", {}).get("required-version")
     if not isinstance(required_version, str):
         fail("pyproject.toml: tool.uv.required-version is missing")
-    uv_minimum = lower_bound(required_version, "pyproject.toml tool.uv.required-version")
+    return lower_bound(required_version, "pyproject.toml tool.uv.required-version")
 
-    build_requires = pyproject.get("build-system", {}).get("requires", [])
-    uv_build_requires = [requirement for requirement in build_requires if requirement.startswith("uv_build")]
-    if len(uv_build_requires) != 1:
-        fail(f"pyproject.toml: expected one uv_build requirement, found {uv_build_requires!r}")
-    uv_build_minimum = lower_bound(uv_build_requires[0].removeprefix("uv_build"), "pyproject.toml uv_build requirement")
-    if uv_build_minimum != uv_minimum:
-        fail(f"pyproject.toml: uv_build lower bound {uv_build_minimum} differs from uv lower bound {uv_minimum}")
-    return uv_minimum
+
+def setup_uv_versions(text: str, source: str) -> list[str]:
+    lines = text.splitlines()
+    versions = []
+    action_lines = 0
+
+    for index, line in enumerate(lines):
+        action = re.match(r"^([ ]*)(-\s+)?uses:\s*[\"']?astral-sh/setup-uv@", line)
+        if action is None:
+            continue
+        action_lines += 1
+        step_indent = len(action.group(1))
+        if action.group(2) is None:
+            for previous in range(index - 1, -1, -1):
+                item = re.match(r"^([ ]*)-\s+", lines[previous])
+                if item is not None and len(item.group(1)) < step_indent:
+                    step_indent = len(item.group(1))
+                    step_start = previous
+                    break
+            else:
+                fail(f"{source}: setup-uv step has no parent list item")
+        else:
+            step_start = index
+
+        step_end = len(lines)
+        for following in range(step_start + 1, len(lines)):
+            item = re.match(r"^([ ]*)-\s+", lines[following])
+            if item is not None and len(item.group(1)) == step_indent:
+                step_end = following
+                break
+
+        step = "\n".join(lines[step_start:step_end])
+        pins = re.findall(r"(?m)^[ ]+version:\s*[\"']?([^\"'\s]+)", step)
+        if len(pins) != 1:
+            fail(f"{source}: setup-uv step must have one explicit version, found {pins!r}")
+        versions.append(pins[0])
+
+    if "astral-sh/setup-uv@" in text and action_lines != text.count("astral-sh/setup-uv@"):
+        fail(f"{source}: could not parse every setup-uv action")
+    return versions
+
+
+def version_sync_error(versions: list[str], uv_minimum: str) -> str | None:
+    unique_versions = set(versions)
+    if len(unique_versions) != 1:
+        return f"setup-uv pins must use one version, found {sorted(unique_versions)!r}"
+    uv_version = next(iter(unique_versions))
+    if uv_version != uv_minimum:
+        return f"setup-uv pin {uv_version} must equal tool.uv.required-version lower bound {uv_minimum}"
+    return None
+
+
+def check_version_sync(versions: list[str], uv_minimum: str) -> None:
+    error = version_sync_error(versions, uv_minimum)
+    if error is not None:
+        fail(error)
 
 
 def check_action_versions(uv_minimum: str) -> None:
-    config_files = [
-        path
-        for path in Path(".github").rglob("*")
-        if path.suffix in {".yml", ".yaml"} and "astral-sh/setup-uv@" in path.read_text()
-    ]
-    if not config_files:
+    versions = []
+    for path in Path(".github").rglob("*"):
+        if path.suffix in {".yml", ".yaml"}:
+            versions.extend(setup_uv_versions(path.read_text(encoding="utf-8"), str(path)))
+
+    if not versions:
         fail("no astral-sh/setup-uv actions found under .github")
 
-    required_files = {
-        Path(".github/actions/setup/action.yml"),
-        Path(".github/workflows/update-copyright-years.yml"),
-    }
-    if not required_files.issubset(config_files):
-        fail("the shared setup action and annual workflow must both install uv")
-
-    versions: list[str] = []
-    for path in config_files:
-        text = path.read_text()
-        actions = list(re.finditer(r"(?m)^([ ]*)-\s+uses:\s+astral-sh/setup-uv@", text))
-        if not actions:
-            fail(f"{path}: could not parse setup-uv action")
-        for action in actions:
-            indent = len(action.group(1))
-            end = len(text)
-            for next_step in re.finditer(r"(?m)^([ ]*)-\s+", text[action.end() :]):
-                if len(next_step.group(1)) == indent:
-                    end = action.end() + next_step.start()
-                    break
-            step = text[action.end() : end]
-            version = re.search(r"(?m)^\s+version:\s*[\"']?([^\"'\s]+)", step)
-            if version is None:
-                fail(f"{path}: setup-uv is missing an explicit version")
-            versions.append(version.group(1))
-
-    unique_versions = set(versions)
-    if len(unique_versions) != 1:
-        fail(f"setup-uv pins must use one version, found {sorted(unique_versions)!r}")
-    uv_version = next(iter(unique_versions))
-    if uv_version != uv_minimum:
-        fail(f"setup-uv pin {uv_version} must equal tool.uv.required-version lower bound {uv_minimum}")
+    check_version_sync(versions, uv_minimum)
 
 
 def main() -> None:

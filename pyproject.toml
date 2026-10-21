@@ -64,7 +64,7 @@ tracker = "https://github.com/frgfm/torch-scan/issues"
 changelog = "https://frgfm.github.io/torch-scan/changelog.html"
 
 [tool.uv]
-required-version = "==0.12.5"
+required-version = "==0.13.4"
 
 [tool.uv.build-backend]
 module-name = "torchscan"

@@ -53,6 +53,10 @@ See [checked performance experiments](benchmark-comparison.md) for output checks
 
 ::: torchscan.BenchmarkComparison
 
+::: torchscan.measure_comparison
+
+::: torchscan.RepeatedBenchmarkComparison
+
 ## Workload diagnostics
 
 See [workload diagnostics](workload-diagnostics.md) for separate process RAM and profiler passes.

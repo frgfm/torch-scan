@@ -7,13 +7,16 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any, Literal, TypedDict, cast
 
-from .benchmark import BenchmarkReport
+import torch
+
+from .benchmark import BenchmarkReport, _positive_finite, _validate_timing_settings, measure_latency
 from .compare import _diff_metrics, _MetricDiff
 from .render import _json_tree, _metrics, _object
 
-__all__ = ["BenchmarkComparison", "compare_benchmarks"]
+__all__ = ["BenchmarkComparison", "RepeatedBenchmarkComparison", "compare_benchmarks", "measure_comparison"]
 
 LatencyChange = Literal["faster", "slower", "within_variability", "unavailable"]
+ComparisonVerdict = Literal["faster", "slower", "inconclusive", "check_failed"]
 
 
 class BenchmarkComparison(TypedDict):
@@ -27,6 +30,16 @@ class BenchmarkComparison(TypedDict):
     output_check: Literal["passed", "failed"]
     latency_change: LatencyChange
     context_changes: dict[str, Any]
+
+
+class RepeatedBenchmarkComparison(TypedDict):
+    """JSON-serializable trials and a descriptive verdict for one paired experiment."""
+
+    schema_version: int
+    report_type: Literal["repeated_benchmark_comparison"]
+    trials: list[BenchmarkComparison]
+    min_latency_change: float
+    verdict: ComparisonVerdict
 
 
 def _validate_benchmark(report: object) -> BenchmarkReport:
@@ -143,4 +156,108 @@ def compare_benchmarks(
         "output_check": "passed" if passed else "failed",
         "latency_change": _latency_change(before, after, differences),
         "context_changes": _context_changes(before, after),
+    }
+
+
+def measure_comparison(
+    baseline: Callable[[], object],
+    candidate: Callable[[], object],
+    *,
+    check: Callable[[], object],
+    min_latency_change: float,
+    device: str | torch.device,
+    inputs: Any = None,
+    trials: int = 3,
+    work_units: float = 1,
+    work_unit: str = "calls",
+    warmup: int = 5,
+    min_run_time: float = 0.2,
+    min_repeats: int = 5,
+) -> RepeatedBenchmarkComparison:
+    """Measure repeatable workloads in alternating order and compare every trial.
+
+    Args:
+        baseline: Repeatable zero-argument reference workload, as for measure_latency.
+        candidate: Repeatable zero-argument changed workload. Both callables own their
+            inputs, state, device placement, precision, and gradient mode.
+        check: Zero-argument output check, run by compare_benchmarks after each pair,
+            outside timing. None/True passes; False or AssertionError fails.
+            Other exceptions and invalid return values propagate.
+        min_latency_change: Caller-supplied positive finite minimum meaningful absolute
+            change in warmed median latency, in seconds.
+        device: Shared synchronization device, as for measure_latency.
+        inputs: Required caller-supplied input metadata for compatible comparisons.
+            It is recorded by measure_latency, never forwarded to either workload.
+        trials: Number of paired trials, at least two. Trial one measures baseline
+            first, trial two candidate first, and subsequent trials alternate.
+        work_units: Shared positive number of work units completed by each invocation.
+        work_unit: Shared unit name for throughput, such as "images" or "tokens".
+        warmup: Shared explicit warmup calls after each first call.
+        min_run_time: Shared minimum warmed measurement duration in seconds.
+        min_repeats: Shared minimum timed blocks per measurement, at least two.
+
+    Returns:
+        Every trial as a BenchmarkComparison, always with baseline as before and
+        candidate as after. Any failed check yields check_failed; all trials still run.
+        Faster/slower requires every trial to have that compare_benchmarks label and
+        an absolute latency delta strictly larger than min_latency_change. Thus each
+        delta also exceeds both runs' IQRs. Mixed, negligible, within-variability, or
+        unavailable changes yield inconclusive. This is a descriptive consistency
+        rule, not a statistical significance test. Raw evidence is retained per trial.
+
+    Raises:
+        TypeError: If either workload or check is not callable.
+        ValueError: If trials, the threshold, shared settings, or comparisons are invalid.
+
+    Notes:
+        Measurements and checks run sequentially and share caller state. Workload
+        exceptions and side effects are preserved, as are measure_latency device errors.
+        Matching input/hardware/software contexts are required within and across trials.
+        No model state, outputs, or timing settings are changed by this helper.
+    """
+    for workload in (baseline, candidate):
+        _validate_timing_settings(workload, work_units, work_unit, warmup, min_run_time, min_repeats)
+    if not callable(check):
+        raise TypeError("check must be callable.")
+    if type(trials) is not int or trials < 2:
+        raise ValueError("trials must be an integer >= 2.")
+    if not _positive_finite(min_latency_change):
+        raise ValueError("min_latency_change must be a positive finite number of seconds.")
+    if inputs is None:
+        raise ValueError("Comparisons require matching caller-supplied input metadata.")
+    settings = {
+        "device": device,
+        "inputs": inputs,
+        "work_units": work_units,
+        "work_unit": work_unit,
+        "warmup": warmup,
+        "min_run_time": min_run_time,
+        "min_repeats": min_repeats,
+    }
+    comparisons: list[BenchmarkComparison] = []
+    for index in range(trials):
+        if index % 2 == 0:
+            before = measure_latency(baseline, **settings)
+            after = measure_latency(candidate, **settings)
+        else:
+            after = measure_latency(candidate, **settings)
+            before = measure_latency(baseline, **settings)
+        if comparisons:
+            _matching_context(comparisons[0]["before"], before)
+        comparisons.append(compare_benchmarks(before, after, check=check))
+
+    verdict: ComparisonVerdict = "inconclusive"
+    if any(comparison["output_check"] == "failed" for comparison in comparisons):
+        verdict = "check_failed"
+    elif all(abs(comparison["totals"]["latency"]["delta"] or 0) > min_latency_change for comparison in comparisons):
+        if all(comparison["latency_change"] == "faster" for comparison in comparisons):
+            verdict = "faster"
+        elif all(comparison["latency_change"] == "slower" for comparison in comparisons):
+            verdict = "slower"
+    return {
+        "schema_version": 1,
+        "report_type": "repeated_benchmark_comparison",
+        "trials": comparisons,
+        "min_latency_change": min_latency_change,
+        "verdict": verdict,
     }

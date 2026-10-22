@@ -272,8 +272,9 @@ def test_module_cli_exit_codes(tmp_path, latency, passed, code):
         check=False,
     )
     assert result.returncode == code
-    assert json.loads(result.stdout)["status"] == {0: "passed", 1: "failed", 2: "inconclusive"}[code]
-    assert not result.stderr
+    output = json.loads(result.stdout)
+    assert output["status"] == {0: "passed", 1: "failed", 2: "inconclusive"}[code]
+    assert output["reasons"]
 
 
 @pytest.mark.parametrize("payload", ["{", "[]", '{"schema_version":2}', "\udcff", "NaN", '{"a":0,"a":1}'])

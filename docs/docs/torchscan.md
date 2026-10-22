@@ -53,8 +53,7 @@ See [checked performance experiments](benchmark-comparison.md) for output checks
 
 ::: torchscan.BenchmarkComparison
 
-See [CI performance checks](benchmark-comparison.md#check-explicit-limits-in-ci) for explicit latency and scoped
-candidate memory limits on saved comparisons. Checking does not execute workloads.
+See [explicit limits](benchmark-comparison.md#apply-explicit-limits) for agent and CI usage.
 
 ::: torchscan.check_performance
 

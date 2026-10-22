@@ -1,19 +1,22 @@
 import json
+import math
 from copy import deepcopy
 
 import pytest
 import torch
 
 from torchscan import check_performance, compare_benchmarks, measure_latency, profile_workload, render_report
+from torchscan.report import metric_result
 
 
-def reports():
+def reports(after_latency=0.01):
     inputs = torch.ones(8)
     before = measure_latency(lambda: inputs + 1, device="cpu", inputs=inputs, min_run_time=0.001, min_repeats=2)
     after = deepcopy(before)
-    for report, latency in ((before, 0.02), (after, 0.01)):
+    for report, latency in ((before, 0.02), (after, after_latency)):
         report["totals"]["latency"].update(value=latency, known_value=latency)
         report["totals"]["latency_iqr"].update(value=0.001, known_value=0.001)
+        report["measurement"].update(number_per_run=1, raw_times_seconds=[latency, latency], measured_calls=2)
     return before, after
 
 
@@ -71,6 +74,7 @@ def test_failed_output_check_withholds_gains(assertion):
     assert result["latency_change"] == "unavailable"
     assert all(metric["delta"] is None for metric in result["totals"].values())
     assert "Output check failed" in render_report(result)
+    assert check_performance(result, max_latency_regression=0)["status"] == "failed"
     result["output_check"] = "unknown"
     with pytest.raises(ValueError, match="comparison"):
         render_report(result)
@@ -126,3 +130,92 @@ def test_check_real_saved_timing():
     comparison = compare_benchmarks(report, report, check=lambda: True)
     saved = json.loads(json.dumps(comparison))
     assert check_performance(saved, max_latency_regression=0)["status"] == "passed"
+
+
+@pytest.mark.parametrize(
+    ("factor", "limit", "status"),
+    [(1, 0, "passed"), (1.05, 0.05, "passed"), (math.nextafter(1.05, math.inf), 0.05, "failed")],
+)
+def test_performance_latency_limit(factor, limit, status):
+    before, after = reports(0.02 * factor)
+    result = check_performance(compare_benchmarks(before, after, check=lambda: True), max_latency_regression=limit)
+    assert result["status"] == status
+    assert result["reasons"]
+
+
+@pytest.mark.parametrize(
+    ("status", "value", "scope", "expected"),
+    [
+        ("complete", 100, "pytorch_tensor_bytes", "passed"),
+        ("complete", 101, "pytorch_tensor_bytes", "failed"),
+        ("missing", None, "pytorch_tensor_bytes", "inconclusive"),
+        ("unavailable", None, "pytorch_tensor_bytes", "inconclusive"),
+        ("partial", 90, "pytorch_tensor_bytes", "inconclusive"),
+        ("complete", 100, "child_process_lifetime", "inconclusive"),
+        ("complete", 100, "pytorch_reserved_bytes", "inconclusive"),
+    ],
+)
+def test_performance_memory_limit(status, value, scope, expected):
+    before, after = reports()
+    if status != "missing":
+        after["totals"]["peak_memory"] = metric_result(
+            status=status,
+            value=value if status == "complete" else None,
+            known_value=value if status == "partial" else None,
+            unit="bytes",
+            scope=scope,
+            method="test_memory",
+        )
+    result = check_performance(
+        compare_benchmarks(before, after, check=lambda: True),
+        max_latency_regression=0,
+        memory_limit={"metric": "peak_memory", "scope": "pytorch_tensor_bytes", "max_bytes": 100},
+    )
+    assert result["status"] == expected
+    assert "peak_memory" in result["reasons"][-1]
+
+
+@pytest.mark.parametrize("problem", ["partial", "unavailable", "missing_blocks", "scope", "schema", "delta"])
+def test_performance_inconclusive_evidence(problem):
+    before, after = reports()
+    if problem in ("partial", "unavailable"):
+        after["totals"]["latency"].update(
+            status=problem,
+            value=None,
+            known_value=0.01 if problem == "partial" else None,
+        )
+    comparison = compare_benchmarks(before, after, check=lambda: True)
+    if problem == "missing_blocks":
+        comparison["after"]["measurement"] = {}
+    elif problem == "scope":
+        comparison["after"]["totals"]["latency"]["scope"] = "other"
+    elif problem == "schema":
+        comparison["schema_version"] = 99
+    elif problem == "delta":
+        comparison["totals"]["latency"]["delta"] = False
+    assert check_performance(comparison, max_latency_regression=0)["status"] == "inconclusive"
+
+
+def test_performance_failure_with_incomplete_timing():
+    before, after = reports()
+    after["measurement"] = {}
+    after["totals"]["process_peak_rss"] = metric_result(
+        status="complete",
+        value=101,
+        unit="bytes",
+        scope="child_process_lifetime",
+        method="test_rss",
+    )
+    result = check_performance(
+        compare_benchmarks(before, after, check=lambda: True),
+        max_latency_regression=0,
+        memory_limit={"metric": "process_peak_rss", "scope": "child_process_lifetime", "max_bytes": 100},
+    )
+    assert result["status"] == "failed"
+
+
+@pytest.mark.parametrize("limit", [-1, math.inf, True])
+def test_performance_invalid_limit(limit):
+    before, after = reports()
+    with pytest.raises(ValueError):
+        check_performance(compare_benchmarks(before, after, check=lambda: True), max_latency_regression=limit)

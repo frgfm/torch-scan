@@ -60,62 +60,31 @@ and alternate their order before claiming a small gain. Raw block durations rema
 See the [`compare_benchmarks`](torchscan.md#torchscan.compare_benchmarks) and
 [`BenchmarkComparison`](torchscan.md#torchscan.BenchmarkComparison) API reference.
 
-## Check explicit limits in CI
+## Apply explicit limits
 
-Use `check_performance` to evaluate an existing `BenchmarkComparison`. The maximum latency regression is an
-explicit fraction: `0.05` allows a 5% increase in warmed median latency; `0` allows no regression. Equality passes.
-TorchScan does not choose thresholds, keep a baseline database, or execute workloads when checking saved JSON.
+Agents and CI can call `check_performance` on an in-memory or JSON-loaded comparison without executing workloads.
+A `max_latency_regression` of `0.05` allows a 5% increase in warmed median latency; equality passes.
 
 ```python
+import json
+from pathlib import Path
 from torchscan import check_performance
 
-result = check_performance(comparison, max_latency_regression=0.05)
-print(result["status"], result["reasons"])
-```
-
-A recorded failed output check fails. Exceeding any usable limit also fails, even if another requested metric is
-incomplete. Otherwise missing, partial, unavailable, incompatible, malformed, or insufficient requested evidence
-returns `inconclusive` with reasons. A pass requires compatible complete latency/IQR, at least two positive raw timing
-blocks per run satisfying the recorded `min_repeats`, and summaries matching those blocks. Unrequested metrics, such
-as partial FLOPs, do not affect the decision. IQR labels do not override a limit or establish statistical significance.
-Invalid API limits raise `ValueError`.
-
-An optional candidate memory ceiling must name the exact `totals` metric, its exact recorded scope, and a byte limit:
-
-```python
+comparison = json.loads(Path("comparison.json").read_text())
 result = check_performance(
     comparison,
     max_latency_regression=0.05,
-    memory_limit={
-        "metric": "process_peak_rss",
-        "scope": "child_process_lifetime",
-        "max_bytes": 536870912,
-    },
+    memory_limit={"metric": "process_peak_rss", "scope": "child_process_lifetime", "max_bytes": 536870912},
 )
+print(result)  # {"status": "passed" | "failed" | "inconclusive", "reasons": [...]}
+raise SystemExit(result["status"] != "passed")  # Optional CI gate.
 ```
 
-Only complete metrics in `bytes` with the requested scope can satisfy a ceiling; zero is valid. A missing RSS metric
-cannot use tracked tensors or allocator memory instead. For `measure_workload`, `peak_memory` uses
-`pytorch_tensor_bytes` on CPU and `pytorch_reserved_bytes` on accelerators. Other collectors or scripts may use other
-keys and scopes: copy them from the saved evidence. Allocated and reserved allocator peaks remain distinct.
-
-For a minimal CI step, install the development version, produce or retrieve `comparison.json` in an earlier step,
-then run:
-
-```yaml
-- name: Check recorded performance
-  run: python -m torchscan check comparison.json --max-latency-regression 0.05
-```
-
-The command prints JSON containing `status` and `reasons`. Exit codes are **0 passed**, **1 failed**, and
-**2 inconclusive or invalid input**, so both failure and insufficient evidence stop the CI step. It reads saved JSON
-and validates the recorded check and deltas without executing workloads or output callbacks. Add all three memory
-options together when needed:
-
-```shell
-python -m torchscan check comparison.json --max-latency-regression 0.05 \
-  --memory-metric process_peak_rss --memory-scope child_process_lifetime --max-memory-bytes 536870912
-```
+The optional memory ceiling requires complete byte evidence for the exact metric and scope. RSS, tracked tensors,
+and allocated/reserved allocator memory cannot substitute for one another. A failed output check or an exceeded
+usable limit fails; otherwise missing, partial, incompatible, invalid, or insufficient requested evidence is
+inconclusive. Timing needs complete warmed latency and matching raw blocks satisfying the recorded minimum repeats.
+Invalid limits raise `ValueError`. Limits belong to the caller; this API does not choose them or assess significance.
 
 ## Save the complete experiment
 

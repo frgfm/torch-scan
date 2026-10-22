@@ -94,7 +94,6 @@ jobs:
           pytest
           tests/test_benchmark.py
           tests/test_benchmark_comparison.py
-          tests/test_check.py
           tests/test_diagnostics.py
           tests/test_compare.py
           tests/test_crawler.py

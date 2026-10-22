@@ -26,6 +26,8 @@ Use the smallest API that answers the request:
   work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.
 - `compare_benchmarks(before, after, check=...)`: compatible workload comparison with an owner-supplied output check.
+- `check_performance(comparison, max_latency_regression=..., memory_limit=...)`: apply owner-supplied limits offline;
+  return `passed`, `failed`, or `inconclusive` with reasons for the agent to act on.
 - `render_report(report)`: offline model HTML/SVG or benchmark/comparison HTML, without remeasurement.
 
 ## Workflow

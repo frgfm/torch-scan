@@ -60,6 +60,32 @@ and alternate their order before claiming a small gain. Raw block durations rema
 See the [`compare_benchmarks`](torchscan.md#torchscan.compare_benchmarks) and
 [`BenchmarkComparison`](torchscan.md#torchscan.BenchmarkComparison) API reference.
 
+## Apply explicit limits
+
+Agents and CI can call `check_performance` on an in-memory or JSON-loaded comparison without executing workloads.
+A `max_latency_regression` of `0.05` allows a 5% increase in warmed median latency; equality passes.
+
+```python
+import json
+from pathlib import Path
+from torchscan import check_performance
+
+comparison = json.loads(Path("comparison.json").read_text())
+result = check_performance(
+    comparison,
+    max_latency_regression=0.05,
+    memory_limit={"metric": "process_peak_rss", "scope": "child_process_lifetime", "max_bytes": 536870912},
+)
+print(result)  # {"status": "passed" | "failed" | "inconclusive", "reasons": [...]}
+raise SystemExit(result["status"] != "passed")  # Optional CI gate.
+```
+
+The optional memory ceiling requires complete byte evidence for the exact metric and scope. RSS, tracked tensors,
+and allocated/reserved allocator memory cannot substitute for one another. A failed output check or an exceeded
+usable limit fails; otherwise missing, partial, incompatible, invalid, or insufficient requested evidence is
+inconclusive. Timing needs complete warmed latency and matching raw blocks satisfying the recorded minimum repeats.
+Invalid limits raise `ValueError`. Limits belong to the caller; this API does not choose them or assess significance.
+
 ## Save the complete experiment
 
 `render_report` accepts one `BenchmarkReport` or the checked comparison above. HTML contains timing, any appended

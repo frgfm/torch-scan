@@ -53,6 +53,14 @@ See [checked performance experiments](benchmark-comparison.md) for output checks
 
 ::: torchscan.BenchmarkComparison
 
+See [explicit limits](benchmark-comparison.md#apply-explicit-limits) for agent and CI usage.
+
+::: torchscan.check_performance
+
+::: torchscan.MemoryLimit
+
+::: torchscan.PerformanceCheck
+
 ## Workload diagnostics
 
 See [workload diagnostics](workload-diagnostics.md) for separate process RAM and profiler passes.

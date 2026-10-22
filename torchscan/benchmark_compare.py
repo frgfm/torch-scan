@@ -5,13 +5,15 @@
 
 from collections.abc import Callable
 from copy import deepcopy
+from math import isclose
+from statistics import median
 from typing import Any, Literal, TypedDict, cast
 
-from .benchmark import BenchmarkReport
+from .benchmark import _METHOD, BenchmarkReport, _positive_finite
 from .compare import _diff_metrics, _MetricDiff
-from .render import _json_tree, _metrics, _object
+from .render import _json_tree, _metric, _metrics, _number, _object
 
-__all__ = ["BenchmarkComparison", "compare_benchmarks"]
+__all__ = ["BenchmarkComparison", "MemoryLimit", "PerformanceCheck", "check_performance", "compare_benchmarks"]
 
 LatencyChange = Literal["faster", "slower", "within_variability", "unavailable"]
 
@@ -27,6 +29,21 @@ class BenchmarkComparison(TypedDict):
     output_check: Literal["passed", "failed"]
     latency_change: LatencyChange
     context_changes: dict[str, Any]
+
+
+class MemoryLimit(TypedDict):
+    """Candidate byte ceiling for one named metric and exact measurement scope."""
+
+    metric: str
+    scope: str
+    max_bytes: int
+
+
+class PerformanceCheck(TypedDict):
+    """JSON-serializable decision with reasons for agents and other callers."""
+
+    status: Literal["passed", "failed", "inconclusive"]
+    reasons: list[str]
 
 
 def _validate_benchmark(report: object) -> BenchmarkReport:
@@ -96,6 +113,39 @@ def _context_changes(before: BenchmarkReport, after: BenchmarkReport) -> dict[st
     }
 
 
+def _validate_comparison(report: object) -> BenchmarkComparison:
+    report = _object(report, "comparison")
+    _json_tree(report, "comparison")
+    if (
+        type(report.get("schema_version")) is not int
+        or report["schema_version"] != 1
+        or report.get("report_type") != "benchmark_comparison"
+        or report.get("output_check") not in ("passed", "failed")
+    ):
+        raise ValueError("Invalid benchmark comparison.")
+    before = _validate_benchmark(report.get("before"))
+    after = _validate_benchmark(report.get("after"))
+    _matching_context(before, after)
+    for name, difference in _object(report.get("totals"), "comparison.totals").items():
+        difference = _object(difference, f"comparison.totals.{name}")
+        if difference.get("delta") is not None:
+            _number(difference["delta"], f"comparison.totals.{name}.delta")
+        for side in ("before", "after"):
+            if difference.get(side) is not None:
+                _metric(difference[side], f"comparison.totals.{name}.{side}")
+    expected = _diff_metrics(before["totals"], after["totals"])
+    if report["output_check"] == "failed":
+        for difference in expected.values():
+            difference["status"], difference["delta"] = "unavailable", None
+    if report.get("totals") != expected:
+        raise ValueError("Comparison deltas do not match the stored measurements/check status.")
+    if report.get("latency_change") != _latency_change(before, after, expected):
+        raise ValueError("Latency change does not match the stored measurements/check status.")
+    if report.get("context_changes") != _context_changes(before, after):
+        raise ValueError("Context changes do not match the stored measurements.")
+    return cast(BenchmarkComparison, report)
+
+
 def compare_benchmarks(
     before: BenchmarkReport,
     after: BenchmarkReport,
@@ -144,3 +194,98 @@ def compare_benchmarks(
         "latency_change": _latency_change(before, after, differences),
         "context_changes": _context_changes(before, after),
     }
+
+
+def _has_timing_evidence(report: BenchmarkReport) -> bool:
+    latency, measurement = report["totals"]["latency"], report["measurement"]
+    number, samples = measurement.get("number_per_run"), measurement.get("raw_times_seconds")
+    repeats = report["context"].get("min_repeats")
+    return (
+        latency["status"] == "complete"
+        and _positive_finite(latency["value"])
+        and latency["scope"] == "warmed_block_average"
+        and latency["method"] == _METHOD
+        and type(number) is int
+        and _positive_finite(number)
+        and isinstance(samples, list)
+        and type(repeats) is int
+        and repeats >= 2
+        and len(samples) >= repeats
+        and all(_positive_finite(sample) for sample in samples)
+        and type(measurement.get("measured_calls")) is int
+        and measurement["measured_calls"] == number * len(samples)
+        and isclose(median(sample / number for sample in samples), cast(float, latency["value"]), rel_tol=1e-12)
+    )
+
+
+def check_performance(
+    comparison: BenchmarkComparison,
+    *,
+    max_latency_regression: float,
+    memory_limit: MemoryLimit | None = None,
+) -> PerformanceCheck:
+    """Apply explicit limits to an existing comparison without executing workloads.
+
+    Args:
+        comparison: In-memory or JSON-loaded compare_benchmarks result.
+        max_latency_regression: Nonnegative finite fraction; 0.05 allows 5% slower median latency.
+        memory_limit: Optional candidate ceiling naming the exact totals metric, scope, and max_bytes.
+
+    Returns:
+        Status and reasons. A failed output check or exceeded usable limit fails.
+        Otherwise incomplete, incompatible, invalid, or insufficient requested evidence is
+        inconclusive. Equality passes. Memory requires complete byte evidence with matching
+        scope. Timing requires complete warmed latency and matching raw blocks. IQR is not
+        a statistical test and does not select the limit.
+
+    Raises:
+        ValueError: If caller-supplied limits are invalid.
+    """
+    _number(max_latency_regression, "max_latency_regression")
+    if max_latency_regression != 0 and not _positive_finite(max_latency_regression):
+        raise ValueError("max_latency_regression must be finite and nonnegative.")
+    if memory_limit is not None:
+        limit = _object(memory_limit, "memory_limit")
+        for field in ("metric", "scope"):
+            if not isinstance(limit.get(field), str) or not limit[field].strip():
+                raise ValueError(f"memory_limit.{field} must be a non-empty string.")
+        _number(limit.get("max_bytes"), "memory_limit.max_bytes", integer=True)
+    try:
+        comparison = _validate_comparison(comparison)
+    except (ValueError, RecursionError) as error:
+        return {"status": "inconclusive", "reasons": [str(error)]}
+    if comparison["output_check"] == "failed":
+        return {"status": "failed", "reasons": ["Recorded output check failed."]}
+
+    failed = False
+    incomplete = not all(_has_timing_evidence(comparison[side]) for side in ("before", "after"))
+    reasons = []
+    if incomplete:
+        reasons.append("Latency requires complete warmed measurements and matching raw timing blocks.")
+    else:
+        before = cast(float, comparison["before"]["totals"]["latency"]["value"])
+        after = cast(float, comparison["after"]["totals"]["latency"]["value"])
+        ceiling = before * (1 + max_latency_regression)
+        failed = after > ceiling
+        reasons.append(f"Candidate latency {after:g}s {'exceeds' if failed else 'meets'} ceiling {ceiling:g}s.")
+    if memory_limit is not None:
+        name, scope, max_bytes = memory_limit["metric"], memory_limit["scope"], memory_limit["max_bytes"]
+        memory = comparison["after"]["totals"].get(name)
+        label = f"Candidate {name!r}, scope {scope!r}"
+        if (
+            memory is None
+            or memory["status"] != "complete"
+            or memory["unit"] != "bytes"
+            or memory["scope"] != scope
+            or cast(float, memory["value"]) < 0
+            or memory["method"].strip() in ("", "not_requested", "unavailable")
+        ):
+            incomplete = True
+            reasons.append(f"{label}: complete byte evidence with matching scope is required.")
+        else:
+            exceeded = cast(float, memory["value"]) > max_bytes
+            failed |= exceeded
+            reasons.append(
+                f"{label}: {memory['value']} bytes {'exceeds' if exceeded else 'meets'} ceiling {max_bytes}."
+            )
+    return {"status": "failed" if failed else "inconclusive" if incomplete else "passed", "reasons": reasons}

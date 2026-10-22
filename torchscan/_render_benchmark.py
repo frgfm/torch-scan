@@ -9,8 +9,7 @@ from html import escape
 from typing import Any
 
 from ._render_assets import STYLE
-from .benchmark_compare import _context_changes, _latency_change, _matching_context, _validate_benchmark
-from .compare import _diff_metrics
+from .benchmark_compare import _validate_benchmark, _validate_comparison
 from .render import _diagnostics, _json_tree, _metadata, _metric_table, _number, _object, _string
 from .utils import _display_unit
 from .workload import _LABELS, _summary
@@ -72,25 +71,9 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
     after = _validate_benchmark(report.get("after") if comparison else report)
     changes: dict[str, Any] = {}
     if comparison:
-        before = _validate_benchmark(before)
-        _matching_context(before, after)
-        if (
-            type(report.get("schema_version")) is not int
-            or report["schema_version"] != 1
-            or report.get("output_check") not in {"passed", "failed"}
-        ):
-            raise ValueError("Invalid benchmark comparison.")
-        expected = _diff_metrics(before["totals"], after["totals"])
-        if report["output_check"] == "failed":
-            for difference in expected.values():
-                difference["status"], difference["delta"] = "unavailable", None
-        if report["totals"] != expected:
-            raise ValueError("Comparison deltas do not match the stored measurements/check status.")
-        if report.get("latency_change") != _latency_change(before, after, expected):
-            raise ValueError("Latency change does not match the stored measurements/check status.")
-        changes = _context_changes(before, after)
-        if report.get("context_changes") != changes:
-            raise ValueError("Context changes do not match the stored measurements.")
+        validated = _validate_comparison(report)
+        before = validated["before"]
+        changes = validated["context_changes"]
     body = _measurements(after)
     verdict = "Single workload measurement"
     if before is not None:

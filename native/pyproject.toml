@@ -1,3 +1,4 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+# PyTorch's MSVC build helper wraps compiler.spawn, removed in setuptools 84.
+requires = ["setuptools>=68,<84", "wheel"]
 build-backend = "setuptools.build_meta"

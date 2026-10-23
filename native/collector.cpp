@@ -118,13 +118,13 @@ std::unique_ptr<at::ObserverContext> begin(const at::RecordFunction& fn) {
     event.overload = op->overload_name;
     event.module = state->modules.empty() ? "" : state->modules.back();
     auto key = event.name + "." + event.overload;
-    if (!state->keywords.count(key)) {
-      std::vector<std::string> keys;
+    auto cached = state->keywords.find(key);
+    std::vector<std::string> uncached;
+    if (cached == state->keywords.end()) {
       if (auto schema = fn.operator_schema())
-        for (const auto& arg : schema->arguments()) keys.push_back(arg.kwarg_only() ? arg.name() : "");
-      state->keywords.emplace(key, std::move(keys));
+        for (const auto& arg : schema->arguments()) uncached.push_back(arg.kwarg_only() ? arg.name() : "");
     }
-    const auto& keys = state->keywords.at(key);
+    const auto& keys = cached == state->keywords.end() ? uncached : cached->second;
     std::ostringstream inputs, kwargs;
     inputs << '[';
     kwargs << '{';
@@ -150,6 +150,7 @@ std::unique_ptr<at::ObserverContext> begin(const at::RecordFunction& fn) {
       ++state->dropped;
       return context;
     }
+    if (cached == state->keywords.end()) state->keywords.emplace(std::move(key), std::move(uncached));
     state->events.push_back(std::move(event));
     state->bytes += bytes;
     context->index = state->events.size() - 1;

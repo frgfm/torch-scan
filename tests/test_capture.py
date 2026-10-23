@@ -113,6 +113,8 @@ def test_native_unknown_and_failed_ops():
     report = analyze_capture(capture_workload(lambda: torch.linalg.svd(value)))
     assert report["total"]["status"] == "partial"
     assert report["diagnostics"]
+    negative = torch._neg_view(value)
+    assert analyze_capture(capture_workload(lambda: torch.resolve_neg(negative)))["total"]["status"] == "partial"
 
     def catches_error():
         with suppress(RuntimeError):

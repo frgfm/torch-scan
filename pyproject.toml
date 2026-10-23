@@ -49,7 +49,7 @@ quality = [
 docs = [
     "mkdocs==1.6.1",
     "mkdocs-material==9.7.7",
-    "mkdocstrings[python]==1.0.7",
+    "mkdocstrings[python]==1.0.8",
 ]
 model-test = [
     "timm==1.0.28",

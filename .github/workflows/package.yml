@@ -149,7 +149,7 @@ jobs:
           if [[ "${{ matrix.runtime }}" == "minimum" ]]; then
             uv pip install -e ".[test]" torch==2.1.0 "numpy<2" "setuptools<70" wheel
           else
-            uv pip install -e ".[test]" setuptools wheel
+            uv pip install -e ".[test]" "setuptools<84" wheel
           fi
       - name: Install model smokes
         if: matrix.os == 'ubuntu-latest' && matrix.runtime == 'latest'

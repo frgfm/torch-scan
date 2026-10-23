@@ -9,13 +9,14 @@ The Python dispatch counter remains the default.
 In a checkout with PyTorch installed, install `setuptools` and `wheel`, then build the optional package:
 
 ```shell
-uv pip install setuptools wheel
+uv pip install "setuptools<84" wheel
 uv pip install --no-build-isolation --no-cache --no-deps ./native
 ```
 
 A C++ compiler is required for this explicit build; imports never compile code. Rebuild after changing PyTorch.
 The native wheel records the exact PyTorch release it was built against. CI builds and tests minimum/current
 PyTorch wheels on Linux, macOS, and Windows; ordinary TorchScan installs remain Python-only.
+Setuptools 84 removed the Windows compiler hook used by PyTorch's build helper.
 PyTorch 2.1 benchmark utilities additionally need `setuptools<70` and `numpy<2`.
 
 ## Capture and replay
@@ -78,9 +79,9 @@ Measured on Linux, AMD EPYC 9V74, Python 3.11.16, PyTorch 2.13.0+cpu, two PyTorc
 
 | Workload | Clean (ms) | Python counter (ms) | Native capture (ms) | Replay (ms) | Native total (ms) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 600 pointwise ops, 1,024 elements | 1.62 | 32.25 | 5.06 | 6.04 | 11.24 |
-| ResNet18, 4 × 3 × 32 × 32 | 8.30 | 23.27 | 10.37 | 1.45 | 11.58 |
-| Tiny BERT, 1 layer, hidden 16, 4 × 8 tokens | 0.54 | 8.23 | 1.39 | 0.54 | 2.32 |
+| 600 pointwise ops, 1,024 elements | 1.59 | 34.78 | 5.21 | 6.32 | 11.67 |
+| ResNet18, 4 × 3 × 32 × 32 | 9.24 | 27.05 | 12.68 | 1.64 | 13.76 |
+| Tiny BERT, 1 layer, hidden 16, 4 × 8 tokens | 0.58 | 7.67 | 1.46 | 0.55 | 2.12 |
 
 FLOP counts match the Python counter in all three workloads: 614,400; 301,391,232; and 172,480 respectively.
 These CPU measurements do not establish accelerator performance. Separately, fresh-process API import medians

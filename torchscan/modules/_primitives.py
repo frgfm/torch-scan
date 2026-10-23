@@ -10,6 +10,7 @@ from typing import cast
 
 from torch import Tensor, nn
 
+from .._formula_math import gelu_flops, rmsnorm_rows, softmax_counts
 from ._transformer import _dense_tensor
 
 ACTIVATION_COSTS: dict[type[nn.Module], int] = {
@@ -43,39 +44,6 @@ PRIMITIVE_TYPES: tuple[type[nn.Module], ...] = (
 if (rmsnorm := getattr(nn, "RMSNorm", None)) is not None:
     PRIMITIVE_TYPES += (rmsnorm,)
 _NATIVE_FORWARDS = {kind: kind.forward for kind in PRIMITIVE_TYPES}
-
-
-def gelu_flops(elements: int, approximate: str = "none") -> int:
-    """Count exact GELU or its tanh expansion; erf costs one operation."""
-    if approximate not in ("none", "tanh"):
-        raise NotImplementedError("GELU estimates support only 'none' and 'tanh' approximations.")
-    return elements * (5 if approximate == "none" else 14)
-
-
-def rmsnorm_rows(input_shape: tuple[int, ...], shape: tuple[int, ...]) -> int:
-    """Count nonempty normalized rows, including zero-batch inputs."""
-    if (
-        not shape
-        or any(type(size) is not int or size <= 0 for size in shape)
-        or len(shape) > len(input_shape)
-        or tuple(input_shape[-len(shape) :]) != shape
-    ):
-        raise NotImplementedError("RMSNorm estimates require matching nonempty normalized rows.")
-    return math.prod(input_shape) // math.prod(shape)
-
-
-def softmax_counts(shape: tuple[int, ...], dim: int, *, logarithmic: bool = False) -> tuple[int, int]:
-    """Count stable row arithmetic and staged logical accesses."""
-    elements = math.prod(shape)
-    width = shape[dim] if shape else 1
-    if not elements or not width:
-        return 0, 0
-    rows = elements // width
-    return (
-        (4 * elements - rows, 8 * elements + 6 * rows)
-        if logarithmic
-        else (5 * elements - 2 * rows, 8 * elements + 4 * rows)
-    )
 
 
 def validate_primitive(module: nn.Module, inp: Tensor) -> tuple[int, int]:

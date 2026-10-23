@@ -117,6 +117,7 @@ def measure_workload(
     profile: bool = False,
     rss_command: Sequence[str] | None = None,
     print_summary: bool = True,
+    flops_backend: Literal["python", "native"] = "python",
 ) -> BenchmarkReport:
     """Collect selected workload evidence and print ms, work units/s, and MiB.
 
@@ -133,6 +134,7 @@ def measure_workload(
         profile: Collect a separate operator profile after FLOPs and memory.
         rss_command: Executable and arguments for fresh-process lifetime RSS; must exit.
         print_summary: Print a terminal summary in addition to returning the report.
+        flops_backend: Counter for the FLOP pass; native retains a replayable capture in operator_flops.
 
     Returns:
         A JSON-serializable BenchmarkReport accepted by render_report. Partial and unavailable
@@ -146,6 +148,8 @@ def measure_workload(
         Use the individual collectors for custom FLOP formulas or trace export.
     """
     _validate_timing_settings(workload, work_units, work_unit, warmup, min_run_time, min_repeats)
+    if flops_backend not in ("python", "native"):
+        raise ValueError("flops_backend must be 'python' or 'native'.")
     if isinstance(metrics, (str, bytes)) or any(name not in _METRICS for name in metrics):
         raise ValueError(f"metrics must be a sequence of names from {_METRICS}.")
     selected = set(metrics)
@@ -198,7 +202,9 @@ def measure_workload(
                 status="unavailable", unit=unit, scope=scope, method="unavailable" if requested else "not_requested"
             )
     if "flops" in selected:
-        flops = _collect(measure_flops, workload, "operator_flops", diagnostics)
+        flops = _collect(
+            lambda call: measure_flops(call, backend=flops_backend), workload, "operator_flops", diagnostics
+        )
         if flops is not None:
             report["operator_flops"] = flops
             report["totals"]["operator_flops"] = flops["total"]

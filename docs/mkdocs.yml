@@ -89,6 +89,7 @@ nav:
       - Workload memory and bottlenecks: workload-diagnostics.md
       - Checked performance experiments: benchmark-comparison.md
       - Autoresearch: autoresearch.md
+      - Native collection and replay: native-capture.md
       - Methodology: methodology.md
       - Native Transformers: transformers.md
       - Report schema: report-schema.md

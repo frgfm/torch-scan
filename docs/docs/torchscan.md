@@ -28,6 +28,14 @@ See [the extension tutorial](extensions.md) for complete examples and subtree ow
 
 ::: torchscan.measure_flops
 
+## Native collection and offline replay
+
+See [native capture](native-capture.md) for the optional collector build, observation scope, and replay without PyTorch.
+
+::: torchscan.capture_workload
+
+::: torchscan.analyze_capture
+
 ## Model cost comparison
 
 ::: torchscan.compare_reports
@@ -79,6 +87,8 @@ model reports also support SVG. A saved comparison displays its recorded output 
 ::: torchscan.Diagnostic
 
 ::: torchscan.FlopReport
+
+::: torchscan.OperatorCapture
 
 ::: torchscan.ReportDiff
 

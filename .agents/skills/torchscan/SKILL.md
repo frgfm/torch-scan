@@ -19,6 +19,8 @@ Use the smallest API that answers the request:
   in a `BenchmarkReport` with a terminal summary. Optional `profile=True`; RSS needs an explicit `rss_command`.
   Unreleased; install `main`. Passes share caller state; use a repeatable workload.
 - `measure_flops(workload)`: operator FLOPs for one zero-argument workload call.
+- `capture_workload(workload)`: optional native metadata capture; `analyze_capture(capture)` replays it without PyTorch.
+  Preserve its calling-thread eager-operator scope, loss counters, and diagnostics. See `docs/docs/native-capture.md`.
 - `measure_peak_memory(workload, device=...)`: backend-specific PyTorch peak memory.
 - `measure_peak_rss(command)`: Linux/macOS child-process lifetime RSS, including loading and imports.
 - `profile_workload(workload, device=...)`: one instrumented operator diagnostic pass; not clean latency.

@@ -448,8 +448,6 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.view",
             "aten.flatten",
             "aten.reshape",
-            "aten.resolve_conj",
-            "aten.resolve_neg",
             "aten.as_strided_",
             "aten.transpose_",
             "aten.unsafe_split",

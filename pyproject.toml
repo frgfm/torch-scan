@@ -42,9 +42,9 @@ test = [
 ]
 quality = [
     "lint-my-headers==0.6.0",
-    "prek==0.5.5",
-    "ruff==0.17.0",
-    "ty==0.0.86",
+    "prek==0.5.7",
+    "ruff==0.17.2",
+    "ty==0.0.92",
 ]
 docs = [
     "mkdocs==1.6.1",

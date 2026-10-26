@@ -129,7 +129,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Check headers
-        uses: frgfm/lint-my-headers@b2cbf9115943aa4b1407c3c944cc7c51250e7673 # v0.6.0
+        uses: frgfm/lint-my-headers@879d4a8d107215724f2848ae40e485a2c4f97adb # v0.8.0
 
   build:
     needs: [install, quality, tests, compatibility, model-smoke, headers]

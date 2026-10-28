@@ -3,17 +3,16 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict
-
-if TYPE_CHECKING:
-    from .flops import FlopReport
+from typing import Any, Literal, NotRequired, TypedDict
 
 __all__ = [
     "AnalysisReport",
     "Diagnostic",
+    "FlopReport",
     "IncompleteAnalysisError",
     "LayerReport",
     "MetricResult",
+    "OperatorCapture",
     "TokenDependency",
     "metric_result",
 ]
@@ -41,6 +40,38 @@ class Diagnostic(TypedDict):
     message: str
     path: NotRequired[str]
     operator: NotRequired[str]
+
+
+class OperatorCapture(TypedDict):
+    """Versioned, bounded native operator metadata; contains no tensor contents."""
+
+    schema_version: int
+    report_type: str
+    context: dict[str, Any]
+    inputs: dict[str, Any]
+    operators: list[dict[str, Any]]
+    dropped_events: int
+    errors: int
+
+
+class IgnoredOperator(TypedDict):
+    """Observed operator that TorchScan explicitly excludes from FLOPs."""
+
+    calls: int
+    reason: str
+
+
+class FlopReport(TypedDict):
+    """JSON-serializable operator FLOP report."""
+
+    schema_version: int
+    context: dict[str, str]
+    total: MetricResult
+    by_module: dict[str, int]
+    by_operator: dict[str, int]
+    ignored_operators: dict[str, IgnoredOperator]
+    diagnostics: list[Diagnostic]
+    capture: NotRequired["OperatorCapture"]
 
 
 class TokenRelation(TypedDict):

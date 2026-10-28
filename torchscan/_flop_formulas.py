@@ -3,18 +3,18 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-"""Small shape formulas used only when the installed PyTorch has no formula.
+"""Portable shape formulas shared by native replay and Python counter fallbacks.
 
 These follow the shape-formula contract shared by PyTorch 2.1 and newer releases.
 They never register in PyTorch's process-global mapping.
 """
 
+from collections.abc import Callable
 from functools import partial
 from math import prod
 from typing import Any
 
-from .modules._pooling import adaptive_visits
-from .modules._primitives import gelu_flops, rmsnorm_rows, softmax_counts
+from ._formula_math import adaptive_visits, gelu_flops, rmsnorm_rows, softmax_counts
 
 
 def _elementwise(*_args: Any, out_shape: Any, cost: int = 1, **_kwargs: Any) -> int:
@@ -316,7 +316,7 @@ def _clamp(_input_shape: Any, minimum: Any = None, maximum: Any = None, *, out_s
     return prod(out_shape) * (int(kwargs.get("min", minimum) is not None) + int(kwargs.get("max", maximum) is not None))
 
 
-FORMULAS = {
+FORMULAS: dict[str, Callable[..., int]] = {
     **{
         f"{prefix}{rank}d": partial(_elementwise, cost=0)
         for prefix in ("upsample_nearest", "_upsample_nearest_exact")
@@ -424,4 +424,105 @@ FORMULAS = {
     "_native_batch_norm_legit": _batch_norm_legit,
     "_native_batch_norm_legit_no_training": _batch_norm_eval,
     "_scaled_dot_product_flash_attention_for_cpu": _cpu_attention,
+}
+
+
+_IGNORED_OPERATOR_REASONS = {
+    **dict.fromkeys(
+        [
+            "aten._unsafe_view",
+            "aten.alias",
+            "aten.as_strided",
+            "aten.detach",
+            "aten.expand",
+            "aten.narrow",
+            "aten.permute",
+            "aten.select",
+            "aten.slice",
+            "aten.squeeze",
+            "aten.squeeze_",
+            "aten.t",
+            "aten.transpose",
+            "aten.unbind",
+            "aten.unsqueeze",
+            "aten.view",
+            "aten.flatten",
+            "aten.reshape",
+            "aten.as_strided_",
+            "aten.transpose_",
+            "aten.unsafe_split",
+        ],
+        "Metadata-only tensor view.",
+    ),
+    **dict.fromkeys(
+        [
+            "aten._to_copy",
+            "aten.cat",
+            "aten.clone",
+            "aten.contiguous",
+            "aten.copy_",
+            "aten.split",
+            "aten.split_with_sizes",
+            "aten.to",
+            "aten.fill_",
+            "aten.zero_",
+            "aten.embedding",
+            "aten.gather",
+            "aten.index",
+            "aten.index_select",
+            "aten.masked_select",
+            "aten.repeat",
+            "aten.repeat_interleave",
+            "aten.roll",
+            "aten.stack",
+            "aten.constant_pad_nd",
+            "aten._local_scalar_dense",
+            "aten.item",
+            "aten.is_nonzero",
+            "aten.pixel_shuffle",
+            "aten.pixel_unshuffle",
+            "aten.channel_shuffle",
+            "aten.native_channel_shuffle",
+            "aten.im2col",
+            "aten._pad_circular",
+            "aten.tril",
+            "aten.tril_",
+            "aten.triu",
+            "aten.triu_",
+            *[
+                f"aten.{prefix}{rank}d"
+                for prefix in ("reflection_pad", "replication_pad", "upsample_nearest", "_upsample_nearest_exact")
+                for rank in (1, 2, 3)
+            ],
+        ],
+        "Data movement is excluded from FLOPs.",
+    ),
+    **dict.fromkeys(
+        ["aten.empty", "aten.empty_strided", "aten.empty_like", "aten.new_empty", "aten.new_empty_strided"],
+        "Tensor allocation is excluded from FLOPs.",
+    ),
+    **dict.fromkeys(
+        [
+            "aten.full",
+            "aten.full_like",
+            "aten.lift_fresh",
+            "aten.lift_fresh_copy",
+            "aten.ones",
+            "aten.ones_like",
+            "aten.scalar_tensor",
+            "aten.zeros",
+            "aten.zeros_like",
+            "aten.arange",
+            "aten.eye",
+        ],
+        "Tensor creation is excluded from FLOPs.",
+    ),
+    **dict.fromkeys(
+        ["aten.rand", "aten.rand_like", "aten.bernoulli", "aten.bernoulli_"],
+        "Random sampling is excluded from FLOPs.",
+    ),
+    **dict.fromkeys(
+        ["aten.bitwise_not", "aten.bitwise_not_"],
+        "Integer and boolean bitwise operations are excluded from FLOPs.",
+    ),
 }

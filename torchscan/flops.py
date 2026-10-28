@@ -5,7 +5,7 @@
 
 from collections import Counter
 from collections.abc import Callable, Mapping
-from typing import Any, TypedDict
+from typing import Any, Literal
 
 import torch
 from torch import nn
@@ -13,129 +13,13 @@ from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_flatten
 from torch.utils.flop_counter import FlopCounterMode
 
-from ._flop_formulas import FORMULAS
-from .report import Diagnostic, MetricResult, metric_result
+from ._flop_formulas import _IGNORED_OPERATOR_REASONS, FORMULAS
+from .report import Diagnostic, FlopReport, IgnoredOperator, metric_result
 
 __all__ = ["FlopReport", "measure_flops"]
 
 _METHOD = "torch.utils.flop_counter.FlopCounterMode"
 _NO_DECOMPOSITION = object()
-
-
-class IgnoredOperator(TypedDict):
-    """Observed operator that TorchScan explicitly excludes from FLOPs."""
-
-    calls: int
-    reason: str
-
-
-class FlopReport(TypedDict):
-    """JSON-serializable operator FLOP report."""
-
-    schema_version: int
-    context: dict[str, str]
-    total: MetricResult
-    by_module: dict[str, int]
-    by_operator: dict[str, int]
-    ignored_operators: dict[str, IgnoredOperator]
-    diagnostics: list[Diagnostic]
-
-
-_IGNORED_OPERATOR_REASONS = {
-    **dict.fromkeys(
-        [
-            "aten._unsafe_view",
-            "aten.alias",
-            "aten.as_strided",
-            "aten.detach",
-            "aten.expand",
-            "aten.narrow",
-            "aten.permute",
-            "aten.select",
-            "aten.slice",
-            "aten.squeeze",
-            "aten.squeeze_",
-            "aten.t",
-            "aten.transpose",
-            "aten.unbind",
-            "aten.unsqueeze",
-            "aten.view",
-            "aten.as_strided_",
-            "aten.transpose_",
-            "aten.unsafe_split",
-        ],
-        "Metadata-only tensor view.",
-    ),
-    **dict.fromkeys(
-        [
-            "aten._to_copy",
-            "aten.cat",
-            "aten.clone",
-            "aten.contiguous",
-            "aten.copy_",
-            "aten.split",
-            "aten.split_with_sizes",
-            "aten.to",
-            "aten.fill_",
-            "aten.zero_",
-            "aten.embedding",
-            "aten.gather",
-            "aten.index",
-            "aten.index_select",
-            "aten.masked_select",
-            "aten.repeat",
-            "aten.repeat_interleave",
-            "aten.roll",
-            "aten.stack",
-            "aten.constant_pad_nd",
-            "aten._local_scalar_dense",
-            "aten.pixel_shuffle",
-            "aten.pixel_unshuffle",
-            "aten.channel_shuffle",
-            "aten.native_channel_shuffle",
-            "aten.im2col",
-            "aten._pad_circular",
-            "aten.tril",
-            "aten.tril_",
-            "aten.triu",
-            "aten.triu_",
-            *[
-                f"aten.{prefix}{rank}d"
-                for prefix in ("reflection_pad", "replication_pad", "upsample_nearest", "_upsample_nearest_exact")
-                for rank in (1, 2, 3)
-            ],
-        ],
-        "Data movement is excluded from FLOPs.",
-    ),
-    **dict.fromkeys(
-        ["aten.empty", "aten.empty_strided", "aten.empty_like", "aten.new_empty", "aten.new_empty_strided"],
-        "Tensor allocation is excluded from FLOPs.",
-    ),
-    **dict.fromkeys(
-        [
-            "aten.full",
-            "aten.full_like",
-            "aten.lift_fresh",
-            "aten.lift_fresh_copy",
-            "aten.ones",
-            "aten.ones_like",
-            "aten.scalar_tensor",
-            "aten.zeros",
-            "aten.zeros_like",
-            "aten.arange",
-            "aten.eye",
-        ],
-        "Tensor creation is excluded from FLOPs.",
-    ),
-    **dict.fromkeys(
-        ["aten.rand", "aten.rand_like", "aten.bernoulli", "aten.bernoulli_"],
-        "Random sampling is excluded from FLOPs.",
-    ),
-    **dict.fromkeys(
-        ["aten.bitwise_not", "aten.bitwise_not_"],
-        "Integer and boolean bitwise operations are excluded from FLOPs.",
-    ),
-}
 
 
 def _operator_key(operator: Any) -> str:
@@ -301,6 +185,7 @@ def measure_flops(
     *,
     modules: nn.Module | list[nn.Module] | None = None,
     custom_mapping: Mapping[Any, Callable[..., int | float]] | None = None,
+    backend: Literal["python", "native"] = "python",
 ) -> FlopReport:
     """Measure workload FLOPs with PyTorch's native operator counter.
 
@@ -308,14 +193,30 @@ def measure_flops(
         workload: Zero-argument callable invoked exactly once inside the counter.
         modules: Optional module or modules used for hierarchical counts on older supported PyTorch releases.
         custom_mapping: Per-call PyTorch operator-to-FLOP formula overrides.
+        backend: Existing Python dispatch counter, or optional native capture followed by offline analysis.
+            Native reports retain their capture and use an explicit calling-thread eager-operator scope.
 
     Returns:
         A versioned report with known counts and diagnostics for every observed uncounted operator.
 
     Raises:
+        ImportError: If backend='native' is requested without a compatible collector build.
+        ValueError: If the backend is invalid or native is combined with live custom_mapping callbacks.
         NotImplementedError: If the installed PyTorch counter cannot expose the mapping needed to find missing formulas.
         Exception: Any exception raised by ``workload`` is propagated unchanged.
     """
+    if backend == "native":
+        if custom_mapping:
+            raise ValueError("Live Python operator callbacks require backend='python'.")
+        from .capture import capture_workload
+        from .replay import analyze_capture
+
+        capture = capture_workload(workload, modules=modules)
+        report = analyze_capture(capture)
+        report["capture"] = capture
+        return report
+    if backend != "python":
+        raise ValueError("backend must be 'python' or 'native'.")
     mapping = dict(custom_mapping or {})
     overloads = [operator for operator in mapping if getattr(operator, "_overloadpacket", operator) is not operator]
     if overloads:

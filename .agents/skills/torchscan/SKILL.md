@@ -26,6 +26,8 @@ Use the smallest API that answers the request:
   work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.
 - `compare_benchmarks(before, after, check=...)`: compatible workload comparison with an owner-supplied output check.
+- `python -m torchscan.autoresearch`: evaluate a candidate against an owner-defined resource objective. Unreleased;
+  install `main`.
 - `render_report(report)`: offline model HTML/SVG or benchmark/comparison HTML, without remeasurement.
 
 ## Workflow
@@ -51,6 +53,9 @@ Use the smallest API that answers the request:
   model loading or fresh-process startup. Use `compare_benchmarks` for timing and `compare_reports` for model estimates.
 - A passed output check does not establish task accuracy. Failed checks withhold benchmark deltas; IQR labels are
   descriptive, not statistical significance. Preserve methods, memory scopes, hardware, and raw timing evidence.
+
+For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Keep the owner's experiment
+and reference files fixed; edit the candidate and keep it only when the evaluator returns `keep`.
 
 For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
 `measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,

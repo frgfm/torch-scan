@@ -120,6 +120,7 @@ compatibility checks, and timing dependencies on PyTorch 2.1.
 - [Getting started](https://frgfm.github.io/torch-scan/)
 - [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html) and the repository
   [agent skill](.agents/skills/torchscan/SKILL.md)
+- [Autoresearch for resource optimization](https://frgfm.github.io/torch-scan/autoresearch.html)
 - [Model and input support](https://frgfm.github.io/torch-scan/model-support.html) and
   [custom extensions](https://frgfm.github.io/torch-scan/extensions.html)
 - [Report schema](https://frgfm.github.io/torch-scan/report-schema.html),

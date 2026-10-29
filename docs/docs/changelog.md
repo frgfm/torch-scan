@@ -7,6 +7,8 @@ Version 0.3.0 is the proposed next release, not a published package.
 
 ### Added
 
+- Resource-focused autoresearch evaluation with isolated workers, fixed reference checks, latency/memory objectives,
+  fresh confirmation, saved evidence, and a bounded recipe for the owner's coding agent.
 - Native GELU, SiLU, GLU, and optional RMSNorm module/operator estimates; GroupNorm MAC/DMA estimates and native
   Transformer GELU FLOPs. Functional gating and scalar squares retain per-analysis coverage and diagnostics.
 - `measure_workload`: one-call selected resource measurements, readable ms/work-units per second/MiB output,

@@ -94,6 +94,7 @@ jobs:
           pytest
           tests/test_autoresearch.py
           tests/test_model_workload.py
+          tests/test_output_error.py
           tests/test_benchmark.py
           tests/test_benchmark_comparison.py
           tests/test_diagnostics.py

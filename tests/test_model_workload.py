@@ -68,6 +68,47 @@ def test_automatic_check_rejects_wrong_model_without_user_callbacks(tmp_path):
     assert report["trials"] == []
 
 
+def test_precision_candidate_needs_no_new_factory_and_retains_output_errors(tmp_path):
+    path = contract(tmp_path, check={"absolute_error": {"mean": 0, "p99": 0}})
+    report = evaluate_model(path, candidate_precision="bfloat16", output=tmp_path / "run")
+    assert report["decision"] == "discard", report["reasons"]
+    errors = report["output_errors"]["initial"]["candidate"]["/"]
+    assert errors["candidate_dtype"] == "torch.bfloat16"
+    assert errors["reference_dtype"] == "torch.float32"
+    assert errors["p99"] > 0
+    assert report["candidate"] == report["baseline"]
+    assert report["candidate_precision"] == "bfloat16"
+
+
+def test_precision_policy_preserves_original_reference_and_fixed_error_budget(tmp_path):
+    path = contract(tmp_path, check={"absolute_error": {"p99": 0.01}})
+    phase = request(path, "reference")
+    phase["settings"] = model_worker(request(path))["settings"]
+    phase["precision"] = "bfloat16"
+    model_worker(phase)
+    assert torch.load(phase["reference_outputs"], weights_only=True).dtype == torch.float32
+    phase["mode"] = "check"
+    checked = model_worker(phase)
+    assert checked["output_check"] == "passed"
+    assert checked["output_errors"]["/"]["candidate_dtype"] == "torch.bfloat16"
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        {"absolute_error": {}},
+        {"absolute_error": {"p999": 1}},
+        {"absolute_error": {"mean": float("nan")}},
+        {"absolute_error": {"p99": 1}, "rtol": 0.1},
+        {"absolute_error": {"mean": True}},
+    ],
+)
+def test_error_constraints_must_be_explicit_finite_and_unambiguous(tmp_path, check):
+    path = contract(tmp_path, check=check)
+    with pytest.raises(ValueError):
+        model_worker(request(path))
+
+
 def test_imported_candidate_does_not_execute_stale_bytecode(tmp_path):
     path = contract(tmp_path)
     source = tmp_path / "models.py"

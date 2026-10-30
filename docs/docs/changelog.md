@@ -10,6 +10,8 @@ Version 0.3.0 is the proposed next release, not a published package.
 - Script-free autoresearch contracts for existing models and tensor descriptors or saved inputs: automatic latency,
   throughput, scoped tensor/allocator memory and clean child RSS. Candidate models get automatic reference checks,
   repeated resource comparisons, fresh confirmation and a bounded recipe for the owner's coding agent.
+- Float16/bfloat16 autocast candidates with per-output absolute-error mean, median, p90, p95, p99 and maximum.
+  Owner-selected error ceilings remain fixed against the original-precision reference.
 - Native GELU, SiLU, GLU, and optional RMSNorm module/operator estimates; GroupNorm MAC/DMA estimates and native
   Transformer GELU FLOPs. Functional gating and scalar squares retain per-analysis coverage and diagnostics.
 - `measure_workload`: one-call selected resource measurements, readable ms/work-units per second/MiB output,

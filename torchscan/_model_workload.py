@@ -15,6 +15,7 @@ from typing import Any
 
 import torch
 
+from ._output_error import ERROR_STATISTICS, compare_outputs
 from .benchmark import _synchronizer
 from .workload import measure_workload
 
@@ -146,11 +147,26 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         },
         require_limits=False,
     )
-    tolerance = contract.get("check", {"rtol": 1e-4, "atol": 1e-5})
-    if not isinstance(tolerance, dict) or tolerance.keys() - {"rtol", "atol"}:
-        raise ValueError("check accepts only rtol and atol.")
-    if any(type(value) not in (int, float) or not 0 <= value < float("inf") for value in tolerance.values()):
+    tolerance = contract.get("check", {})
+    if not isinstance(tolerance, dict) or tolerance.keys() - {"rtol", "atol", "absolute_error"}:
+        raise ValueError("check accepts rtol/atol or absolute_error statistic ceilings.")
+    if "absolute_error" in tolerance:
+        limits = tolerance["absolute_error"]
+        if (
+            tolerance.keys() != {"absolute_error"}
+            or not isinstance(limits, dict)
+            or not limits
+            or limits.keys() - set(ERROR_STATISTICS)
+        ):
+            raise ValueError("absolute_error requires named mean/median/p90/p95/p99/max ceilings, without rtol/atol.")
+    else:
+        tolerance = {"rtol": 1e-4, "atol": 1e-5, **tolerance}
+        limits = tolerance
+    if any(type(value) not in (int, float) or not 0 <= value < float("inf") for value in limits.values()):
         raise ValueError("Output tolerances must be finite nonnegative numbers.")
+    precision = "default" if request["mode"] == "reference" else request.get("precision", "default")
+    if precision not in ("default", "float16", "bfloat16"):
+        raise ValueError("precision must be default, float16 or bfloat16 (autocast).")
     if request["mode"] != "inspect" and settings != request["settings"]:
         raise ValueError("Model workload settings changed between workers.")
     declared_files = contract.get("files", [])
@@ -190,18 +206,26 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
 
     @torch.inference_mode()
     def workload() -> Any:
-        return model(*args, **kwargs)
+        if precision == "default":
+            return model(*args, **kwargs)
+        device_type = torch.device(device).type
+        dtype = torch.float16 if precision == "float16" else torch.bfloat16
+        with torch.autocast(device_type=device_type, dtype=dtype):
+            try:
+                enabled = torch.is_autocast_enabled(device_type)
+            except TypeError:  # PyTorch 2.1 exposes a separate CPU getter.
+                enabled = torch.is_autocast_cpu_enabled() if device_type == "cpu" else torch.is_autocast_enabled()
+            if not enabled:
+                raise NotImplementedError(f"{precision} autocast is unavailable on {device_type}.")
+            return model(*args, **kwargs)
 
     if request["mode"] == "reference":
         torch.save(_outputs(workload()), request["reference_outputs"])
         return {"reference_outputs": request["reference_outputs"]}
     if request["mode"] == "check":
         reference = torch.load(request["reference_outputs"], map_location="cpu", weights_only=True)
-        try:
-            torch.testing.assert_close(_outputs(workload()), reference, **tolerance, equal_nan=False)
-        except AssertionError:
-            return {"output_check": "failed"}
-        return {"output_check": "passed"}
+        passed, errors = compare_outputs(_outputs(workload()), reference, tolerance)
+        return {"output_check": "passed" if passed else "failed", "output_errors": errors}
     if request["mode"] == "rss":
         _, synchronize = _synchronizer(torch.device(device))
         for _ in range(settings["warmup"] + 1):
@@ -225,5 +249,6 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         inputs_origin="saved" if "inputs" in contract else "synthetic",
         seed=seed,
         model_reference=request["implementation"],
+        execution_precision=precision,
     )
     return result

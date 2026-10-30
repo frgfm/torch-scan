@@ -68,6 +68,43 @@ TorchScan generates reference outputs in a fresh process, checks each implementa
 repeated measurement pairs, and confirms a tentative winner with another fresh checked pair. Reference outputs are
 saved locally with the experiment. They can contain application data.
 
+## Numerical output error and execution precision
+
+The input descriptor's `dtype` describes incoming data. Execution precision is a candidate choice. Test float16 or
+bfloat16 mixed precision on the same model without writing another implementation:
+
+```shell
+python -m torchscan.autoresearch workload.json --candidate-precision bfloat16 --output /tmp/precision-001
+```
+
+`float16` and `bfloat16` select PyTorch autocast for eligible operations. Weights and input fixtures retain their
+declared types. The workload must actually execute; unsupported modes remain inconclusive. Reduced precision is not
+assumed faster. `default` preserves original execution. Use `--baseline-precision` for an already accepted autocast
+incumbent. The reference always uses the original model's default precision.
+
+Set fixed error ceilings in the contract, for example:
+
+```json
+"check": {
+  "absolute_error": {"mean": 0.0001, "p99": 0.001}
+}
+```
+
+Each floating output produces `mean`, `median`, `p90`, `p95`, `p99`, `max` and element `count`, measured on
+`abs(candidate - original_reference)`. Values are converted to float64 **after** inference; the reference is never
+rounded down to the candidate dtype. These are output-value differences, not task accuracy. Floating scalars use
+the same rules. Selected ceilings must hold independently for every tensor; differently scaled outputs are not pooled.
+Percentiles use linear interpolation over the flattened tensor, including batch. Statistics, original output dtypes
+and failed constraint names are retained in JSON/CLI feedback, including rejected candidates.
+
+Only selected statistics are constraints. A p99 ceiling can permit outliers; add `max` to bound every error.
+Shapes/containers and non-floating outputs must still match; empty/non-finite error samples cannot pass. Limits are
+in owner-defined output units and are never silently relaxed for a precision mode. Without `absolute_error`, fixed
+pointwise defaults are `rtol=1e-4`, `atol=1e-5`, both overridable. Do not combine the two policies in one `check`.
+Error calculation and checks run outside clean latency and RSS passes.
+
+## Resource objectives
+
 The default objective is a latency reduction greater than 3% and the observed IQR in every pair. Add explicit settings
 when you want different requirements:
 
@@ -102,8 +139,8 @@ provide per-child OS accounting; other platforms report RSS unavailable. It incl
 not an inference-only delta or summed process tree.
 
 CPU PyTorch memory covers tracked tensors; CUDA memory covers reserved allocator bytes. Neither is total device
-memory or process RSS, and the scopes must not be added. Matching outputs establishes the selected numerical
-tolerance (`check.rtol`/`atol`, defaults `1e-4`/`1e-5`); it does not establish task accuracy. IQR is descriptive.
+memory or process RSS, and the scopes must not be added. Output checks establish the selected numerical constraints
+on the supplied inputs, not unseen inputs or mathematical ground truth. IQR is descriptive.
 
 ## Runnable example and custom workloads
 

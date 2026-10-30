@@ -30,7 +30,13 @@ python -m torchscan.autoresearch examples/autoresearch/workload.json \
 
 Read the returned JSON and its saved evidence:
 
-- `keep`: record the confirmed objective gain and resource tradeoff. Preserve the accepted factory/revision and
+Precision is also an experiment variable: use `--candidate-precision float16` or `bfloat16` to test autocast without
+editing a model factory. Before searching, the owner can set fixed `check.absolute_error` ceilings on mean, median,
+p90, p95, p99 or maximum absolute output error. Read all statistics; p99 can leave large outliers. Never relax these
+limits after a failed candidate. Record accepted precision and use `--baseline-precision` for future comparisons;
+the original reference remains fixed.
+
+- `keep`: record the confirmed objective gain, output errors and resource tradeoff. Preserve the accepted factory/revision and
   use `--baseline-model` to select it for the next iteration.
 - `discard`: record the violated check/constraint or regression, then restore the previous candidate implementation.
 - `inconclusive`: preserve logs and do not promote. Inspect the reason; spend another attempt only within the budget.

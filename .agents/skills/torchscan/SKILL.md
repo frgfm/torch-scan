@@ -59,7 +59,10 @@ Use the smallest API that answers the request:
 For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Prefer a JSON model/input
 contract. Preserve the contract, inputs and original baseline; edit the candidate model and keep it only on `keep`.
 An initial `measured` result is feedback, not an optimization verdict. Use explicit Python experiments only when
-stateful calls or task-quality checks cannot be expressed by inference and reference-output equivalence.
+stateful calls or custom checks cannot be expressed by inference and numerical output-error constraints.
+Use `--candidate-precision float16` or `bfloat16` to vary autocast without new model code. Preserve the original
+reference and fixed `check.absolute_error` limits on mean/median/p90/p95/p99/max. These measure numerical differences,
+not task accuracy. Keep per-output error statistics and reject changes that exceed any selected ceiling.
 
 For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
 `measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,

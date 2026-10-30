@@ -42,6 +42,8 @@ TorchScan collects latency, throughput, scoped PyTorch memory and fresh-process 
 Point `model` at your own importable model or factory, and use shapes/dtypes or a saved real input batch. Add
 `--candidate-model your_package.models:build_candidate` for automatic output checks, repeated comparisons and a
 confirmed `keep`/`discard`/`inconclusive` result. See the [autoresearch guide](docs/docs/autoresearch.md).
+Use `--candidate-precision float16` or `bfloat16` to test mixed precision on the same model. Numerical fidelity can
+be constrained by mean/median/p90/p95/p99/max absolute output error against the unchanged original model.
 
 ## Measure a custom callable
 

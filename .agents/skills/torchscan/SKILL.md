@@ -26,8 +26,10 @@ Use the smallest API that answers the request:
   work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.
 - `compare_benchmarks(before, after, check=...)`: compatible workload comparison with an owner-supplied output check.
-- `python -m torchscan.autoresearch`: evaluate a candidate against an owner-defined resource objective. Unreleased;
-  install `main`.
+- `python -m torchscan.autoresearch workload.json --output RUN`: start with the owner's model reference, args/kwargs
+  descriptors or saved inputs, and inference workload. Collect latency/throughput, scoped PyTorch peak memory and
+  clean child-process RSS without writing an experiment script. Add `--candidate-model module:factory` for automatic
+  reference checks and repeated keep/discard/inconclusive evaluation. Unreleased; install the development version.
 - `render_report(report)`: offline model HTML/SVG or benchmark/comparison HTML, without remeasurement.
 
 ## Workflow
@@ -54,8 +56,10 @@ Use the smallest API that answers the request:
 - A passed output check does not establish task accuracy. Failed checks withhold benchmark deltas; IQR labels are
   descriptive, not statistical significance. Preserve methods, memory scopes, hardware, and raw timing evidence.
 
-For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Keep the owner's experiment
-and reference files fixed; edit the candidate and keep it only when the evaluator returns `keep`.
+For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Prefer a JSON model/input
+contract. Preserve the contract, inputs and original baseline; edit the candidate model and keep it only on `keep`.
+An initial `measured` result is feedback, not an optimization verdict. Use explicit Python experiments only when
+stateful calls or task-quality checks cannot be expressed by inference and reference-output equivalence.
 
 For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
 `measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,

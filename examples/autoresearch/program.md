@@ -1,54 +1,44 @@
-# TorchScan resource autoresearch
+# Resource autoresearch with an existing coding agent
 
-Use the bounded edit/evaluate/keep loop below with the user's existing coding agent. The owner supplies the fixed
-experiment, reference implementation, inputs, correctness check, device and resource limit. The agent edits the
-candidate implementation.
+The owner supplies one model/input contract: `workload.json`. The coding agent changes candidate model code.
+TorchScan owns model execution, timing, memory/RSS measurements, output checks and improvement decisions.
 
-## Before the loop
+## Establish the experiment
 
-1. Select CPU or a CUDA device, a latency objective and memory ceiling, and a maximum number of candidate attempts.
-   This attempt limit is separate from `SETTINGS["trials"]`, which repeats each measurement. The committed example
-   uses CPU. Use CUDA only on a CUDA-enabled host.
-2. Install TorchScan and the example dependencies:
+1. Install TorchScan and the model's dependencies. The example uses `uv pip install -e ".[model-test]"`.
+2. Review `workload.json` with the owner: model/weights, shapes or real input batch, inference, target device,
+   objective and constraints. Agree on a maximum number of candidate attempts before starting.
+3. Keep that contract, data/weights and original baseline fixed in an isolated experiment branch.
+   For the example, preserve `models.py:baseline` and edit only `candidate()` or candidate-specific code.
+4. Measure the original model once:
 
    ```shell
-   uv pip install -e ".[model-test]"
+   python -m torchscan.autoresearch examples/autoresearch/workload.json --output /tmp/autoresearch/baseline
    ```
 
-3. Review `experiment.py`, `reference.py`, and `baseline.py` with the owner. Configure the device and objective before
-   the campaign. Keep the model, seed, input batch, reference, correctness tolerance, and measurement settings fixed.
-   The defaults use four 32 × 32 RGB inputs, FP32, eval/inference mode and one CPU thread.
-4. Compare the baseline with itself as a noise control. The checks should pass; the improvement decision should be
-   `inconclusive`. This does not establish statistical significance.
-5. Create a clean experiment branch and commit the baseline, candidate starter and owner contract before the loop.
-   Save an unchanged copy of the starting baseline as `baseline-initial.py` for the final comparison.
-6. Run the commands below from `examples/autoresearch/`, or the directory containing your own experiment files.
+5. Compare baseline with itself using `--candidate-model models.py:baseline`. Never interpret identical-code
+   controls as evidence of an optimization. If one promotes, investigate noise before continuing.
 
-## Experiment loop
+## Bounded edit/evaluate loop
 
-Edit only `candidate.py`. Commit each candidate, then compare it with the current accepted `baseline.py`:
+Propose one change, commit it, then evaluate its factory against the current incumbent:
 
 ```shell
-python -m torchscan.autoresearch experiment.py \
-  --baseline baseline.py --candidate candidate.py --output /tmp/torchscan-autoresearch/run-001
+python -m torchscan.autoresearch examples/autoresearch/workload.json \
+  --candidate-model models.py:candidate --output /tmp/autoresearch/attempt-001
 ```
 
-Each output directory must be new. The example writes output to `/tmp` so reports stay outside the source tree.
+Read the returned JSON and its saved evidence:
 
-- **`keep`**: checks pass, measurements are complete, resource limits hold, and the repeated improvement exceeds the
-  configured threshold. Promote the candidate to `baseline.py` and commit it before the next experiment.
-- **`discard`**: a reference check fails, a complete measurement crosses a resource limit, or the objective consistently worsens. Record why
-  and restore the candidate from its previous commit.
-- **`inconclusive`**: evidence is missing or noisy, a worker fails or times out, or the candidate does not clear the
-  improvement threshold. Do not advance the baseline. Inspect its saved logs and reports.
+- `keep`: record the confirmed objective gain and resource tradeoff. Preserve the accepted factory/revision and
+  use `--baseline-model` to select it for the next iteration.
+- `discard`: record the violated check/constraint or regression, then restore the previous candidate implementation.
+- `inconclusive`: preserve logs and do not promote. Inspect the reason; spend another attempt only within the budget.
 
-Use one change per experiment, preserve reports and stop at the owner's candidate-attempt limit. Rerun the final
-accepted candidate against `baseline-initial.py` in a new output directory. Never present an inconclusive measurement
-as a gain. Keep the unchanged reference even when promoting a new incumbent.
+Every output directory must be new. Keep a ledger with revision, hypothesis, decision and report path.
+The candidate-attempt budget is separate from paired `settings.trials` within each evaluation. Stop at the agreed
+attempt limit. Never weaken output checks, process fewer inputs, or change reference data to improve the score.
 
-## Evidence boundaries
-
-This example checks output agreement with a locally initialized ResNet18. It does not measure task accuracy. Latency
-is warmed block-average call time, not request p95. Memory is PyTorch-tracked CPU tensors or the CUDA reserved
-allocator; it is not total device memory or process RSS. CPU runs provide no CUDA speed evidence. Use
-`candidate_wrong.py` and `candidate_memory.py` to see check and resource failures.
+Rerun the final candidate against the unchanged original baseline in a new directory. Return the accepted code
+revision, confirmed measurements, tradeoffs and unresolved limits. Synthetic checks on locally initialized weights
+establish runtime behavior and output tolerance; they do not establish task accuracy or another device's performance.

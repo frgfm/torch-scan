@@ -79,8 +79,8 @@ def _timing_evidence(report: Mapping[str, Any]) -> bool:
     )
 
 
-def _memory_evidence(report: Mapping[str, Any]) -> tuple[int | float, tuple[str, str]] | None:
-    metric = report["totals"].get("peak_memory")
+def _memory_evidence(report: Mapping[str, Any], name: str) -> tuple[int | float, tuple[str, str]] | None:
+    metric = report["totals"].get(name)
     device = report["context"].get("device", "")
     if not isinstance(metric, Mapping) or metric.get("status") != "complete" or metric.get("unit") != "bytes":
         return None
@@ -90,6 +90,8 @@ def _memory_evidence(report: Mapping[str, Any]) -> tuple[int | float, tuple[str,
         "cuda": ("pytorch_reserved_bytes", "torch.cuda.max_memory_reserved"),
         "mps": ("pytorch_reserved_bytes", "torch.accelerator.memory.max_memory_reserved"),
     }
+    if name == "process_peak_rss":
+        expected = dict.fromkeys(("cpu", "cuda"), ("child_process_lifetime", "os.wait4.ru_maxrss"))
     backend = device.partition(":")[0]
     scope, method = expected.get(backend, (None, None))
     if metric.get("scope") != scope or metric.get("method") != method:
@@ -143,7 +145,7 @@ def decide(trials: Sequence[Mapping[str, Any]], settings: Mapping[str, Any]) -> 
         raise ValueError("min_improvement must be a finite fraction between 0 and 1")
     limit_name = "max_memory_bytes" if objective == "latency" else "max_latency_seconds"
     limit = settings.get(limit_name)
-    if not _finite_number(limit) or limit <= 0:
+    if limit is not None and (not _finite_number(limit) or limit <= 0):
         raise ValueError(f"{limit_name} must be a positive finite number")
     if len(trials) < 2:
         raise ValueError("at least two trials are required")
@@ -196,8 +198,11 @@ def decide(trials: Sequence[Mapping[str, Any]], settings: Mapping[str, Any]) -> 
         if not valid_iqr:
             uncertainties.append(f"Trial {index} lacks complete latency variability evidence.")
 
-        before_memory, after_memory = _memory_evidence(before), _memory_evidence(after)
-        if before_memory is None or after_memory is None or before_memory[1] != after_memory[1]:
+        memory_name = settings.get("memory_metric", "peak_memory")
+        before_memory, after_memory = _memory_evidence(before, memory_name), _memory_evidence(after, memory_name)
+        if (objective == "memory" or limit is not None) and (
+            before_memory is None or after_memory is None or before_memory[1] != after_memory[1]
+        ):
             uncertainties.append(f"Trial {index} lacks matching, supported peak-memory evidence.")
 
         if valid_iqr:
@@ -212,7 +217,7 @@ def decide(trials: Sequence[Mapping[str, Any]], settings: Mapping[str, Any]) -> 
             )
 
         if objective == "latency":
-            if after_memory is not None:
+            if after_memory is not None and limit is not None:
                 candidate_memory = after_memory[0]
                 if candidate_memory > limit:
                     failures.append(
@@ -221,7 +226,7 @@ def decide(trials: Sequence[Mapping[str, Any]], settings: Mapping[str, Any]) -> 
             primary_changes.append((before_latency - after_latency) / before_latency)
         else:
             candidate_latency = after_latency
-            if valid_iqr:
+            if valid_iqr and limit is not None:
                 candidate_iqr = after_iqr["value"]
                 if candidate_latency - candidate_iqr > limit:
                     failures.append(

@@ -124,6 +124,27 @@ def test_memory_objective_keeps_smaller_candidate_within_latency_cap():
     assert "memory objective" in reasons[0]
 
 
+def test_rss_objective_uses_named_scope_and_latency_can_have_no_memory_cap():
+    before, after = benchmark(0.01, 20_000), benchmark(0.008, 15_000)
+    for report, peak in ((before, 200_000), (after, 100_000)):
+        report["totals"]["process_peak_rss"] = {
+            **report["totals"]["peak_memory"],
+            "value": peak,
+            "known_value": peak,
+            "scope": "child_process_lifetime",
+            "method": "os.wait4.ru_maxrss",
+        }
+    trial = compare_benchmarks(before, after, check=lambda: True)
+    assert decide([trial] * 2, settings("memory", memory_metric="process_peak_rss"))[0] == "keep"
+    uncapped = settings()
+    uncapped.pop("max_memory_bytes")
+    assert decide([trial] * 2, uncapped)[0] == "keep"
+    for report in (before, after):
+        report["totals"]["process_peak_rss"]["scope"] = "unknown"
+    wrong_scope = compare_benchmarks(before, after, check=lambda: True)
+    assert decide([wrong_scope] * 2, settings("memory", memory_metric="process_peak_rss"))[0] == "inconclusive"
+
+
 def test_memory_objective_discards_latency_breach_and_marks_cap_overlap_inconclusive():
     slower = [comparison(0.01, 0.012, before_memory=20_000, after_memory=15_000)] * 2
     overlap = [comparison(0.01, 0.012, before_memory=20_000, after_memory=15_000, iqr=0.0002)] * 2

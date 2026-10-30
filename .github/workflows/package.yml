@@ -92,6 +92,9 @@ jobs:
       - name: Run v0.2 contract tests
         run: >-
           pytest
+          tests/test_autoresearch.py
+          tests/test_model_workload.py
+          tests/test_output_error.py
           tests/test_benchmark.py
           tests/test_benchmark_comparison.py
           tests/test_diagnostics.py
@@ -99,6 +102,7 @@ jobs:
           tests/test_crawler.py
           tests/test_custom_transformer.py
           tests/test_flops.py
+          tests/test_experiment_decision.py
           tests/test_primitives.py
           tests/test_inputs.py
           tests/test_report.py

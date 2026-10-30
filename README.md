@@ -21,7 +21,31 @@
 TorchScan helps you **inspect model cost, measure actual resource use, check an optimization, and consume the report**.
 Use your own model and inputs. Save JSON or offline HTML; metrics carry a method, scope, and completeness status.
 
-## Measure your workload
+## Start from a model
+
+With the development version, describe an existing model/factory and its inputs in `workload.json`:
+
+```json
+{
+  "model": "torch.nn:Linear",
+  "model_kwargs": {"in_features": 128, "out_features": 64},
+  "args": [{"shape": [32, 128], "dtype": "float32"}],
+  "workload": "inference"
+}
+```
+
+```shell
+python -m torchscan.autoresearch workload.json --output /tmp/torchscan-baseline
+```
+
+TorchScan collects latency, throughput, scoped PyTorch memory and fresh-process peak RSS without an experiment script.
+Point `model` at your own importable model or factory, and use shapes/dtypes or a saved real input batch. Add
+`--candidate-model your_package.models:build_candidate` for automatic output checks, repeated comparisons and a
+confirmed `keep`/`discard`/`inconclusive` result. See the [autoresearch guide](docs/docs/autoresearch.md).
+Compare model architectures and implementations at fixed FP32 precision. Every comparison reports
+mean/median/p90/p95/p99/max absolute output error against the unchanged original model; explicit ceilings can gate acceptance.
+
+## Measure a custom callable
 
 The workload timing and offline report APIs require the development version. The current PyPI release is **0.2.0**;
 **0.3.0 is proposed and unreleased**. Install `main` after installing PyTorch for your hardware:
@@ -120,6 +144,7 @@ compatibility checks, and timing dependencies on PyTorch 2.1.
 - [Getting started](https://frgfm.github.io/torch-scan/)
 - [Agent quickstart](https://frgfm.github.io/torch-scan/agent-quickstart.html) and the repository
   [agent skill](.agents/skills/torchscan/SKILL.md)
+- [Autoresearch for resource optimization](https://frgfm.github.io/torch-scan/autoresearch.html)
 - [Model and input support](https://frgfm.github.io/torch-scan/model-support.html) and
   [custom extensions](https://frgfm.github.io/torch-scan/extensions.html)
 - [Report schema](https://frgfm.github.io/torch-scan/report-schema.html),

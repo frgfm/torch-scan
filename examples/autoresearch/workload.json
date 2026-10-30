@@ -1,0 +1,11 @@
+{
+  "model": "models.py:baseline",
+  "args": [{"shape": [4, 3, 32, 32], "dtype": "float32"}],
+  "workload": "inference",
+  "check": {"absolute_error": {"mean": 0.0001, "p99": 0.001}},
+  "settings": {
+    "work_units": 4,
+    "work_unit": "images",
+    "max_memory_bytes": 268435456
+  }
+}

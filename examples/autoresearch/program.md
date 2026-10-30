@@ -30,11 +30,12 @@ python -m torchscan.autoresearch examples/autoresearch/workload.json \
 
 Read the returned JSON and its saved evidence:
 
-Precision is also an experiment variable: use `--candidate-precision float16` or `bfloat16` to test autocast without
-editing a model factory. Before searching, the owner can set fixed `check.absolute_error` ceilings on mean, median,
-p90, p95, p99 or maximum absolute output error. Read all statistics; p99 can leave large outliers. Never relax these
-limits after a failed candidate. Record accepted precision and use `--baseline-precision` for future comparisons;
-the original reference remains fixed.
+Keep FP32 precision fixed while changing architecture or implementation. Do not add internal casts, autocast or
+quantization to a candidate. Before searching, the owner can set fixed `check.absolute_error` ceilings on mean,
+median, p90, p95, p99 or maximum absolute output error. Read all statistics; p99 can leave large outliers.
+Never relax these limits after a failed candidate; the original reference remains fixed.
+Without `check`, errors are still measured but do not gate acceptance. Record `output_error_policy`; a resource
+winner with `report_only` does not establish numerical equivalence or task quality.
 
 - `keep`: record the confirmed objective gain, output errors and resource tradeoff. Preserve the accepted factory/revision and
   use `--baseline-model` to select it for the next iteration.

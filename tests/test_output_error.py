@@ -4,6 +4,15 @@ import torch
 from torchscan._output_error import compare_outputs
 
 
+def test_errors_are_measured_without_implicit_constraints():
+    passed, outputs = compare_outputs(torch.tensor([1.0, 3.0]), torch.zeros(2), {})
+    assert passed
+    assert outputs["/"]["mean"] == 2
+    assert outputs["/"]["p99"] == pytest.approx(2.98)
+    assert outputs["/"]["failed_constraints"] == []
+    assert not compare_outputs(torch.tensor([float("nan")]), torch.zeros(1), {})[0]
+
+
 def test_absolute_error_statistics_and_linear_percentiles():
     passed, outputs = compare_outputs(
         torch.tensor([-4.0, -2.0, 0.0, 1.0, 3.0]), torch.zeros(5), {"absolute_error": {"max": 4}}

@@ -44,6 +44,11 @@ def _factory(reference: str, directory: Path) -> tuple[Any, list[Path]]:
     return factory, [Path(path).resolve() for path in sorted(sources)]
 
 
+def _require_fp32(value: torch.Tensor) -> None:
+    if value.is_floating_point() and value.dtype != torch.float32:
+        raise ValueError("Model comparisons require FP32 floating parameters, buffers, inputs and outputs.")
+
+
 def _tensor(value: Any, device: str, *, descriptors: bool = True) -> Any:
     if descriptors and isinstance(value, dict) and "shape" in value:
         if value.keys() - {"shape", "dtype", "fill", "low", "high"}:
@@ -53,15 +58,12 @@ def _tensor(value: Any, device: str, *, descriptors: bool = True) -> Any:
             raise ValueError("Tensor shape must be a list of positive dimensions, including batch.")
         dtype = {
             "float32": torch.float32,
-            "float64": torch.float64,
-            "float16": torch.float16,
-            "bfloat16": torch.bfloat16,
             "int64": torch.int64,
             "int32": torch.int32,
             "bool": torch.bool,
         }.get(value.get("dtype", "float32"))
         if dtype is None:
-            raise ValueError("Unsupported tensor dtype.")
+            raise ValueError("Input dtype must be float32, int64, int32 or bool for fixed-FP32 comparisons.")
         if "fill" in value:
             if "low" in value or "high" in value:
                 raise ValueError("Choose fill or integer low/high bounds.")
@@ -79,6 +81,7 @@ def _tensor(value: Any, device: str, *, descriptors: bool = True) -> Any:
             return torch.randint(low, high, shape, dtype=dtype, device=device)
         return torch.randn(shape, dtype=dtype, device=device)
     if isinstance(value, torch.Tensor):
+        _require_fp32(value)
         return value.to(device)
     if isinstance(value, Mapping):
         return {key: _tensor(item, device, descriptors=descriptors) for key, item in value.items()}
@@ -89,6 +92,7 @@ def _tensor(value: Any, device: str, *, descriptors: bool = True) -> Any:
 
 def _outputs(value: Any) -> Any:
     if isinstance(value, torch.Tensor):
+        _require_fp32(value)
         return value.detach().cpu()
     if isinstance(value, Mapping):
         return {key: _outputs(item) for key, item in value.items()}
@@ -159,14 +163,13 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
             or limits.keys() - set(ERROR_STATISTICS)
         ):
             raise ValueError("absolute_error requires named mean/median/p90/p95/p99/max ceilings, without rtol/atol.")
-    else:
+    elif tolerance:
         tolerance = {"rtol": 1e-4, "atol": 1e-5, **tolerance}
         limits = tolerance
+    else:
+        limits = {}
     if any(type(value) not in (int, float) or not 0 <= value < float("inf") for value in limits.values()):
         raise ValueError("Output tolerances must be finite nonnegative numbers.")
-    precision = "default" if request["mode"] == "reference" else request.get("precision", "default")
-    if precision not in ("default", "float16", "bfloat16"):
-        raise ValueError("precision must be default, float16 or bfloat16 (autocast).")
     if request["mode"] != "inspect" and settings != request["settings"]:
         raise ValueError("Model workload settings changed between workers.")
     declared_files = contract.get("files", [])
@@ -175,6 +178,9 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     files = [str((path.parent / item).resolve()) for item in declared_files]
     files.extend(str((path.parent / contract[name]).resolve()) for name in ("inputs", "checkpoint") if name in contract)
     torch.set_num_threads(threads)
+    torch.set_default_dtype(torch.float32)
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
     torch.manual_seed(seed)
     factory, _ = _factory(request["implementation"], path.parent)
     if request["mode"] == "inspect":
@@ -190,6 +196,8 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         raise TypeError("The model reference must be an nn.Module or a factory returning one.")
     if "checkpoint" in contract:
         model.load_state_dict(torch.load(path.parent / contract["checkpoint"], map_location="cpu", weights_only=True))
+    for tensor in (*model.parameters(), *model.buffers()):
+        _require_fp32(tensor)
     device = settings["device"]
     model = model.eval().to(device)
     torch.manual_seed(seed)  # Input values must not depend on how many RNG draws a candidate's factory performs.
@@ -206,17 +214,7 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
 
     @torch.inference_mode()
     def workload() -> Any:
-        if precision == "default":
-            return model(*args, **kwargs)
-        device_type = torch.device(device).type
-        dtype = torch.float16 if precision == "float16" else torch.bfloat16
-        with torch.autocast(device_type=device_type, dtype=dtype):
-            try:
-                enabled = torch.is_autocast_enabled(device_type)
-            except TypeError:  # PyTorch 2.1 exposes a separate CPU getter.
-                enabled = torch.is_autocast_cpu_enabled() if device_type == "cpu" else torch.is_autocast_enabled()
-            if not enabled:
-                raise NotImplementedError(f"{precision} autocast is unavailable on {device_type}.")
+        with torch.autocast(device_type=torch.device(device).type, enabled=False):
             return model(*args, **kwargs)
 
     if request["mode"] == "reference":
@@ -249,6 +247,6 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         inputs_origin="saved" if "inputs" in contract else "synthetic",
         seed=seed,
         model_reference=request["implementation"],
-        execution_precision=precision,
+        execution_precision="float32",
     )
     return result

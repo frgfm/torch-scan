@@ -251,9 +251,9 @@ def decide(trials: Sequence[Mapping[str, Any]], settings: Mapping[str, Any]) -> 
 
     if objective == "latency":
         if all(change == "slower" for change in latency_labels):
-            return "discard", ["The candidate is consistently slower than the baseline beyond observed IQR."]
+            return "discard", ["The candidate is consistently slower than the baseline beyond observed timing spread."]
         if not all(change == "faster" for change in latency_labels):
-            return "inconclusive", ["Latency changes are mixed or within observed IQR."]
+            return "inconclusive", ["Latency changes are mixed or within observed timing spread."]
 
     if len(primary_changes) != len(validated):
         return "inconclusive", ["The primary objective is missing from one or more trials."]

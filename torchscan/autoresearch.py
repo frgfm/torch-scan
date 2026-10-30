@@ -281,22 +281,20 @@ def evaluate_model(
     output: str | Path,
     candidate_model: str | None = None,
     baseline_model: str | None = None,
-    candidate_precision: str | None = None,
-    baseline_precision: str = "default",
 ) -> dict[str, Any]:
-    """Measure a JSON model/input contract, optionally comparing a candidate factory.
+    """Measure a fixed-FP32 model/input contract, optionally comparing a candidate factory.
 
     Args:
         workload: JSON file defining model, args/kwargs (or saved inputs), and inference settings.
         output: New directory for measurements, checks, JSON, HTML and worker logs.
         candidate_model: Optional module:factory or file.py:factory to evaluate against the baseline.
         baseline_model: Optional incumbent factory; defaults to the contract's model.
-        candidate_precision: Optional float16/bfloat16 autocast policy. Uses the incumbent model when no factory is given.
-        baseline_precision: Incumbent autocast policy, or default to preserve its original execution precision.
 
     Returns:
         A measured baseline when no candidate is supplied; otherwise a checked keep/discard/inconclusive result.
         Resource feedback includes clean timing, tracked/allocator memory and separate fresh-process peak RSS.
+        Output errors are reported against the original model. Explicit check limits gate acceptance;
+        without limits, keep confirms resource gains and compatible outputs, not numerical equivalence.
     """
     contract = json.loads(Path(workload).read_text(encoding="utf-8"))
     if not isinstance(contract, dict):
@@ -304,19 +302,12 @@ def evaluate_model(
     baseline = baseline_model or contract.get("model")
     if not isinstance(baseline, str) or not baseline:
         raise ValueError("The workload must define model as an existing model/factory reference.")
-    for precision in (baseline_precision, candidate_precision or "default"):
-        if precision not in ("default", "float16", "bfloat16"):
-            raise ValueError("Precision must be default, float16 or bfloat16 (autocast).")
-    if candidate_precision is not None and candidate_model is None:
-        candidate_model = baseline
     return _evaluate(
         workload,
         baseline,
         candidate_model,
         output=output,
         model_contract=True,
-        baseline_precision=baseline_precision,
-        candidate_precision=candidate_precision or "default",
     )
 
 
@@ -327,8 +318,6 @@ def _evaluate(
     *,
     output: str | Path,
     model_contract: bool,
-    baseline_precision: str = "default",
-    candidate_precision: str = "default",
 ) -> dict[str, Any]:
     from ._experiment_decision import decide
 
@@ -349,8 +338,6 @@ def _evaluate(
         "experiment": str(experiment),
         "baseline": str(baseline),
         "candidate": candidate,
-        "baseline_precision": baseline_precision,
-        "candidate_precision": candidate_precision,
         "settings": {},
         "checks": {},
         "trials": [],
@@ -358,6 +345,7 @@ def _evaluate(
     }
     if model_contract:
         report["workload"] = json.loads(experiment.read_text(encoding="utf-8"))
+        report["output_error_policy"] = "enforced" if report["workload"].get("check") else "report_only"
     request: dict[str, Any] = {
         "experiment": str(experiment),
         "identities": identities,
@@ -370,19 +358,18 @@ def _evaluate(
     import_cache = tempfile.TemporaryDirectory(prefix="torchscan-imports-")
     request["bytecode_cache"] = import_cache.name
 
-    def run(mode: str, implementation: str, label: str, *, role: str = "baseline") -> dict[str, Any]:
+    def run(mode: str, implementation: str, label: str) -> dict[str, Any]:
         result = _run_worker(
             {
                 **request,
                 "mode": mode,
                 "implementation": str(implementation),
-                "precision": baseline_precision if role == "baseline" else candidate_precision,
             },
             destination / f"{label}.json",
             report["settings"].get("timeout", 120),
         )
         if mode == "measure" and model_contract:
-            rss = run("rss", implementation, f"{label}-rss", role=role)
+            rss = run("rss", implementation, f"{label}-rss")
             result["totals"]["process_peak_rss"] = rss["_process_peak_rss"]
             result["context"]["rss_boundary"] = (
                 "fresh process imports, model/input loading, warmup and one inference; no instrumentation"
@@ -393,7 +380,7 @@ def _evaluate(
     def checks(prefix: str) -> bool:
         results = report["checks"][prefix] = {}
         for name, implementation in (("baseline", baseline), ("candidate", candidate)):
-            checked = run("check", cast(str, implementation), f"{prefix}-{name}", role=name)
+            checked = run("check", cast(str, implementation), f"{prefix}-check-{name}")
             results[name] = checked["output_check"]
             if "output_errors" in checked:
                 report.setdefault("output_errors", {}).setdefault(prefix, {})[name] = checked["output_errors"]
@@ -413,8 +400,7 @@ def _evaluate(
         if index % 2:
             order = tuple(reversed(order))
         measurements = {
-            name: run("measure", cast(str, implementation), f"{label}-{name}", role=name)
-            for name, implementation in order
+            name: run("measure", cast(str, implementation), f"{label}-{name}") for name, implementation in order
         }
         comparison = compare_benchmarks(
             cast(BenchmarkReport, measurements["baseline"]),
@@ -470,7 +456,11 @@ def _evaluate(
     finally:
         import_cache.cleanup()
     if report.get("output_errors"):
-        report.setdefault("feedback", {})["output_errors"] = list(report["output_errors"].values())[-1]
+        report["feedback"] = {
+            **report.get("feedback", {}),
+            "output_errors": list(report["output_errors"].values())[-1],
+            "output_error_policy": report["output_error_policy"],
+        }
     _write(destination / "report.json", report)
     return report
 
@@ -490,7 +480,7 @@ def _feedback(measurement: dict[str, Any]) -> dict[str, Any]:
         "peak_rss_mib": value("process_peak_rss", 1 / 1024**2),
         "pytorch_peak_mib": value("peak_memory", 1 / 1024**2),
         "pytorch_memory_scope": totals["peak_memory"]["scope"],
-        "execution_precision": measurement["context"].get("execution_precision", "default"),
+        "execution_precision": measurement["context"]["execution_precision"],
     }
 
 
@@ -502,17 +492,6 @@ def main() -> None:
     parser.add_argument("--candidate", type=Path)
     parser.add_argument("--baseline-model", help="Incumbent model/factory for a JSON workload.")
     parser.add_argument("--candidate-model", help="Candidate model/factory for a JSON workload.")
-    parser.add_argument(
-        "--candidate-precision",
-        choices=("default", "float16", "bfloat16"),
-        help="Candidate autocast policy; no alternate factory is required.",
-    )
-    parser.add_argument(
-        "--baseline-precision",
-        choices=("default", "float16", "bfloat16"),
-        default="default",
-        help="Current incumbent's autocast policy.",
-    )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--_worker", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -529,18 +508,9 @@ def main() -> None:
             output=args.output,
             baseline_model=args.baseline_model,
             candidate_model=args.candidate_model,
-            candidate_precision=args.candidate_precision,
-            baseline_precision=args.baseline_precision,
         )
     else:
-        if (
-            args.baseline is None
-            or args.candidate is None
-            or args.baseline_model
-            or args.candidate_model
-            or args.candidate_precision
-            or args.baseline_precision != "default"
-        ):
+        if args.baseline is None or args.candidate is None or args.baseline_model or args.candidate_model:
             parser.error("Python experiments require --baseline FILE and --candidate FILE")
         result = evaluate_experiment(args.experiment, args.baseline, args.candidate, output=args.output)
     print(  # ruff: ignore[print]

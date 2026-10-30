@@ -60,9 +60,11 @@ For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresear
 contract. Preserve the contract, inputs and original baseline; edit the candidate model and keep it only on `keep`.
 An initial `measured` result is feedback, not an optimization verdict. Use explicit Python experiments only when
 stateful calls or custom checks cannot be expressed by inference and numerical output-error constraints.
-Use `--candidate-precision float16` or `bfloat16` to vary autocast without new model code. Preserve the original
-reference and fixed `check.absolute_error` limits on mean/median/p90/p95/p99/max. These measure numerical differences,
-not task accuracy. Keep per-output error statistics and reject changes that exceed any selected ceiling.
+Compare architectures and implementations at fixed FP32 precision. Do not change precision or quantize candidates.
+Preserve the original reference and fixed `check.absolute_error` limits on mean/median/p90/p95/p99/max. These measure
+numerical differences, not task accuracy. Keep per-output error statistics and reject changes that exceed any selected ceiling.
+Without explicit `check` limits, feedback uses `output_error_policy: report_only`; `keep` confirms resource gains
+and output compatibility, not numerical equivalence. Never present differences between random models as task quality.
 
 For an uncounted operator, preserve the partial result. Supply `custom_mapping` to `crawl_module`, `summary`, or
 `measure_flops` only when the owner can justify that operator's counting convention. For custom module estimates,

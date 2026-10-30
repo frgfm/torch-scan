@@ -83,6 +83,12 @@ def test_identical_candidate_stays_unpromoted_and_check_workers_are_isolated(tmp
     assert len(report["trials"]) == 2
     assert all(trial["output_check"] == "passed" for trial in report["trials"])
     assert all((tmp_path / "evidence" / f"trial-{index}.html").is_file() for index in (1, 2))
+    for index in (1, 2):
+        for role in ("baseline", "candidate"):
+            measured = tmp_path / "evidence" / f"trial-{index}-{role}.result.json"
+            checked = tmp_path / "evidence" / f"trial-{index}-check-{role}.result.json"
+            assert "totals" in json.loads(measured.read_text())
+            assert json.loads(checked.read_text())["output_check"] == "passed"
     events = [line.split(":") for line in (tmp_path / "events.log").read_text(encoding="utf-8").splitlines()]
     checks = {pid for kind, pid in events if kind == "check"}
     measurements = {pid for kind, pid in events if kind == "measure"}

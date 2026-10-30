@@ -3,7 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-"""Numerical output fidelity against the fixed, original-precision reference."""
+"""Numerical output fidelity against the fixed original model's outputs."""
 
 import math
 from collections.abc import Mapping
@@ -62,8 +62,11 @@ def compare_outputs(actual: Any, reference: Any, check: dict[str, Any]) -> tuple
                 "count": errors.numel(),
                 "reference_dtype": str(expected.dtype),
                 "candidate_dtype": str(candidate.dtype),
+                "failed_constraints": [],
                 **statistics,
             }
+            if not check:
+                return True
             if "absolute_error" in check:
                 exceeded = [name for name, limit in check["absolute_error"].items() if statistics[name] > limit]
                 outputs[path or "/"]["failed_constraints"] = exceeded

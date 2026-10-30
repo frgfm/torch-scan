@@ -50,6 +50,7 @@ def test_zero_script_probe_collects_clean_rss_and_latency(tmp_path):
     report = evaluate_model(path, output=tmp_path / "run")
     assert report["decision"] == "measured", report["reasons"]
     assert report["feedback"]["latency_ms"] > 0
+    assert report["feedback"]["execution_precision"] == "float32"
     rss = report["measurement"]["totals"]["process_peak_rss"]
     if hasattr(os, "wait4"):
         assert rss["status"] == "complete"
@@ -68,29 +69,78 @@ def test_automatic_check_rejects_wrong_model_without_user_callbacks(tmp_path):
     assert report["trials"] == []
 
 
-def test_precision_candidate_needs_no_new_factory_and_retains_output_errors(tmp_path):
+def test_fp32_candidate_retains_output_error_statistics(tmp_path):
     path = contract(tmp_path, check={"absolute_error": {"mean": 0, "p99": 0}})
-    report = evaluate_model(path, candidate_precision="bfloat16", output=tmp_path / "run")
+    with (tmp_path / "models.py").open("a") as source:
+        source.write(
+            "def shifted():\n"
+            "    model = baseline()\n"
+            "    model.register_forward_hook(lambda m, a, out: out + 0.01)\n"
+            "    return model\n"
+        )
+    report = evaluate_model(path, candidate_model="models.py:shifted", output=tmp_path / "run")
     assert report["decision"] == "discard", report["reasons"]
+    assert report["feedback"]["output_error_policy"] == "enforced"
     errors = report["output_errors"]["initial"]["candidate"]["/"]
-    assert errors["candidate_dtype"] == "torch.bfloat16"
+    assert errors["candidate_dtype"] == "torch.float32"
     assert errors["reference_dtype"] == "torch.float32"
     assert errors["p99"] > 0
-    assert report["candidate"] == report["baseline"]
-    assert report["candidate_precision"] == "bfloat16"
+    assert errors["failed_constraints"] == ["mean", "p99"]
 
 
-def test_precision_policy_preserves_original_reference_and_fixed_error_budget(tmp_path):
+def test_without_error_ceilings_fidelity_is_still_reported(tmp_path):
+    path = contract(tmp_path)
+    with (tmp_path / "models.py").open("a") as source:
+        source.write(
+            "def shifted():\n"
+            "    model = baseline()\n"
+            "    model.register_forward_hook(lambda m, a, out: out + 1)\n"
+            "    return model\n"
+        )
+    report = evaluate_model(path, candidate_model="models.py:shifted", output=tmp_path / "run")
+    assert all(pair["candidate"] == "passed" for pair in report["checks"].values())
+    assert report["feedback"]["output_error_policy"] == "report_only"
+    assert report["feedback"]["output_errors"]["candidate"]["/"]["mean"] == pytest.approx(1)
+    assert len(report["trials"]) == 2
+
+
+def test_fp32_workload_disables_ambient_autocast(tmp_path):
     path = contract(tmp_path, check={"absolute_error": {"p99": 0.01}})
     phase = request(path, "reference")
     phase["settings"] = model_worker(request(path))["settings"]
-    phase["precision"] = "bfloat16"
-    model_worker(phase)
+    with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+        model_worker(phase)
     assert torch.load(phase["reference_outputs"], weights_only=True).dtype == torch.float32
     phase["mode"] = "check"
     checked = model_worker(phase)
     assert checked["output_check"] == "passed"
-    assert checked["output_errors"]["/"]["candidate_dtype"] == "torch.bfloat16"
+    assert checked["output_errors"]["/"]["candidate_dtype"] == "torch.float32"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "model.half()",
+        "model.register_buffer('reduced', torch.ones(1, dtype=torch.bfloat16))",
+        "model.register_forward_hook(lambda m, a, out: out.to(torch.bfloat16))",
+    ],
+)
+def test_model_comparison_rejects_precision_changes(tmp_path, change):
+    path = contract(tmp_path)
+    with (tmp_path / "models.py").open("a") as source:
+        source.write(f"def reduced():\n    model = baseline()\n    {change}\n    return model\n")
+    phase = request(path, "reference", "models.py:reduced")
+    phase["settings"] = model_worker(request(path))["settings"]
+    with pytest.raises(ValueError, match="FP32"):
+        model_worker(phase)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16, torch.float64])
+def test_model_comparison_rejects_non_fp32_floating_inputs(dtype):
+    with pytest.raises(ValueError, match="fixed-FP32"):
+        _tensor({"shape": [2, 4], "dtype": str(dtype).removeprefix("torch.")}, "cpu")
+    with pytest.raises(ValueError, match="FP32"):
+        _tensor(torch.ones(2, 4, dtype=dtype), "cpu", descriptors=False)
 
 
 @pytest.mark.parametrize(

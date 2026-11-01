@@ -23,7 +23,7 @@ def contract(tmp_path, **updates):
     )
     specification = {
         "model": "models.py:baseline",
-        "args": [{"shape": [2, 4]}],
+        "args": [{"shape": [1, 4]}],
         "workload": "inference",
         "settings": {"trials": 2, "warmup": 0, "min_run_time": 0.001, "min_repeats": 2},
         **updates,
@@ -67,6 +67,44 @@ def test_automatic_check_rejects_wrong_model_without_user_callbacks(tmp_path):
     assert report["decision"] == "discard", report["reasons"]
     assert report["checks"]["initial"]["candidate"] == "failed"
     assert report["trials"] == []
+
+
+@pytest.mark.parametrize(
+    ("fails_at", "role", "decision"),
+    [(2, "candidate", "discard"), (3, "candidate", "discard"), (3, "baseline", "inconclusive")],
+)
+def test_repeated_and_measured_model_state_must_pass_fidelity(tmp_path, fails_at, role, decision):
+    path = contract(tmp_path, check={"absolute_error": {"max": 0}})
+    with (tmp_path / "models.py").open("a") as source:
+        source.write(
+            "class ChangesAfterCalls(torch.nn.Module):\n"
+            "    def __init__(self):\n"
+            "        super().__init__()\n"
+            "        self.model = baseline()\n"
+            "        self.calls = 0\n"
+            "    def forward(self, inputs):\n"
+            "        self.calls += 1\n"
+            "        output = self.model(inputs)\n"
+            f"        return output if self.calls < {fails_at} else output + 1\n"
+            "def changes(): return ChangesAfterCalls()\n"
+        )
+    report = evaluate_model(
+        path,
+        baseline_model="models.py:changes" if role == "baseline" else None,
+        candidate_model="models.py:changes" if role == "candidate" else "models.py:baseline",
+        output=tmp_path / "run",
+    )
+    assert report["decision"] == decision, report["reasons"]
+    assert report["feedback"]["output_errors"][role]["/"]["max"] == pytest.approx(1)
+    assert report["feedback"]["output_check_phases"][role] == ("warmed" if fails_at == 2 else "after_measurement")
+    if fails_at == 2:
+        assert report["trials"] == []
+    else:
+        assert report["checks"]["initial"] == {"baseline": "passed", "candidate": "passed"}
+        assert len(report["trials"]) == 1
+        assert report["trials"][0]["output_check"] == "failed"
+        assert report["trials"][0]["totals"]["latency"]["delta"] is None
+        assert report["confirmation"] is None
 
 
 def test_fp32_candidate_retains_output_error_statistics(tmp_path):

@@ -350,6 +350,7 @@ def _evaluate(
         "experiment": str(experiment),
         "identities": identities,
         "model_contract": model_contract,
+        "check_outputs": model_contract and candidate is not None,
         "baseline": baseline,
         "candidate": candidate or baseline,
         "reference_outputs": str(destination / "reference.pt"),
@@ -377,13 +378,20 @@ def _evaluate(
             _write(destination / f"{label}.result.json", result)
         return result
 
-    def checks(prefix: str) -> bool:
+    def checks(prefix: str, measurements: dict[str, Any] | None = None) -> bool:
         results = report["checks"][prefix] = {}
         for name, implementation in (("baseline", baseline), ("candidate", candidate)):
             checked = run("check", cast(str, implementation), f"{prefix}-check-{name}")
+            if model_contract and measurements is not None:
+                measured = measurements[name]
+                if measured["output_check"] == "failed" or checked["output_check"] == "passed":
+                    checked = measured
             results[name] = checked["output_check"]
             if "output_errors" in checked:
                 report.setdefault("output_errors", {}).setdefault(prefix, {})[name] = checked["output_errors"]
+                report.setdefault("output_check_phases", {}).setdefault(prefix, {})[name] = checked[
+                    "output_check_phase"
+                ]
         if results["baseline"] != "passed":
             report["decision"], report["reasons"] = "inconclusive", ["The incumbent failed the fixed reference check."]
             return False
@@ -405,7 +413,7 @@ def _evaluate(
         comparison = compare_benchmarks(
             cast(BenchmarkReport, measurements["baseline"]),
             cast(BenchmarkReport, measurements["candidate"]),
-            check=lambda: checks(label),
+            check=lambda: checks(label, measurements),
         )
         (destination / f"{label}.html").write_text(render_report(comparison, title=label), encoding="utf-8")
         return comparison
@@ -460,6 +468,7 @@ def _evaluate(
             **report.get("feedback", {}),
             "output_errors": list(report["output_errors"].values())[-1],
             "output_error_policy": report["output_error_policy"],
+            "output_check_phases": list(report["output_check_phases"].values())[-1],
         }
     _write(destination / "report.json", report)
     return report

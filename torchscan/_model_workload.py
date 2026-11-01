@@ -126,9 +126,7 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     }:
         raise ValueError("Unknown model workload fields; expected a JSON object.")
     if contract.get("workload", "inference") != "inference":
-        raise ValueError(
-            "The built-in workload is inference; custom training/stateful workloads use a Python experiment."
-        )
+        raise ValueError("The built-in workload is inference; training is outside this workflow.")
     if not isinstance(contract.get("model"), str):
         raise ValueError("model must name an existing model or factory.")
     if "inputs" in contract and ("args" in contract or "kwargs" in contract):
@@ -217,13 +215,25 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         with torch.autocast(device_type=torch.device(device).type, enabled=False):
             return model(*args, **kwargs)
 
+    def check_outputs(phase: str) -> dict[str, Any]:
+        reference = torch.load(request["reference_outputs"], map_location="cpu", weights_only=True)
+        passed, errors = compare_outputs(_outputs(workload()), reference, tolerance)
+        return {
+            "output_check": "passed" if passed else "failed",
+            "output_errors": errors,
+            "output_check_phase": phase,
+        }
+
     if request["mode"] == "reference":
         torch.save(_outputs(workload()), request["reference_outputs"])
         return {"reference_outputs": request["reference_outputs"]}
     if request["mode"] == "check":
-        reference = torch.load(request["reference_outputs"], map_location="cpu", weights_only=True)
-        passed, errors = compare_outputs(_outputs(workload()), reference, tolerance)
-        return {"output_check": "passed" if passed else "failed", "output_errors": errors}
+        first = check_outputs("first_call")
+        if first["output_check"] == "failed":
+            return first
+        for _ in range(settings["warmup"]):
+            workload()
+        return check_outputs("warmed")
     if request["mode"] == "rss":
         _, synchronize = _synchronizer(torch.device(device))
         for _ in range(settings["warmup"] + 1):
@@ -249,4 +259,6 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         model_reference=request["implementation"],
         execution_precision="float32",
     )
+    if request.get("check_outputs"):
+        result.update(check_outputs("after_measurement"))
     return result

@@ -21,15 +21,15 @@
 TorchScan helps you **inspect model cost, measure actual resource use, check an optimization, and consume the report**.
 Use your own model and inputs. Save JSON or offline HTML; metrics carry a method, scope, and completeness status.
 
-## Start from a model
+## Optimize batch-one inference
 
-With the development version, describe an existing model/factory and its inputs in `workload.json`:
+With the development version, describe an existing model/factory and one input sample in `workload.json`:
 
 ```json
 {
   "model": "torch.nn:Linear",
   "model_kwargs": {"in_features": 128, "out_features": 64},
-  "args": [{"shape": [32, 128], "dtype": "float32"}],
+  "args": [{"shape": [1, 128], "dtype": "float32"}],
   "workload": "inference"
 }
 ```
@@ -39,10 +39,11 @@ python -m torchscan.autoresearch workload.json --output /tmp/torchscan-baseline
 ```
 
 TorchScan collects latency, throughput, scoped PyTorch memory and fresh-process peak RSS without an experiment script.
-Point `model` at your own importable model or factory, and use shapes/dtypes or a saved real input batch. Add
+Point `model` at your own importable model or factory, and use shapes/dtypes or a saved real input with batch size one. Add
 `--candidate-model your_package.models:build_candidate` for automatic output checks, repeated comparisons and a
 confirmed `keep`/`discard`/`inconclusive` result. See the [autoresearch guide](docs/docs/autoresearch.md).
-Compare model architectures and implementations at fixed FP32 precision. Every comparison reports
+Compare model architectures and implementations at fixed FP32 precision, with latency as the default objective.
+Large-batch training is a separate future workflow. Every comparison reports
 mean/median/p90/p95/p99/max absolute output error against the unchanged original model; explicit ceilings can gate acceptance.
 
 ## Measure a custom callable

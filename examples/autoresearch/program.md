@@ -1,12 +1,13 @@
-# Resource autoresearch with an existing coding agent
+# Batch-one inference autoresearch with an existing coding agent
 
-The owner supplies one model/input contract: `workload.json`. The coding agent changes candidate model code.
+The owner supplies one model/input contract with one sample per call: `workload.json`. The coding agent changes candidate model code.
 TorchScan owns model execution, timing, memory/RSS measurements, output checks and improvement decisions.
+Optimize FP32 inference latency. Large-batch training is a separate future workflow.
 
 ## Establish the experiment
 
 1. Install TorchScan and the model's dependencies. The example uses `uv pip install -e ".[model-test]"`.
-2. Review `workload.json` with the owner: model/weights, shapes or real input batch, inference, target device,
+2. Review `workload.json` with the owner: model/weights, shapes or a real sample with batch size one, inference, target device,
    objective and constraints. Agree on a maximum number of candidate attempts before starting.
 3. Keep that contract, data/weights and original baseline fixed in an isolated experiment branch.
    For the example, preserve `models.py:baseline` and edit only `candidate()` or candidate-specific code.
@@ -36,6 +37,8 @@ median, p90, p95, p99 or maximum absolute output error. Read all statistics; p99
 Never relax these limits after a failed candidate; the original reference remains fixed.
 Without `check`, errors are still measured but do not gate acceptance. Record `output_error_policy`; a resource
 winner with `report_only` does not establish numerical equivalence or task quality.
+Check `output_check_phases`: trial evidence includes the measured model after repeated calls, alongside separate
+first/warmed-call checks. Do not promote a candidate that fails any phase or changes the input batch size.
 
 - `keep`: record the confirmed objective gain, output errors and resource tradeoff. Preserve the accepted factory/revision and
   use `--baseline-model` to select it for the next iteration.

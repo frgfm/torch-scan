@@ -1,9 +1,11 @@
-# Autoresearch for model resources
+# Autoresearch for batch-one inference
 
 This workflow requires the development version of TorchScan.
 
 Describe your **model, inputs and workload** once. TorchScan builds the measurement and comparison harness. The
 coding agent edits the model implementation and uses the same contract for every experiment.
+This workflow focuses on batch-one FP32 inference: reduce model-call latency while measuring memory use and
+numerical output fidelity. Supply one sample per call. Large-batch training is a separate future workflow.
 
 ## Start without an experiment script
 
@@ -12,7 +14,7 @@ Create `workload.json` using an existing importable model or factory:
 ```json
 {
   "model": "torchvision.models:resnet18",
-  "args": [{"shape": [4, 3, 32, 32], "dtype": "float32"}],
+  "args": [{"shape": [1, 3, 224, 224], "dtype": "float32"}],
   "workload": "inference"
 }
 ```
@@ -32,9 +34,10 @@ The default workload is `model.eval()` under `torch.inference_mode()`, on CPU, w
 Floating parameters, buffers, inputs and checked outputs must be FP32. Integer and boolean inputs retain their types.
 Autocast and CUDA TF32 are disabled. Compare architecture and implementation changes while keeping precision fixed;
 precision optimization and quantization are separate work.
-Shapes include the batch dimension. Throughput defaults to calls/s; declare `settings.work_units` and `work_unit`
-when one call completes several images, tokens or other units. Synthetic inputs are labelled in the saved context.
-They measure the declared call, not task accuracy or production traffic.
+Shapes include the batch dimension; use size one on the model's batch axis. Batch axes are model-specific and are
+not inferred from arbitrary nested inputs. Throughput defaults to calls/s; `settings.work_units: 1` and
+`work_unit: images` express single-image inference in images/s. Synthetic inputs are labelled in the saved context.
+They measure the declared call, not task accuracy, training speed or production traffic.
 
 ## Use your own model and real inputs
 
@@ -47,10 +50,10 @@ Describe positional tensors with `args` and named tensors with `kwargs`. Descrip
 optional `fill`; integer inputs require explicit `low`/`high` bounds or a fill value. Boolean masks default to true.
 Nested containers and literal scalars/`null` are forwarded, so token IDs, masks and optional arguments need no callback.
 
-For representative tensors you already have, save them once:
+For representative tensors you already have, save one sample once:
 
 ```python
-torch.save({"args": (batch,), "kwargs": {"attention_mask": mask}}, "inputs.pt")
+torch.save({"args": (sample,), "kwargs": {"attention_mask": mask}}, "inputs.pt")
 ```
 
 Use `"inputs": "inputs.pt"` instead of descriptor `args`/`kwargs`. Tensor data and checkpoints load with
@@ -68,8 +71,10 @@ python -m torchscan.autoresearch workload.json \
 
 The baseline defaults to the contract's `model`; `--baseline-model` selects a previously accepted incumbent.
 The numerical reference always remains the contract's original model, so tolerances do not drift with promotion.
-TorchScan generates reference outputs in a fresh process, checks each implementation against them, alternates
-repeated measurement pairs, and confirms a tentative winner with another fresh checked pair. Reference outputs are
+TorchScan generates reference outputs in a fresh process, checks first and warmed calls against them, alternates
+repeated measurement pairs, and confirms a tentative winner with another fresh checked pair. Each measured model
+instance also receives an output check after its resource passes, outside timing and memory collection. A failed
+first, warmed or post-measurement check withholds acceptance. Reference outputs are
 saved locally with the experiment. They can contain application data.
 
 ## Numerical output error
@@ -99,6 +104,8 @@ initializations can produce unrelated outputs; their distance does not establish
 An explicit `check` can instead set pointwise `rtol`/`atol`; missing members default to `1e-4`/`1e-5`.
 Do not combine pointwise tolerances and `absolute_error` in one `check`.
 Error calculation and checks run outside clean latency and RSS passes.
+`output_check_phases` identifies the selected error record's phase: `first_call`, `warmed` or `after_measurement`.
+The measured instance's errors are used for each trial unless a separate first/warmed check failed.
 
 ## Resource objectives
 
@@ -132,7 +139,9 @@ each attempt, and rerun the final winner against the original baseline. Run one 
 
 ## Measurement boundaries
 
-Clean latency excludes loading and instrumentation and describes block averages, not request p95. Peak RSS comes
+Batch-one latency covers the model call with inputs already on the target device. It excludes input transfer,
+preprocessing, queueing, model loading and instrumentation, and describes block averages, not request p95.
+It does not establish an end-to-end real-time deadline. Peak RSS comes
 from a separate child doing imports, model/input loading, warmup and one inference without profiling. Linux/macOS
 provide per-child OS accounting; other platforms report RSS unavailable. It includes the child's whole lifetime,
 not an inference-only delta or summed process tree.
@@ -151,12 +160,13 @@ python -m torchscan.autoresearch examples/autoresearch/workload.json \
   --candidate-model models.py:candidate --output /tmp/torchscan-resnet
 ```
 
-The ResNet18 factories initialize weights locally without downloads. The
+The ResNet18 factories initialize weights locally without downloads. The candidate folds BatchNorm into adjacent
+convolutions at fixed FP32, removing separate normalization work for batch-one inference. The
 [bounded agent recipe](https://github.com/frgfm/torch-scan/blob/main/examples/autoresearch/program.md) describes the
 editable surface, incumbent promotion and stop condition.
 
-For stateful workloads or task-quality evaluators beyond output equivalence, the advanced Python experiment API
-still accepts explicit `SETTINGS`, `build(implementation)` and `check(implementation)` functions.
+For custom inference calls or checks beyond the model contract, the advanced Python experiment API accepts explicit
+`SETTINGS`, `build(implementation)` and `check(implementation)` functions. The owner supplies its repeatability checks.
 
 ::: torchscan.autoresearch.evaluate_model
 

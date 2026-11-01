@@ -65,18 +65,9 @@ def compare_outputs(actual: Any, reference: Any, check: dict[str, Any]) -> tuple
                 "failed_constraints": [],
                 **statistics,
             }
-            if not check:
-                return True
-            if "absolute_error" in check:
-                exceeded = [name for name, limit in check["absolute_error"].items() if statistics[name] > limit]
-                outputs[path or "/"]["failed_constraints"] = exceeded
-                return not exceeded
-            try:
-                torch.testing.assert_close(left, right, **check, equal_nan=False)
-            except AssertionError:
-                outputs[path or "/"]["failed_constraints"] = ["pointwise_tolerance"]
-                return False
-            return True
+            exceeded = [name for name, limit in check.get("absolute_error", {}).items() if statistics[name] > limit]
+            outputs[path or "/"]["failed_constraints"] = exceeded
+            return not exceeded
         if isinstance(candidate, Mapping) and isinstance(expected, Mapping) and candidate.keys() == expected.keys():
             results = [
                 visit(candidate[key], expected[key], path + "/" + str(key).replace("~", "~0").replace("/", "~1"))

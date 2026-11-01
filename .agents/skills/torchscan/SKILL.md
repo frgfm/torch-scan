@@ -58,11 +58,10 @@ Use the smallest API that answers the request:
 
 For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Prefer a JSON model/input
 contract. Preserve the contract, inputs and original baseline; edit the candidate model and keep it only on `keep`.
-An initial `measured` result is feedback, not an optimization verdict. Use explicit Python experiments only when
-stateful calls or custom checks cannot be expressed by inference and numerical output-error constraints.
+An initial `measured` result is feedback, not an optimization verdict.
 Optimize batch-one inference latency at fixed FP32 precision. Do not change the batch size, precision or quantize candidates.
 Large-batch training is a separate future workflow. First, warmed and post-measurement output checks must all pass;
-`output_check_phases` identifies the selected evidence. Batch-one model-call timing does not establish request p95.
+Each side's `feedback.output_check_phase` identifies its evidence. Batch-one model-call timing does not establish request p95.
 Preserve the original reference and fixed `check.absolute_error` limits on mean/median/p90/p95/p99/max. These measure
 numerical differences, not task accuracy. Keep per-output error statistics and reject changes that exceed any selected ceiling.
 Without explicit `check` limits, feedback uses `output_error_policy: report_only`; `keep` confirms resource gains

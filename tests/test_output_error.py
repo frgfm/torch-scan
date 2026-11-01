@@ -41,14 +41,12 @@ def test_float_dtype_changes_are_allowed_without_rounding_the_reference():
     assert outputs["/"]["mean"] > 0.0002
     assert outputs["/"]["candidate_dtype"] == "torch.float16"
     assert compare_outputs(candidate, reference, {"absolute_error": {"mean": 0.001}})[0]
-    assert compare_outputs(torch.ones(2).half(), torch.ones(2), {"rtol": 0, "atol": 0})[0]
 
 
 def test_scalar_float_outputs_use_the_same_error_contract():
     passed, outputs = compare_outputs(1.01, 1.0, {"absolute_error": {"p99": 0.02}})
     assert passed
     assert outputs["/"]["p99"] == pytest.approx(0.01)
-    assert compare_outputs(1.01, 1.0, {"rtol": 0, "atol": 0.02})[0]
     assert not compare_outputs(1.0, 1, {"absolute_error": {"p99": 1}})[0]
 
 

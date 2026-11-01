@@ -136,22 +136,10 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     seed, threads = contract.get("seed", 0), contract.get("threads", 1)
     if type(seed) is not int or type(threads) is not int or threads < 1:
         raise ValueError("seed must be an integer and threads a positive integer.")
-    supplied = contract.get("settings", {})
-    if not isinstance(supplied, dict) or "workload_id" in supplied or "device" in supplied:
-        raise ValueError("settings must be an object; device and workload identity belong to the workload contract.")
-    settings = _settings(
-        {
-            "device": contract.get("device", "cpu"),
-            "objective": "latency",
-            "min_improvement": 0.03,
-            **supplied,
-            "workload_id": request["identities"][str(path)],
-        },
-        require_limits=False,
-    )
+    settings = _settings(contract)
     tolerance = contract.get("check", {})
-    if not isinstance(tolerance, dict) or tolerance.keys() - {"rtol", "atol", "absolute_error"}:
-        raise ValueError("check accepts rtol/atol or absolute_error statistic ceilings.")
+    if not isinstance(tolerance, dict) or tolerance.keys() - {"absolute_error"}:
+        raise ValueError("check accepts absolute_error statistic ceilings.")
     if "absolute_error" in tolerance:
         limits = tolerance["absolute_error"]
         if (
@@ -160,10 +148,7 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
             or not limits
             or limits.keys() - set(ERROR_STATISTICS)
         ):
-            raise ValueError("absolute_error requires named mean/median/p90/p95/p99/max ceilings, without rtol/atol.")
-    elif tolerance:
-        tolerance = {"rtol": 1e-4, "atol": 1e-5, **tolerance}
-        limits = tolerance
+            raise ValueError("absolute_error requires named mean/median/p90/p95/p99/max ceilings.")
     else:
         limits = {}
     if any(type(value) not in (int, float) or not 0 <= value < float("inf") for value in limits.values()):

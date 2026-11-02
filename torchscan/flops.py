@@ -289,10 +289,12 @@ def _scoped_mapping(
 
         return count
 
+    # PyTorch's native CPU attention formula omits scaling, softmax, and masks.
     return {
         operator: guarded(operator, formula)
         for name, formula in FORMULAS.items()
-        if (operator := getattr(torch.ops.aten, name, None)) is not None and operator not in registry
+        if (operator := getattr(torch.ops.aten, name, None)) is not None
+        and (operator not in registry or name == "_scaled_dot_product_flash_attention_for_cpu")
     }
 
 
@@ -325,7 +327,7 @@ def measure_flops(
         )
     diagnostics: list[Diagnostic] = []
     recorder = _OperatorRecorder(diagnostics)
-    # Inspect the invocation's upstream mapping, then fill gaps. The caller wins.
+    # Fill upstream gaps and replace incomplete CPU attention counts. The caller wins.
     base_counter = FlopCounterMode(display=False)
     mapping = {**_scoped_mapping(base_counter, recorder, diagnostics), **mapping}
     counter = FlopCounterMode(

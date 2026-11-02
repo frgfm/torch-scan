@@ -5,6 +5,7 @@ import pytest
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils import flop_counter
 from torch.utils.flop_counter import FlopCounterMode
 
 from scripts.benchmark import metric_cell
@@ -736,6 +737,29 @@ def test_transformer_final_norm_boundary(stack, norm):
     else:
         # Default2694 includes encoder102 and decoder68 final-normalization ops.
         assert report["totals"]["module_flops"]["value"] == (2592 if stack == "encoder" else 2626)
+
+
+@pytest.mark.parametrize("masked", [False, True])
+@pytest.mark.parametrize("custom_override", [False, True])
+def test_cpu_attention_replaces_native_core_only_formula(monkeypatch, masked, custom_override):
+    operator = getattr(torch.ops.aten, "_scaled_dot_product_flash_attention_for_cpu", None)
+    if operator is None:
+        pytest.skip("This PyTorch release has no separate CPU attention operator.")
+    # Simulate newer PyTorch registering only the two matrix products (480 FLOPs).
+    native_formula = flop_counter.shape_wrapper(lambda *_args, **_kwargs: 480)
+    monkeypatch.setitem(flop_counter.flop_registry, operator, native_formula)
+    query, memory = torch.ones(2, 2, 3, 2), torch.ones(2, 2, 5, 2)
+    mask = torch.zeros(3, 5) if masked else None
+    mapping = {operator: lambda *_args, **_kwargs: 123} if custom_override else None
+
+    report = measure_flops(lambda: operator(query, memory, memory, attn_mask=mask), custom_mapping=mapping)
+
+    # Scaling and softmax add 60 + 276; a broadcast mask adds another 60.
+    expected = 123 if custom_override else 816 + (60 if masked else 0)
+    assert report["total"]["status"] == "complete"
+    assert report["total"]["value"] == expected
+    assert report["by_operator"] == {str(operator): expected}
+    assert flop_counter.flop_registry[operator] is native_formula
 
 
 def test_cpu_attention_unsupported_broadcast_batch_is_partial():

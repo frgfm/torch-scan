@@ -151,6 +151,7 @@ class _OperatorRecorder(TorchDispatchMode):
         self.complex: dict[Any, bool] = {}
         self.complex_operators: set[Any] = set()
         self.registry: dict[Any, Any] = {}
+        self.raw_registry = False
         self.guarded_operators: set[Any] = set()
         self.diagnostics = diagnostics
 
@@ -232,13 +233,14 @@ class _OperatorRecorder(TorchDispatchMode):
                     "operator": _operator_key(packet),
                     "message": "Shape FLOP formulas require dense strided tensors; sparse and nested layouts are unsupported.",
                 })
-            # PyTorch 2.1 extracts shapes before calling formulas. Temporarily
-            # remove the packet formula before extraction. Modern counters also
-            # decompose unregistered overloads, which can query unsupported
-            # nested sizes even when the actual operator kernel works. An
-            # overload-only marker prevents decomposition without registering
-            # a packet count. Caller overrides retain their own raw/shape policy.
+            # Legacy counters extract shapes before calling formulas, so remove
+            # the packet rule. Modern counters check either overload or packet
+            # keys before decomposing; mark both and count zero without reading
+            # shapes. The diagnostic above keeps the report partial.
             formula = self.registry.pop(packet) if suppress_formula else None
+            mark_packet = self.raw_registry and packet not in self.registry
+            if mark_packet:
+                self.registry[packet] = lambda *_args, **_kwargs: 0
             mark_overload = func is not packet and func not in self.registry
             if mark_overload:
                 self.registry[func] = _NO_DECOMPOSITION
@@ -247,6 +249,8 @@ class _OperatorRecorder(TorchDispatchMode):
             finally:
                 if mark_overload:
                     self.registry.pop(func)
+                if mark_packet:
+                    self.registry.pop(packet)
                 if suppress_formula:
                     self.registry[packet] = formula
         if func not in self.registry and packet not in self.registry:
@@ -341,6 +345,7 @@ def measure_flops(
             for overload in getattr(operator, "overloads", lambda: ())():
                 counter.flop_registry[getattr(operator, overload)] = counter.flop_registry[operator]
     recorder.registry = getattr(counter, "flop_registry", getattr(counter, "flop_mapping", {}))
+    recorder.raw_registry = hasattr(counter, "flop_registry")
     recorder.guarded_operators = set(recorder.registry) - set(custom_mapping or {})
     with counter, recorder:
         workload()

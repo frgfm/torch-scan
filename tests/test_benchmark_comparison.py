@@ -1,5 +1,7 @@
 import json
 import math
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import sys
 from copy import deepcopy
 
 import pytest
@@ -124,12 +126,21 @@ def test_latency_variability_labels(latency, label):
         render_report(result)
 
 
-def test_check_real_saved_timing():
+def test_check_real_saved_timing(tmp_path):
     inputs = torch.ones(8)
     report = measure_latency(lambda: inputs + 1, device="cpu", inputs=inputs, min_run_time=0.001, min_repeats=2)
     comparison = compare_benchmarks(report, report, check=lambda: True)
     saved = json.loads(json.dumps(comparison))
     assert check_performance(saved, max_latency_regression=0)["status"] == "passed"
+    path = tmp_path / "comparison.json"
+    path.write_text(json.dumps(saved), encoding="utf-8")
+    script = (
+        "import sys,json; sys.modules['torch']=None; "
+        "from torchscan import BenchmarkReport, BenchmarkComparison, MemoryLimit, PerformanceCheck, check_performance; "
+        "result=check_performance(json.load(open(sys.argv[1])),max_latency_regression=0); "
+        "assert result['status']=='passed'"
+    )
+    subprocess.run([sys.executable, "-c", script, str(path)], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
 
 
 @pytest.mark.parametrize(

@@ -9,8 +9,9 @@ from html import escape
 from typing import Any
 
 from ._render_assets import STYLE
+from ._validation import _json_tree, _number, _object, _string
 from .benchmark_compare import _validate_benchmark, _validate_comparison
-from .render import _diagnostics, _json_tree, _metadata, _metric_table, _number, _object, _string
+from .render import _diagnostics, _metadata, _metric_table
 from .utils import _display_unit
 from .workload import _LABELS, _summary
 

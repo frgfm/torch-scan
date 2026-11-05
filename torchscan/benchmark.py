@@ -3,7 +3,6 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-import math
 import platform
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
@@ -11,38 +10,23 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._validation import _TIMING_METHOD as _METHOD
+from ._validation import _positive_finite as _positive_finite
 from .crawler import _describe, _package_version
-from .report import Diagnostic, MetricResult, metric_result
+from .report import BenchmarkReport, metric_result
 
 if TYPE_CHECKING:
     from torch.utils.benchmark import Measurement, Timer
 
-    from .flops import FlopReport
-    from .profiler import ProfileReport
 
 __all__ = ["BenchmarkReport", "measure_latency"]
 
-_METHOD = "torch.utils.benchmark.Timer"
 # ponytail: native timing uses process-global thread settings; use processes for parallel benchmarks.
 _TIMING_LOCK = threading.Lock()
-
-
-class BenchmarkReport(TypedDict):
-    """JSON-serializable timing report for one caller-controlled workload."""
-
-    schema_version: int
-    context: dict[str, Any]
-    inputs: dict[str, Any]
-    totals: dict[str, MetricResult]
-    measurement: dict[str, Any]
-    profile: NotRequired["ProfileReport"]
-    operator_flops: NotRequired["FlopReport"]
-    memory: NotRequired[dict[str, str | int]]
-    diagnostics: NotRequired[list[Diagnostic]]
 
 
 def _processor() -> str:
@@ -85,15 +69,6 @@ def _benchmark_tools() -> tuple[type["Timer"], type["Measurement"]]:
             "PyTorch version, or upgrade PyTorch. PyTorch 2.1 requires setuptools<70 and numpy<2 for these utilities."
         ) from error
     return Timer, Measurement
-
-
-def _positive_finite(value: object) -> bool:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return False
-    try:
-        return math.isfinite(value) and value > 0
-    except OverflowError:
-        return False
 
 
 def _run_timing(

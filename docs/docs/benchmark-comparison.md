@@ -63,6 +63,9 @@ See the [`compare_benchmarks`](torchscan.md#torchscan.compare_benchmarks) and
 ## Apply explicit limits
 
 Agents and CI can call `check_performance` on an in-memory or JSON-loaded comparison without executing workloads.
+The checker and shared report validation do not import PyTorch; an analysis-only environment can install the
+development wheel with `--no-deps`. Autoresearch `report.json` files contain compatible comparisons in `trials`;
+pass one trial to the checker. Its budget decision is separate from autoresearch's improvement decision.
 A `max_latency_regression` of `0.05` allows a 5% increase in warmed median latency; equality passes.
 
 ```python

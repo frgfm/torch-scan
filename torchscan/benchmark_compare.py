@@ -9,9 +9,9 @@ from math import isclose
 from statistics import median
 from typing import Any, Literal, TypedDict, cast
 
-from .benchmark import _METHOD, BenchmarkReport, _positive_finite
+from ._validation import _TIMING_METHOD, _json_tree, _metric, _metrics, _number, _object, _positive_finite
 from .compare import _diff_metrics, _MetricDiff
-from .render import _json_tree, _metric, _metrics, _number, _object
+from .report import BenchmarkReport
 
 __all__ = ["BenchmarkComparison", "MemoryLimit", "PerformanceCheck", "check_performance", "compare_benchmarks"]
 
@@ -204,7 +204,7 @@ def _has_timing_evidence(report: BenchmarkReport) -> bool:
         latency["status"] == "complete"
         and _positive_finite(latency["value"])
         and latency["scope"] == "warmed_block_average"
-        and latency["method"] == _METHOD
+        and latency["method"] == _TIMING_METHOD
         and type(number) is int
         and _positive_finite(number)
         and isinstance(samples, list)

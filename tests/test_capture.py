@@ -57,7 +57,8 @@ def test_exact_large_native_counts(tmp_path):
     assert analyze_capture(capture)["total"]["status"] == "partial"
 
 
-def test_replay_without_pytorch(tmp_path):
+@pytest.mark.parametrize(("operator", "weight"), [("mm", [4, 3]), ("linear", [3, 4])])
+def test_replay_without_pytorch(tmp_path, operator, weight):
     def tensor(shape):
         return {"shape": shape, "floating": True, "complex": False, "dtype": "Float", "device": "cpu"}
 
@@ -75,11 +76,11 @@ def test_replay_without_pytorch(tmp_path):
         },
         "operators": [
             {
-                "operator": "aten::mm",
+                "operator": f"aten::{operator}",
                 "overload": "",
                 "module": "Linear",
                 "kwargs": {},
-                "inputs": [tensor([2, 4]), tensor([4, 3])],
+                "inputs": [tensor([2, 4]), tensor(weight)],
                 "outputs": [tensor([2, 3])],
             }
         ],
@@ -117,8 +118,9 @@ def test_native_counts_and_roundtrip(device):
     workload = lambda: model(inputs)
     capture = capture_workload(workload, inputs=inputs, modules=model)
     result = analyze_capture(json.loads(json.dumps(capture)))
-    assert result["total"]["value"] == measure_flops(workload)["total"]["value"] == 132
-    assert result["by_operator"] == {"aten.addmm": 48, "aten.gelu": 84}
+    assert result["total"]["value"] == measure_flops(workload)["total"]["value"] == 132, result
+    product = "aten.linear" if device == "mps" else "aten.addmm"
+    assert result["by_operator"] == {product: 48, "aten.gelu": 84}
     assert result["by_module"]["Sequential"] == 132
     report = measure_workload(workload, device=device, metrics=("flops",), print_summary=False)
     assert analyze_capture(report["operator_flops"]["capture"])["total"] == report["totals"]["operator_flops"]

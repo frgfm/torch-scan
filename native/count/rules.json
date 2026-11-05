@@ -48,7 +48,7 @@
 ["_batch_norm_legit",{},"_native_batch_norm_legit"],
 ["_batch_norm_eval",{},"_native_batch_norm_legit_no_training"],
 ["_cpu_attention",{},"_scaled_dot_product_flash_attention_for_cpu"],
-["_product",{"left":0},"mm bmm _scaled_mm"],
+["_product",{"left":0},"mm bmm _scaled_mm linear"],
 ["_product",{"left":1},"addmm baddbmm"],
 ["_convolution",{"transposed_arg":6},"convolution _convolution convolution_overrideable"],
 ["_convolution",{},"cudnn_convolution _slow_conv2d_forward"],

@@ -1,4 +1,4 @@
-.PHONY: install install-quality install-test install-docs ruff-lint-fix ruff-format-fix lint-check lint-format typing-check headers-check headers-fix precommit quality style test serve-docs build-docs set-version build publish
+.PHONY: install install-quality install-test install-docs deps-check ruff-lint-fix ruff-format-fix lint-check lint-format typing-check headers-check headers-fix precommit quality style test serve-docs build-docs set-version build publish
 
 install:
 	uv pip install -e .
@@ -15,6 +15,9 @@ install-docs:
 lint-check:
 	ruff format --check .
 	ruff check .
+
+deps-check:
+	python .github/verify_deps_sync.py
 
 ruff-lint-fix:
 	ruff check --fix .
@@ -36,7 +39,7 @@ headers-fix:
 precommit:
 	prek run --all-files
 
-quality: lint-check typing-check headers-check
+quality: deps-check lint-check typing-check headers-check
 
 style: lint-format
 

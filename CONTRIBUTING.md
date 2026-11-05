@@ -46,7 +46,7 @@ make precommit
 make build-docs
 ```
 
-`make quality` checks Ruff formatting/lint, ty types, and copyright headers. `make precommit` runs repository hooks.
+`make quality` checks uv version synchronization, Ruff formatting/lint, ty types, and copyright headers. `make precommit` runs repository hooks.
 Use `make style` to apply Ruff fixes and `make headers-fix` to refresh headers. CI also verifies installation,
 compatibility, distributions, and model integrations; [Codecov](https://codecov.io/gh/frgfm/torch-scan) reports coverage.
 See [the documentation guide](docs/README.md) for local preview instructions.

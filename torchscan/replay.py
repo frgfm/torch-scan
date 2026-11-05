@@ -16,25 +16,21 @@ from .report import FlopReport, OperatorCapture, metric_result
 __all__ = ["OperatorCapture", "analyze_capture"]
 
 _METHOD = "ATen.RecordFunction/torchscan_flops_v1"
-_SCOPE = "calling_thread_eager_ops"
-_FORMULAS = {
-    **FORMULAS,
-    **{
-        name: FORMULAS[target]
-        for name, target in {
-            "layer_norm": "native_layer_norm",
-            "batch_norm": "native_batch_norm",
-            "softmax": "_softmax",
-            "log_softmax": "_log_softmax",
-            "adaptive_avg_pool2d": "_adaptive_avg_pool2d",
-            "adaptive_avg_pool3d": "_adaptive_avg_pool3d",
-        }.items()
-    },
+_SCOPE = "calling_thread_and_autograd_eager_ops"
+_PRODUCTS = {"mm", "bmm", "addmm", "baddbmm", "_scaled_mm"}
+_CONVOLUTIONS = {"convolution", "_convolution", "cudnn_convolution", "convolution_overrideable", "_slow_conv2d_forward"}
+_ATTENTION = {
+    f"_scaled_dot_product_{kind}_attention{suffix}"
+    for kind in ("flash", "efficient", "cudnn")
+    for suffix in ("", "_backward")
 }
+_SUPPORTED = FORMULAS.keys() | _PRODUCTS | _CONVOLUTIONS | _ATTENTION | {"convolution_backward"}
 
 
 def _shapes(value: Any) -> Any:
     if isinstance(value, dict):
+        if set(value) == {"nonfinite"} and value["nonfinite"] in {"inf", "-inf", "nan"}:
+            return float(value["nonfinite"])
         if "unknown" in value:
             raise NotImplementedError(str(value["unknown"]))
         shape = value.get("shape")
@@ -63,9 +59,38 @@ def _product(*args: Any, out_shape: Any, left: int = 0, **_kwargs: Any) -> int:
     return 2 * prod(out_shape) * args[left][-1]
 
 
-def _convolution(inp: Any, weight: Any, *_args: Any, out_shape: Any, **_kwargs: Any) -> int:
-    transposed = len(_args) > 4 and _args[4] is True
-    return 2 * prod(inp if transposed else out_shape) * prod(weight[1:])
+def _convolution(inp: Any, weight: Any, output: Any, transposed: bool = False) -> int:
+    return 2 * inp[0] * prod(weight) * prod((inp if transposed else output)[2:])
+
+
+def _count(packet: str, args: Any, kwargs: Any, output: Any) -> int:
+    if packet in _PRODUCTS:
+        return _product(*args, out_shape=output, left=int(packet in {"addmm", "baddbmm"}))
+    if packet in _CONVOLUTIONS:
+        transposed = args[6] if packet in {"convolution", "_convolution", "convolution_overrideable"} else False
+        return _convolution(args[0], args[1], output, transposed)
+    if packet == "convolution_backward":
+        grad, inp, weight = args[:3]
+        transposed, mask = args[7], args[10]
+        # Each input/weight gradient visits the same dense products as forward,
+        # including grouped channels. Fused bias arithmetic remains excluded.
+        return _convolution(inp, weight, grad, transposed) * (mask[0] + mask[1])
+    if packet in _ATTENTION:
+        backward = packet.endswith("_backward")
+        query, key, value = args[1:4] if backward else args[:3]
+        if (
+            len(query) != 4
+            or len(key) != 4
+            or len(value) != 4
+            or query[0] != key[0]
+            or key[:3] != value[:3]
+            or query[3] != key[3]
+            or key[1] <= 0
+            or query[1] % key[1]
+        ):
+            raise NotImplementedError("Fused attention requires compatible dense batched Q/K/V shapes.")
+        return 2 * prod(query[:3]) * key[2] * ((3 * query[3] + 2 * value[3]) if backward else (query[3] + value[3]))
+    return FORMULAS[packet](*args, out_shape=output, **kwargs)
 
 
 def analyze_capture(capture: OperatorCapture) -> "FlopReport":
@@ -76,7 +101,7 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
             events, and incomplete arguments retain partial counts and diagnostics.
 
     Returns:
-        A standard FlopReport at the calling-thread, outermost eager-operator boundary.
+        A standard FlopReport at the calling-thread and autograd eager dispatcher boundary.
         Module counts are inclusive. Complex arithmetic retains an explicitly partial lower bound.
 
     Raises:
@@ -90,7 +115,7 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
             or capture["report_type"] != "operator_capture"
             or capture["context"]["method"] != _METHOD
             or capture["context"]["scope"] != _SCOPE
-            or capture["context"].get("boundary") != "outermost_native_operator"
+            or capture["context"].get("boundary") != "dispatcher_operator"
             or not isinstance(capture["context"].get("torch_version"), str)
             or not isinstance(capture["inputs"], dict)
             or not isinstance(capture["operators"], list)
@@ -104,9 +129,9 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
     ignored: dict[str, Any] = {}
     diagnostics = []
 
-    def gap(operator: str, message: str) -> None:
+    def gap(operator: str, message: str, code: str = "unsupported_operator_formula") -> None:
         diagnostics.append({
-            "code": "incomplete_capture",
+            "code": code,
             "severity": "warning",
             "metric": "flops",
             "operator": operator,
@@ -114,7 +139,11 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
         })
 
     if capture["dropped_events"] or capture["errors"]:
-        gap("", f"Capture lost {capture['dropped_events']} events and recorded {capture['errors']} collector errors.")
+        gap(
+            "",
+            f"Capture lost {capture['dropped_events']} events and recorded {capture['errors']} collector errors.",
+            "incomplete_capture",
+        )
     for event in capture["operators"]:
         if (
             not isinstance(event, dict)
@@ -124,58 +153,57 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
         ):
             raise ValueError("Invalid operator event.")
         name = event["operator"].replace("::", ".")
-        reason = _IGNORED_OPERATOR_REASONS.get(name)
-        if (
-            name == "aten.dropout"
-            and len(event["inputs"]) == 3
-            and (event["inputs"][1] == 0 or event["inputs"][2] is False)
-        ):
-            reason = "Dropout evaluation or zero probability is identity."
+        custom = "custom_flops" in event or "custom_error" in event
+        reason = None if custom else _IGNORED_OPERATOR_REASONS.get(name)
         if reason is None:
             try:
-                args = _shapes(event["inputs"])
-                kwargs = {key: _shapes(value) for key, value in event["kwargs"].items()}
-                outputs = _shapes(event["outputs"])
-                if not outputs:
-                    raise NotImplementedError("Missing operator outputs.")
-                out_shape = outputs[0] if len(outputs) == 1 else outputs
                 packet = name.removeprefix("aten.") if name.startswith("aten.") else ""
-                formula = _FORMULAS.get(packet)
-                if packet in {"mm", "bmm", "matmul", "linear", "addmm", "baddbmm"}:
-                    count = _product(*args, out_shape=out_shape, left=int(packet in {"addmm", "baddbmm"}))
-                elif packet in {"convolution", "_convolution", "conv1d", "conv2d", "conv3d"}:
-                    count = _convolution(*args, out_shape=out_shape)
-                elif packet in {"max_pool2d", "max_pool3d"}:
-                    count = FORMULAS[packet + "_with_indices"](*args, out_shape=(out_shape, None), **kwargs)
-                elif packet == "scaled_dot_product_attention":
-                    query, key, value, mask, dropout, causal = args[:6]
-                    count = FORMULAS["_scaled_dot_product_flash_attention_for_cpu"](
-                        query,
-                        key,
-                        value,
-                        dropout,
-                        causal,
-                        attn_mask=mask,
-                    )
-                elif formula is not None:
-                    count = formula(*args, out_shape=out_shape, **kwargs)
-                else:
-                    raise NotImplementedError("No portable formula for this outermost native operator.")
                 tensors = _tensors([event["inputs"], event["kwargs"], event["outputs"]])
-                if tensors and not any(t["floating"] or t["complex"] for t in tensors):
-                    reason = "Integer-only arithmetic is excluded from FLOPs."
+                arithmetic = (
+                    _tensors(event["outputs"])
+                    if packet in {"sum", "mean", "cumsum", "cumsum_", "linalg_vector_norm"}
+                    else tensors
+                )
+                complex_work = any(t["complex"] for t in arithmetic)
+                if "custom_error" in event:
+                    raise NotImplementedError(event["custom_error"])
+                if custom:
+                    count = event["custom_flops"]
                 else:
-                    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
-                        raise ValueError("Invalid formula result.")
+                    if packet not in _SUPPORTED:
+                        raise KeyError(packet)
+                    args = _shapes(event["inputs"])
+                    kwargs = {key: _shapes(value) for key, value in event["kwargs"].items()}
+                    outputs = _shapes(event["outputs"][:1] if packet in _ATTENTION else event["outputs"])
+                    if not outputs:
+                        raise NotImplementedError("Missing operator outputs.")
+                    out_shape = outputs[0] if len(outputs) == 1 else outputs
+                    if arithmetic and not any(t["floating"] or t["complex"] for t in arithmetic):
+                        count = 0
+                    elif complex_work and packet not in _PRODUCTS | _CONVOLUTIONS | _ATTENTION:
+                        raise NotImplementedError("Supplemental FLOP formulas cover real arithmetic only.")
+                    elif kwargs.get("rounding_mode") is not None:
+                        raise NotImplementedError("Rounded division is not covered by the scalar arithmetic formula.")
+                    else:
+                        count = _count(packet, args, kwargs, out_shape)
+                if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+                    raise ValueError("Invalid formula result.")
+                if reason is None:
                     counts[name] += count
                     path = event["module"]
                     if path:
                         parts = path.split(".")
                         for length in range(1, len(parts) + 1):
                             modules[".".join(parts[:length])] += count
-                    if any(t["complex"] for t in tensors):
-                        gap(name, "Shape counts do not establish complete real-arithmetic counts for complex inputs.")
-            except (ValueError, TypeError, NotImplementedError, IndexError, KeyError, ZeroDivisionError) as error:
+                    if not custom and (complex_work or packet in _ATTENTION):
+                        gap(
+                            name,
+                            "Shape counts cover only core arithmetic for complex inputs or fused attention.",
+                            "incomplete_operator_formula",
+                        )
+            except LookupError:
+                gap(name, f"{name} was observed 1 time(s), but no FLOP formula is registered.", "uncounted_operator")
+            except (ValueError, TypeError, NotImplementedError, ZeroDivisionError) as error:
                 gap(name, str(error))
         if reason is not None:
             item = ignored.setdefault(name, {"calls": 0, "reason": reason})
@@ -187,7 +215,7 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
             "torch_version": capture["context"].get("torch_version", "unknown"),
             "method": _METHOD,
             "counting_convention": "torchscan_flops_v1",
-            "boundary": "outermost_native_operator",
+            "boundary": "dispatcher_operator",
         },
         "total": metric_result(
             status="partial" if diagnostics else "complete",

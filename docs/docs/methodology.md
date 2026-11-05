@@ -39,9 +39,9 @@ remain visible. An incomplete owner remains incomplete rather than falling back 
 
 ## Operator FLOPs
 
-`measure_flops` uses PyTorch's `torch.utils.flop_counter.FlopCounterMode` around one owner-provided workload. The
-dispatcher can observe functional operations and work inside custom modules that hooks cannot assign to a supported
-leaf formula.
+`measure_flops` runs one owner-provided workload under the C++ collector, then computes FLOPs offline from
+operator metadata. Composite wrappers are opened to observe their underlying dispatcher operations once, including
+functional calls inside custom modules. See [collection and replay](native-capture.md) for the end-to-end process.
 
 For structure, shapes, parameters, and buffers alone, use `mode="structure"` in `crawl_module` or `summary`. This
 skips operator counting and module formulas while preserving one evaluation forward pass. Skipped compute totals
@@ -51,7 +51,7 @@ released during execution instead of retaining them for deferred analysis.
 
 Only operators with registered or caller-provided formulas contribute to the known count. TorchScan records executed
 but uncounted operators and marks the result partial. Caller formulas are scoped to one invocation and use the
-installed PyTorch version's shape-formula contract. Pass `custom_mapping` to `crawl_module` or `summary` to use the
+shape-formula contract described in [extensions](extensions.md). Pass `custom_mapping` to `crawl_module` or `summary` to use the
 same capability for their single-forward operator report. Module handlers do not supply operator estimates.
 
 The workload owns model state, gradient mode, autocast, device placement, warmup, and side effects. Exceptions are
@@ -94,8 +94,7 @@ execution-state details. Target-device acceptance requires real checks on that d
 
 ## FLOP conventions
 
-`torchscan_flops_v1` keeps module/operator counts separate. Priority: caller override > native PyTorch > invocation-only
-fallback; no global mutation. N = elements, R = rows, C = channels, A = affine tensors present (0–2).
+`torchscan_flops_v1` keeps module/operator counts separate. Caller operator formulas override TorchScan formulas for that invocation, without global mutation. N = elements, R = rows, C = channels, A = affine tensors present (0–2).
 Scalar arithmetic, exp/sqrt/erf, comparison, and selection each cost one operation. Sigmoid expands to four operations
 and tanh to six, as in the existing module formulas. Constant-only arithmetic is excluded.
 
@@ -103,7 +102,7 @@ and tanh to six, as in the existing module formulas. Constant-only arithmetic is
 | --- | --- |
 | K-term dot, K>0 | Module: K multiplies + K-1 adds; native: 2K. Empty dots: zero. |
 | Bias/scaling | Module: one bias add/output. Native fused bias and alpha/beta scaling omitted; separate arithmetic counts. |
-| Grouped convolution | Outputs × `Cin/groups × kernel_volume` terms; dense padded work. |
+| Grouped convolution | Outputs × `Cin/groups × kernel_volume` terms; dense padded work. Each requested input/weight gradient visits the same dense products as forward. |
 | Transposed convolution | `2 × input_elements × Cout/groups × kernel_volume`, plus module bias; cropped scatter products included. |
 | Fixed pooling, K values/window | Max: K-1; average: K. Nominal dense padding/ceil windows. |
 | Adaptive pooling | Exact overlapping floor/ceil windows: each spatial axis visits `L+O-gcd(L,O)` values over all output positions. Multiply axis sums and batch/channels. Max subtracts output elements; average adds one divide/window. Logical DMAs add output writes and optional max indices. Legacy pooling MAC conventions are retained with corrected geometry. |

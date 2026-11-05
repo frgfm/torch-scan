@@ -30,7 +30,7 @@ See [the extension tutorial](extensions.md) for complete examples and subtree ow
 
 ## Native collection and offline replay
 
-See [native capture](native-capture.md) for the optional collector build, observation scope, and replay without PyTorch.
+See [native capture](native-capture.md) for the native package build, observation scope, and replay without PyTorch.
 
 ::: torchscan.capture_workload
 

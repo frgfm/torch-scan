@@ -3,7 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-"""Compare clean execution, Python counting, native collection, and offline replay; no downloads."""
+"""Measure clean execution and counting overhead for a checkout; no model downloads."""
 
 import argparse
 import json
@@ -15,8 +15,8 @@ from pathlib import Path
 
 import torch
 
+import torchscan
 from scripts.benchmark_comparison import build_model
-from torchscan import analyze_capture, capture_workload, measure_flops
 from torchscan.benchmark import _processor
 
 
@@ -47,18 +47,15 @@ def main():
             return model(**inputs) if args.model == "bert" else model(inputs["input"])
 
     workload = torch.inference_mode()(forward)
-    capture = capture_workload(workload, modules=model)
-    python_report = measure_flops(workload, modules=model)
-    replay = analyze_capture(capture)
-    assert replay["total"]["status"] == python_report["total"]["status"] == "complete"
-    assert replay["total"]["value"] == python_report["total"]["value"]
-    jobs = {
-        "baseline": workload,
-        "python_counter": lambda: measure_flops(workload, modules=model),
-        "native_capture": lambda: capture_workload(workload, modules=model),
-        "offline_replay": lambda: analyze_capture(capture),
-        "native_total": lambda: measure_flops(workload, modules=model, backend="native"),
-    }
+    report = torchscan.measure_flops(workload, modules=model)
+    jobs = {"baseline": workload, "counter": lambda: torchscan.measure_flops(workload, modules=model)}
+    capture = None
+    if hasattr(torchscan, "capture_workload"):
+        capture = torchscan.capture_workload(workload, modules=model)
+        jobs.update({
+            "capture": lambda: torchscan.capture_workload(workload, modules=model),
+            "replay": lambda: torchscan.analyze_capture(capture),
+        })
     for job in jobs.values():
         for _ in range(3):
             job()
@@ -80,9 +77,11 @@ def main():
         "processor": _processor(),
         "python_version": platform.python_version(),
         "torch_version": str(torch.__version__),
-        "events": len(capture["operators"]),
-        "capture_bytes": len(json.dumps(capture).encode()),
-        "flops": replay["total"]["value"],
+        "events": len(capture["operators"]) if capture else None,
+        "capture_bytes": len(json.dumps(capture).encode()) if capture else None,
+        "flops": report["total"]["known_value"],
+        "status": report["total"]["status"],
+        "by_operator": report["by_operator"],
         "samples_seconds": samples,
         "median_ms": {name: statistics.median(values) * 1000 for name, values in samples.items()},
     }

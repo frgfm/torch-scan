@@ -143,7 +143,7 @@ incomplete; children do not silently become a substitute estimate. See [Custom m
 | `schema_version` | `1` for the v0.2 wire shape. |
 | `context` | `torch_version`, the counting `method`, and `counting_convention` for measured FLOPs. |
 | `total` | Complete or partial FLOP `MetricResult`. |
-| `by_module` | Best-effort known FLOPs keyed by PyTorch's upstream module labels when available. |
+| `by_module` | Best-effort inclusive known FLOPs keyed by module labels when available. |
 | `by_operator` | Known FLOPs keyed by normalized operator packet such as `aten.mm`. |
 | `ignored_operators` | Explicit zero-FLOP metadata, movement, or allocation operators with call count and reason. |
 | `diagnostics` | `uncounted_operator`, `unsupported_operator_formula`, `incomplete_operator_formula`, and other method limitations. |
@@ -153,17 +153,16 @@ even when the same packet has counted work.
 
 `crawl_module` stores the complete report under `operator_flops` and the same `total` result under
 `totals.operator_flops`. Module hooks and the native operator counter observe the same forward call; module formulas
-run in post-hooks with dispatch suspended so their own bookkeeping and custom callback tensor operations are not
+run in post-hooks with collection paused so their own bookkeeping and custom callback tensor operations are not
 counted. Intermediate activations are released as the forward pass progresses; the report retains only metadata.
 
 `custom_mapping` on `crawl_module` or `summary` configures this operator report independently from module handlers.
 Neither extension changes a global registry. `mode="structure"` executes no formulas or handlers.
 
-`Global`/`total` is authoritative. `crawl_module` does not request PyTorch 2.1's explicit module tracker because that
-tracker replaces tensors passed through its hooks; preserving the caller's exact `args` and `kwargs` takes priority.
-Consequently, `by_module` can be empty on older supported PyTorch versions. Standalone `measure_flops(modules=...)`
-requests native hierarchical attribution explicitly.
-Upstream `by_module` labels are not stable layer identities, parent entries include their children, and rows must not be
+`total` is authoritative. Module labelling preserves the caller's exact `args` and `kwargs`.
+Module labels are discovered automatically or selected with `measure_flops(modules=...)`.
+Backward attribution uses recorded forward autograd sequence numbers when available.
+`by_module` labels are not stable layer identities, parent entries include their children, and rows must not be
 joined to `layers` or summed. Use the global `total` for comparison.
 
 ## `ReportDiff`

@@ -23,8 +23,8 @@ def test_replay_without_pytorch(tmp_path):
         "errors": 0,
         "context": {
             "method": "ATen.RecordFunction/torchscan_flops_v1",
-            "scope": "calling_thread_eager_ops",
-            "boundary": "outermost_native_operator",
+            "scope": "calling_thread_and_autograd_eager_ops",
+            "boundary": "dispatcher_operator",
             "torch_version": "2.1.0",
         },
         "operators": [
@@ -55,7 +55,6 @@ def test_replay_without_pytorch(tmp_path):
 
 @pytest.mark.parametrize("device", ["cpu", "cuda", "mps"])
 def test_native_counts_and_roundtrip(device):
-    pytest.importorskip("_torchscan_native")
     if (device == "cuda" and not torch.cuda.is_available()) or (
         device == "mps" and not torch.backends.mps.is_available()
     ):
@@ -66,15 +65,14 @@ def test_native_counts_and_roundtrip(device):
     capture = capture_workload(workload, inputs=inputs, modules=model)
     result = analyze_capture(json.loads(json.dumps(capture)))
     assert result["total"]["value"] == measure_flops(workload)["total"]["value"] == 132
-    assert len(capture["operators"]) == 2  # No linear/addmm or GELU implementation double-counting.
+    assert result["by_operator"] == {"aten.addmm": 48, "aten.gelu": 84}
     assert result["by_module"]["Sequential"] == 132
-    report = measure_workload(workload, device=device, metrics=("flops",), flops_backend="native", print_summary=False)
+    report = measure_workload(workload, device=device, metrics=("flops",), print_summary=False)
     assert analyze_capture(report["operator_flops"]["capture"])["total"] == report["totals"]["operator_flops"]
 
 
 @pytest.mark.parametrize("limits", [{"max_events": 1}, {"max_bytes": 1}])
 def test_native_loss_is_partial(limits):
-    pytest.importorskip("_torchscan_native")
     value = torch.ones(4)
     capture = capture_workload(lambda: (value + 1).relu(), **limits)
     assert capture["dropped_events"] > 0
@@ -82,7 +80,6 @@ def test_native_loss_is_partial(limits):
 
 
 def test_native_cleanup_and_tensor_lifetime():
-    pytest.importorskip("_torchscan_native")
     references = []
     calls = []
 
@@ -107,8 +104,8 @@ def test_native_cleanup_and_tensor_lifetime():
         capture_workload(lambda: capture_workload(workload))
 
 
-def test_native_unknown_and_failed_ops():
-    pytest.importorskip("_torchscan_native")
+@pytest.mark.parametrize("right_shape", [(3, 2), ()])
+def test_native_unknown_and_failed_ops(right_shape):
     value = torch.eye(4)
     report = analyze_capture(capture_workload(lambda: torch.linalg.svd(value)))
     assert report["total"]["status"] == "partial"
@@ -118,30 +115,16 @@ def test_native_unknown_and_failed_ops():
 
     def catches_error():
         with suppress(RuntimeError):
-            value @ torch.ones(3, 2)
+            value @ torch.ones(right_shape)
 
     assert analyze_capture(capture_workload(catches_error))["total"]["status"] == "partial"
+    captured = capture_workload(catches_error, custom_mapping={torch.ops.aten.mm: lambda *_args, **_kwargs: 99})
+    assert analyze_capture(captured)["total"]["status"] == "partial"
 
 
 def test_native_module_calls_on_other_threads():
-    pytest.importorskip("_torchscan_native")
     model, inputs = torch.nn.Linear(4, 3), torch.ones(2, 4)
     with ThreadPoolExecutor(max_workers=1) as pool:
         capture = capture_workload(lambda: pool.submit(model, inputs).result(), modules=model)
     assert capture["context"]["unobserved_module_calls"] == 1
     assert analyze_capture(capture)["total"]["status"] == "partial"
-
-
-@pytest.mark.parametrize("name", ["resnet18", "bert"])
-def test_native_model_parity(name):
-    pytest.importorskip("_torchscan_native")
-    pytest.importorskip("torchvision" if name == "resnet18" else "transformers")
-    from scripts.benchmark_comparison import build_model
-
-    model, inputs, *_ = build_model(name, torch.device("cpu"))
-    workload = lambda: model(**inputs) if name == "bert" else model(inputs["input"])
-    with torch.inference_mode():
-        before = measure_flops(workload)
-        after = measure_flops(workload, modules=model, backend="native")
-    assert after["total"]["status"] == before["total"]["status"] == "complete"
-    assert after["total"]["value"] == before["total"]["value"]

@@ -3,7 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-"""Portable shape formulas shared by native replay and Python counter fallbacks.
+"""Portable shape formulas for offline native capture analysis.
 
 These follow the shape-formula contract shared by PyTorch 2.1 and newer releases.
 They never register in PyTorch's process-global mapping.
@@ -37,9 +37,16 @@ def _weight_norm(input_shape: Any, scale_shape: Any, dim: int = 0, *_args: Any, 
 
 
 def _pool(
-    _input_shape: Any, kernel_size: Any, *_args: Any, out_shape: Any, rank: int, maximum: bool, **_kwargs: Any
+    _input_shape: Any,
+    kernel_size: Any,
+    *_args: Any,
+    out_shape: Any,
+    rank: int,
+    maximum: bool,
+    indices: bool = True,
+    **_kwargs: Any,
 ) -> int:
-    output = out_shape[0] if maximum else out_shape
+    output = out_shape[0] if maximum and indices else out_shape
     kernel = (kernel_size,) if isinstance(kernel_size, int) else kernel_size
     volume = kernel[0] ** rank if len(kernel) == 1 else prod(kernel)
     return prod(output) * (volume - int(maximum))
@@ -317,6 +324,7 @@ def _clamp(_input_shape: Any, minimum: Any = None, maximum: Any = None, *, out_s
 
 
 FORMULAS: dict[str, Callable[..., int]] = {
+    "max_pool1d": partial(_pool, rank=1, maximum=True, indices=False),
     **{
         f"{prefix}{rank}d": partial(_elementwise, cost=0)
         for prefix in ("upsample_nearest", "_upsample_nearest_exact")
@@ -431,10 +439,12 @@ _IGNORED_OPERATOR_REASONS = {
     **dict.fromkeys(
         [
             "aten._unsafe_view",
+            "aten._reshape_alias",
             "aten.alias",
             "aten.as_strided",
             "aten.detach",
             "aten.expand",
+            "aten.expand_as",
             "aten.narrow",
             "aten.permute",
             "aten.select",
@@ -444,6 +454,8 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.t",
             "aten.transpose",
             "aten.unbind",
+            "aten.unflatten",
+            "aten.chunk",
             "aten.unsqueeze",
             "aten.view",
             "aten.flatten",
@@ -461,6 +473,7 @@ _IGNORED_OPERATOR_REASONS = {
             "aten.clone",
             "aten.contiguous",
             "aten.copy_",
+            "aten.pad",
             "aten.split",
             "aten.split_with_sizes",
             "aten.to",

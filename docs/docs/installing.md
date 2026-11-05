@@ -23,6 +23,7 @@ The API reference covers unreleased development APIs. **0.3.0** is proposed and 
 | One-call resource report and terminal summary with `measure_workload` | `main` only; unreleased |
 | The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
 | New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
+| C++ operator collection and offline FLOP replay | `main` only; unreleased |
 
 See the [changelog](changelog.md) for other changes after 0.2.0.
 
@@ -34,11 +35,17 @@ python -m pip install torchscan==0.2.0
 
 ## Development version
 
-Install `main` without cloning the repository:
+The development version builds a C++ collector against PyTorch. Install a C++ compiler (GCC/Clang or MSVC),
+PyTorch and build tools first, then build against that environment:
 
 ```shell
-python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
+python -m pip install "setuptools>=68,<84" wheel
+python -m pip install --no-build-isolation "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
 ```
+
+Native wheels require the exact PyTorch release they were built against; source builds support PyTorch ≥2.1,<3.
+Reinstall TorchScan after changing PyTorch. Imports never compile code or fall back to a Python collector.
+For PyTorch 2.1, use `setuptools>=68,<70` and `numpy<2` before building.
 
 For repeatable experiments, use the commit you tested and record it with the report. Start with
 the [quickstart](index.md), then [check an optimization](benchmark-comparison.md).
@@ -65,7 +72,8 @@ git clone https://github.com/frgfm/torch-scan.git
 cd torch-scan
 uv venv --python 3.11
 source .venv/bin/activate
-uv pip install -e .
+uv pip install torch "setuptools>=68,<84" wheel
+uv pip install --no-build-isolation -e .
 ```
 
 Install documentation or test dependencies only when needed:

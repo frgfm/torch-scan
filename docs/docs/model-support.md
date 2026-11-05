@@ -104,7 +104,7 @@ estimates. Use native classes with unchanged forwards; custom composites need ha
 
 Supply custom operator formulas through `custom_mapping` on `crawl_module`, `summary`, or standalone `measure_flops`.
 Overrides apply to that analysis and take precedence over built-in formulas without modifying a global registry.
-Formulas use PyTorch's shape-based `FlopCounterMode` contract:
+Formulas use the shape callback contract:
 
 ```python
 from math import prod

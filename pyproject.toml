@@ -1,6 +1,6 @@
 [build-system]
 # PyTorch's MSVC helper uses compiler.spawn, removed in setuptools 84.
-requires = ["setuptools>=68,<84", "setuptools-rust>=1.13,<2", "wheel", "torch>=2.1.0,<3.0.0"]
+requires = ["setuptools>=68,<84", "boost-headers==1.85.0.post1", "nlohmann_json>=3.12,<3.13", "wheel", "torch>=2.1.0,<3.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]

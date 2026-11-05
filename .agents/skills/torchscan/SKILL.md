@@ -19,7 +19,7 @@ Use the smallest API that answers the request:
   in a `BenchmarkReport` with a terminal summary. Optional `profile=True`; RSS needs an explicit `rss_command`.
   Unreleased; install `main`. Passes share caller state; use a repeatable workload.
 - `measure_flops(workload)`: operator FLOPs for one zero-argument workload call.
-- `capture_workload(workload)`: C++ metadata capture; `analyze_capture(capture)` counts it in Rust without PyTorch.
+- `capture_workload(workload)`: C++ metadata capture; `analyze_capture(capture)` counts it in C++ without PyTorch.
   Save the capture and exit Python, then run `torchscan-count capture.json -o flops.json` for counting without Python.
   Exit 0 means complete; 2 means partial or invalid input.
   Preserve its calling-thread/autograd eager-operator scope, loss counters, and diagnostics. See `docs/docs/native-capture.md`.

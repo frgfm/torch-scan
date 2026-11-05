@@ -1,3 +1,2 @@
-include native/count/Cargo.toml native/count/Cargo.lock
-include native/count/rules.json native/count/ignored.json
-recursive-include native/count/src *.rs
+include native/count/*.cpp native/count/*.hpp native/count/*.in native/count/*.json
+include native/count/CMakeLists.txt native/count/THIRD_PARTY_LICENSES.txt

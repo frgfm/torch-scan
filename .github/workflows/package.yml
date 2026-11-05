@@ -89,9 +89,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ matrix.name }}" == "minimum" ]]; then
-            uv pip install "${{ matrix.torch }}" "setuptools<70" "numpy<2" "setuptools-rust>=1.13,<2" wheel
+            uv pip install "${{ matrix.torch }}" "setuptools<70" "numpy<2" "boost-headers==1.85.0.post1" "nlohmann_json>=3.12,<3.13" wheel
           else
-            uv pip install "${{ matrix.torch }}" "setuptools<84" "setuptools-rust>=1.13,<2" wheel
+            uv pip install "${{ matrix.torch }}" "setuptools<84" "boost-headers==1.85.0.post1" "nlohmann_json>=3.12,<3.13" wheel
           fi
           uv pip install --no-build-isolation -e ".[test]"
       - name: Run native correctness tests
@@ -136,7 +136,7 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Install model test dependencies
         run: |
-          python -c "import subprocess, tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['model-test']; subprocess.run(['uv', 'pip', 'install', *deps, 'setuptools<84', 'setuptools-rust>=1.13,<2', 'wheel'], check=True)"
+          python -c "import subprocess, tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['model-test']; subprocess.run(['uv', 'pip', 'install', *deps, 'setuptools<84', 'boost-headers==1.85.0.post1', 'nlohmann_json>=3.12,<3.13', 'wheel'], check=True)"
           uv pip install --no-build-isolation -e ".[test,model-test]"
       - name: Run no-download model smokes
         run: pytest tests/test_model_zoo.py

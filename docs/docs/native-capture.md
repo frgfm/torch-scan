@@ -1,6 +1,6 @@
 # Collect once, count after Python exits
 
-Python runs the model, C++ captures operator metadata, and Rust calculates operator FLOPs.
+Python runs the model. C++ captures operator metadata and calculates operator FLOPs.
 `measure_flops`, `measure_workload`, `crawl_module`, and `summary` use this automatically.
 The counting engine is shared by the Python API and a native executable; there is no Python counter.
 
@@ -32,14 +32,14 @@ python collect.py && torchscan-count capture.json -o flops.json
    formula arguments at operator boundaries. Known composite wrappers are opened to count their operations once.
 2. Collection stops and releases temporary references. `collect.py` saves metadata and exits, releasing
    Python, PyTorch and the model before counting starts.
-3. `torchscan-count` reads the JSON and computes global, per-operator and inclusive module counts in Rust.
+3. `torchscan-count` reads the JSON and computes global, per-operator and inclusive module counts in C++.
    It neither runs the model nor loads Python or PyTorch. The example produces **78 FLOPs**.
 
 The executable writes a standard `FlopReport` to stdout, or to `-o`. Exit code **0** means a complete count;
 **2** means a partial count or invalid input. Partial reports retain known counts and diagnostics.
 A failed collection stops the shell command before counting. Saved custom results are replayed without callbacks.
 
-For an existing Python process, `analyze_capture(capture)` calls the same Rust engine without PyTorch.
+For an existing Python process, `analyze_capture(capture)` calls the same C++ engine without PyTorch.
 `measure_flops(workload)` combines collection and counting in that process and retains the capture in its report;
 it does not exit the caller. Timing, memory and profiling use separate passes. Module estimates remain a separate view.
 
@@ -47,11 +47,16 @@ it does not exit the caller. Timing, memory and profiling use separate passes. M
 
 The collector, counting library and `torchscan-count` executable are built with TorchScan; there is no backend selector or runtime compilation.
 Wheels require the PyTorch release they were built against. To use another supported PyTorch version,
-[build from source](installing.md#development-version) against that installation. Rebuild after changing PyTorch. Source builds require C++ and Rust ≥1.85; installed wheels need neither compiler.
+[build from source](installing.md#development-version) against that installation. Rebuild after changing PyTorch. Source builds require a C++ compiler compatible with the installed PyTorch; wheels need no compiler.
 
-To build only the standalone counter, without Python or PyTorch, run
-`cargo build --release --locked --manifest-path native/count/Cargo.toml --bin torchscan-count`.
-The executable is in `native/count/target/release/` (`.exe` on Windows).
+To build only the standalone counter, install CMake, Boost headers and nlohmann JSON headers, then run:
+
+```shell
+cmake -S native/count -B /tmp/torchscan-count-build -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/torchscan-count-build --config Release
+```
+
+This build uses neither Python nor PyTorch. The executable is in the build directory (`Release/torchscan-count.exe` on Windows).
 
 `custom_mapping` remains per call. Shape callbacks receive `out_shape`; callbacks marked `_get_raw = True`
 receive live tensors and `out_val`, including nested tensors. Only explicitly overridden operators call
@@ -78,24 +83,24 @@ Module estimation callbacks run with collection paused.
 Linux, AMD EPYC 9V45, Python 3.11.16, PyTorch 2.13.0+cpu, two threads, locally initialized models.
 Against the previous C++ capture + Python counting implementation (`d2b03d4`):
 
-| Workload | FLOPs, both versions | Full pass, Python counting | Full pass, Rust counting |
+| Workload | FLOPs, both versions | Full pass, Python counting | Full pass, C++ counting |
 | --- | ---: | ---: | ---: |
-| 600 pointwise ops, 1,024 elements | 614,400 | 7.37 ms | 5.00 ms |
-| ResNet18, 4 × 3 × 32 × 32 | 301,391,232 | 6.75 ms | 6.16 ms |
-| Tiny BERT, 1 layer, hidden 16, 4 × 8 tokens | 172,480 | 1.30 ms | 1.20 ms |
+| 600 pointwise ops, 1,024 elements | 614,400 | 7.44 ms | 5.58 ms |
+| ResNet18, 4 × 3 × 32 × 32 | 301,391,232 | 6.83 ms | 6.36 ms |
+| Tiny BERT, 1 layer, hidden 16, 4 × 8 tokens | 172,480 | 1.31 ms | 1.21 ms |
 
 The full pass includes model execution, collection, metadata transfer and counting. Medians of five fresh
 processes, each with five warmups and 31 timing samples, pinned to CPUs 0–1; process jobs were randomized.
-Peak process RSS stays approximately unchanged: pointwise 193→194 MiB, ResNet18 330→330 MiB, BERT 311→312 MiB.
+Peak process RSS stays approximately unchanged: pointwise 193→193 MiB, ResNet18 330→330 MiB, BERT 311→311 MiB.
 These are whole-process lifetime peaks, including imports, model/inputs and repeated measurements.
 
 Counting saved JSON after Python exits uses much less memory:
 
-| Saved workload | Python time / peak RSS | Rust executable time / peak RSS |
+| Saved workload | Python time / peak RSS | C++ executable time / peak RSS |
 | --- | ---: | ---: |
-| Pointwise | 35.65 ms / 18.09 MiB | 2.60 ms / 3.77 MiB |
-| ResNet18 | 31.75 ms / 16.25 MiB | 1.30 ms / 2.08 MiB |
-| Tiny BERT | 31.00 ms / 16.00 MiB | 1.05 ms / 1.83 MiB |
+| Pointwise | 35.98 ms / 18.09 MiB | 3.95 ms / 3.80 MiB |
+| ResNet18 | 31.71 ms / 16.25 MiB | 1.84 ms / 2.55 MiB |
+| Tiny BERT | 31.65 ms / 16.00 MiB | 1.49 ms / 2.30 MiB |
 
 Medians of nine randomized fresh-process runs, including startup, JSON input and full report output,
 with cached files and CPU affinity 0–1. Peak RSS is each counting process's lifetime high-water mark, measured

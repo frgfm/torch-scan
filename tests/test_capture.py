@@ -41,7 +41,7 @@ def test_native_counter_after_python_exits(tmp_path):
     assert subprocess.run([counter, str(path)], env=environment, capture_output=True, check=False).returncode == 2  # ruff: ignore[subprocess-without-shell-equals-true]
 
 
-def test_exact_large_native_counts():
+def test_exact_large_native_counts(tmp_path):
     x, y = torch.ones(2, 4), torch.ones(4, 3)
     capture = capture_workload(lambda: x @ y)
     event = next(event for event in capture["operators"] if event["operator"] == "aten::mm")
@@ -49,6 +49,10 @@ def test_exact_large_native_counts():
     assert analyze_capture(capture)["total"]["value"] == 2**62 * 4 * 3 * 2
     event["custom_flops"] = 10**100
     assert analyze_capture(capture)["total"]["value"] == 10**100
+    path = tmp_path / "capture.json"
+    path.write_text(json.dumps(capture))
+    result = subprocess.check_output([shutil.which("torchscan-count"), str(path)])  # ruff: ignore[subprocess-without-shell-equals-true]
+    assert json.loads(result)["total"]["value"] == 10**100
     event["custom_flops"] = True
     assert analyze_capture(capture)["total"]["status"] == "partial"
 

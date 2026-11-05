@@ -76,7 +76,7 @@ std::string metadata(const c10::IValue& value, size_t& budget, bool output = fal
     auto number = value.toDouble();
     if (!std::isfinite(number)) return "{\"nonfinite\":" + quote(std::isnan(number) ? "nan" : (number < 0 ? "-inf" : "inf")) + "}";
     std::ostringstream out;
-    out << std::setprecision(17) << number;
+    out << std::setprecision(17) << std::showpoint << number;
     return out.str();
   }
   // Preserve formula options, not arbitrary strings supplied to custom operators.

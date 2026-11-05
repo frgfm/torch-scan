@@ -104,10 +104,14 @@ def test_modified_forward_stays_unknown():
         crawl_module(module, args=(torch.ones(2, 4),), strict=True)
 
 
-def test_arbitrary_power():
-    report = measure_flops(lambda: torch.ones(2, 4).pow(0.5))
+@pytest.mark.parametrize(
+    ("dtype", "exponent", "expected"),
+    [(torch.float32, 0.5, 8), (torch.int64, 2, 0), (torch.int64, 2.0, 8)],
+)
+def test_arbitrary_power(dtype, exponent, expected):
+    report = measure_flops(lambda: torch.ones(2, 4, dtype=dtype).pow(exponent))
     assert report["total"]["status"] == "complete"
-    assert report["total"]["value"] == 8
+    assert report["total"]["value"] == expected
 
 
 def test_complex_rmsnorm_weight_stays_unknown():

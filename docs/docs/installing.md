@@ -48,8 +48,9 @@ uv drives [scikit-build-core and CMake](https://docs.astral.sh/uv/concepts/proje
 to compile the extensions and executable. TorchScan does not use setuptools. `uv build` creates wheels and source archives;
 `uv pip install -e .` supports editable development without rebuilding on import.
 
-Native wheels require the exact PyTorch release they were built against; source builds support PyTorch ≥2.1,<3.
-After changing PyTorch, rebuild from the checkout with
+Native wheels require the PyTorch release and a compatible build ABI they were compiled against;
+source builds support PyTorch ≥2.1,<3. Switching CPU/CUDA/ROCm builds can also change the ABI within one release.
+After changing the PyTorch release or build, rebuild from the checkout with
 `uv pip install --no-build-isolation --reinstall --no-cache .` to avoid reusing a wheel built for another version.
 Imports never compile code or fall back to a Python collector.
 

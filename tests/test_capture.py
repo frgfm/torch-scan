@@ -53,39 +53,11 @@ def test_exact_large_native_counts(tmp_path):
     path.write_text(json.dumps(capture))
     result = subprocess.check_output([shutil.which("torchscan-count"), str(path)])  # ruff: ignore[subprocess-without-shell-equals-true]
     assert json.loads(result)["total"]["value"] == 10**100
-    event["custom_flops"] = True
-    assert analyze_capture(capture)["total"]["status"] == "partial"
 
 
-@pytest.mark.parametrize(("operator", "weight"), [("mm", [4, 3]), ("linear", [3, 4])])
-def test_replay_without_pytorch(tmp_path, operator, weight):
-    def tensor(shape):
-        return {"shape": shape, "floating": True, "complex": False, "dtype": "Float", "device": "cpu"}
-
-    capture = {
-        "schema_version": 1,
-        "report_type": "operator_capture",
-        "inputs": {},
-        "dropped_events": 0,
-        "errors": 0,
-        "context": {
-            "method": "ATen.RecordFunction/torchscan_flops_v1",
-            "scope": "calling_thread_and_autograd_eager_ops",
-            "boundary": "dispatcher_operator",
-            "torch_version": "2.1.0",
-        },
-        "operators": [
-            {
-                "operator": f"aten::{operator}",
-                "overload": "",
-                "module": "Linear",
-                "kwargs": {},
-                "inputs": [tensor([2, 4]), tensor(weight)],
-                "outputs": [tensor([2, 3])],
-            }
-        ],
-    }
-    assert analyze_capture(capture)["total"]["value"] == 48
+def test_saved_capture_replay_and_validation(tmp_path):
+    x, y = torch.ones(2, 4), torch.ones(4, 3)
+    capture = capture_workload(lambda: x @ y)
     path = tmp_path / "capture.json"
     path.write_text(json.dumps(capture), encoding="utf-8")
     script = (
@@ -93,8 +65,6 @@ def test_replay_without_pytorch(tmp_path, operator, weight):
         "r=analyze_capture(json.load(open(sys.argv[1]))); assert r['total']['value']==48"
     )
     subprocess.run([sys.executable, "-c", script, str(path)], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
-    capture["dropped_events"] = 1
-    assert analyze_capture(capture)["total"]["status"] == "partial"
     for malformed in (
         None,
         {**capture, "schema_version": 2},

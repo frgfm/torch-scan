@@ -17,7 +17,7 @@ setup(
         CppExtension(
             "_torchscan_native",
             ["native/collector.cpp"],
-            extra_compile_args=["/O2"] if sys.platform == "win32" else ["-O2", "-g0"],
+            extra_compile_args=["/O2", "/utf-8"] if sys.platform == "win32" else ["-O2", "-g0"],
         )
     ],
     cmdclass={"build_ext": BuildExtension.with_options(use_ninja=False, force=True)},

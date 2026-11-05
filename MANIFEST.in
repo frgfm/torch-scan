@@ -1,3 +1,0 @@
-include native/count/*.cpp native/count/*.hpp native/count/*.in native/count/*.json
-include native/count/CMakeLists.txt native/count/THIRD_PARTY_LICENSES.txt
-include _build_deps.py

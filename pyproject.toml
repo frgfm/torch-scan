@@ -1,7 +1,6 @@
 [build-system]
-# PyTorch's MSVC helper uses compiler.spawn, removed in setuptools 84.
-requires = ["setuptools>=68,<84", "wheel", "torch>=2.1.0,<3.0.0"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=1.1,<2", "torch>=2.1.0,<3.0.0"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "torchscan"
@@ -12,7 +11,8 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.11,<4"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE", "native/count/THIRD_PARTY_LICENSES.txt"]
 keywords = ["pytorch", "deep learning", "summary", "memory", "ram"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -62,10 +62,24 @@ changelog = "https://frgfm.github.io/torch-scan/changelog.html"
 
 [tool.uv]
 required-version = ">=0.13.4,<1.0.0"
+cache-keys = [
+    {file = "pyproject.toml"}, {file = "_build_metadata.py"}, {file = "CMakeLists.txt"},
+    {file = "native/collector.cpp"}, {file = "native/count/CMakeLists.txt"},
+    {file = "native/count/*.cpp"}, {file = "native/count/*.hpp"},
+    {file = "native/count/*.in"}, {file = "native/count/*.json"}, {file = "native/count/*.cmake"},
+]
 
-[tool.setuptools.packages.find]
-include = ["torchscan*"]
-namespaces = false
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+wheel.packages = ["torchscan"]
+sdist.include = [
+    "CMakeLists.txt", "_build_metadata.py", "native/*.cpp", "native/count/CMakeLists.txt",
+    "native/count/*.cpp", "native/count/*.hpp", "native/count/*.in",
+    "native/count/*.json", "native/count/*.cmake", "native/count/THIRD_PARTY_LICENSES.txt",
+]
+
+[[tool.dynamic-metadata]]
+provider = {path = ".", module = "_build_metadata"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests/"]

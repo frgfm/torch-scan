@@ -159,10 +159,14 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
             try:
                 packet = name.removeprefix("aten.") if name.startswith("aten.") else ""
                 tensors = _tensors([event["inputs"], event["kwargs"], event["outputs"]])
-                arithmetic = (
-                    _tensors(event["outputs"])
-                    if packet in {"sum", "mean", "cumsum", "cumsum_", "linalg_vector_norm"}
-                    else tensors
+                if packet in {"sum", "mean", "cumsum", "cumsum_", "linalg_vector_norm"}:
+                    arithmetic = _tensors(event["outputs"])
+                elif packet in {"pow", "pow_", "addcmul", "addcmul_", "addcdiv", "addcdiv_"}:
+                    arithmetic = _tensors(event["inputs"])
+                else:
+                    arithmetic = tensors
+                scalar_power = packet in {"pow", "pow_"} and any(
+                    isinstance(arg, float) or (isinstance(arg, dict) and "nonfinite" in arg) for arg in event["inputs"]
                 )
                 complex_work = any(t["complex"] for t in arithmetic)
                 if "custom_error" in event:
@@ -178,7 +182,7 @@ def analyze_capture(capture: OperatorCapture) -> "FlopReport":
                     if not outputs:
                         raise NotImplementedError("Missing operator outputs.")
                     out_shape = outputs[0] if len(outputs) == 1 else outputs
-                    if arithmetic and not any(t["floating"] or t["complex"] for t in arithmetic):
+                    if arithmetic and not (scalar_power or any(t["floating"] or t["complex"] for t in arithmetic)):
                         count = 0
                     elif complex_work and packet not in _PRODUCTS | _CONVOLUTIONS | _ATTENTION:
                         raise NotImplementedError("Supplemental FLOP formulas cover real arithmetic only.")

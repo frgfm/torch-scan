@@ -123,9 +123,6 @@ def _validate_comparison(report: object) -> BenchmarkComparison:
         or report.get("output_check") not in ("passed", "failed")
     ):
         raise ValueError("Invalid benchmark comparison.")
-    before = _validate_benchmark(report.get("before"))
-    after = _validate_benchmark(report.get("after"))
-    _matching_context(before, after)
     for name, difference in _object(report.get("totals"), "comparison.totals").items():
         difference = _object(difference, f"comparison.totals.{name}")
         if difference.get("delta") is not None:
@@ -133,16 +130,18 @@ def _validate_comparison(report: object) -> BenchmarkComparison:
         for side in ("before", "after"):
             if difference.get(side) is not None:
                 _metric(difference[side], f"comparison.totals.{name}.{side}")
-    expected = _diff_metrics(before["totals"], after["totals"])
-    if report["output_check"] == "failed":
-        for difference in expected.values():
-            difference["status"], difference["delta"] = "unavailable", None
-    if report.get("totals") != expected:
-        raise ValueError("Comparison deltas do not match the stored measurements/check status.")
-    if report.get("latency_change") != _latency_change(before, after, expected):
-        raise ValueError("Latency change does not match the stored measurements/check status.")
-    if report.get("context_changes") != _context_changes(before, after):
-        raise ValueError("Context changes do not match the stored measurements.")
+    expected = compare_benchmarks(
+        cast(BenchmarkReport, report.get("before")),
+        cast(BenchmarkReport, report.get("after")),
+        check=lambda: report["output_check"] == "passed",
+    )
+    for field, label in (
+        ("totals", "Comparison deltas"),
+        ("latency_change", "Latency change"),
+        ("context_changes", "Context changes"),
+    ):
+        if report.get(field) != expected[field]:
+            raise ValueError(f"{label} do not match the stored measurements/check status.")
     return cast(BenchmarkComparison, report)
 
 
@@ -224,19 +223,18 @@ def check_performance(
     max_latency_regression: float,
     memory_limit: MemoryLimit | None = None,
 ) -> PerformanceCheck:
-    """Apply explicit limits to an existing comparison without executing workloads.
+    """Check saved comparison evidence against caller-supplied budgets.
 
     Args:
-        comparison: In-memory or JSON-loaded compare_benchmarks result.
+        comparison: In-memory or JSON-loaded BenchmarkComparison, including an autoresearch trial.
         max_latency_regression: Nonnegative finite fraction; 0.05 allows 5% slower median latency.
         memory_limit: Optional candidate ceiling naming the exact totals metric, scope, and max_bytes.
 
     Returns:
-        Status and reasons. A failed output check or exceeded usable limit fails.
-        Otherwise incomplete, incompatible, invalid, or insufficient requested evidence is
-        inconclusive. Equality passes. Memory requires complete byte evidence with matching
-        scope. Timing requires complete warmed latency and matching raw blocks. IQR is not
-        a statistical test and does not select the limit.
+        Passed, failed, or inconclusive with reasons. Failed output checks and exceeded usable
+        limits fail; missing or incompatible evidence is inconclusive. Equality passes.
+        Timing requires matching raw blocks; memory requires the exact metric and scope.
+        No workloads execute.
 
     Raises:
         ValueError: If caller-supplied limits are invalid.
@@ -257,35 +255,30 @@ def check_performance(
     if comparison["output_check"] == "failed":
         return {"status": "failed", "reasons": ["Recorded output check failed."]}
 
-    failed = False
-    incomplete = not all(_has_timing_evidence(comparison[side]) for side in ("before", "after"))
-    reasons = []
-    if incomplete:
-        reasons.append("Latency requires complete warmed measurements and matching raw timing blocks.")
-    else:
+    ceiling = None
+    if all(_has_timing_evidence(comparison[side]) for side in ("before", "after")):
         before = cast(float, comparison["before"]["totals"]["latency"]["value"])
-        after = cast(float, comparison["after"]["totals"]["latency"]["value"])
         ceiling = before * (1 + max_latency_regression)
-        failed = after > ceiling
-        reasons.append(f"Candidate latency {after:g}s {'exceeds' if failed else 'meets'} ceiling {ceiling:g}s.")
+    limits = [("latency", "seconds", "warmed_block_average", ceiling)]
     if memory_limit is not None:
-        name, scope, max_bytes = memory_limit["metric"], memory_limit["scope"], memory_limit["max_bytes"]
-        memory = comparison["after"]["totals"].get(name)
-        label = f"Candidate {name!r}, scope {scope!r}"
+        limits.append((memory_limit["metric"], "bytes", memory_limit["scope"], memory_limit["max_bytes"]))
+    failed, incomplete = False, False
+    reasons = []
+    for name, unit, scope, ceiling in limits:
+        metric = comparison["after"]["totals"].get(name)
         if (
-            memory is None
-            or memory["status"] != "complete"
-            or memory["unit"] != "bytes"
-            or memory["scope"] != scope
-            or cast(float, memory["value"]) < 0
-            or memory["method"].strip() in ("", "not_requested", "unavailable")
+            ceiling is None
+            or metric is None
+            or metric["status"] != "complete"
+            or metric["unit"] != unit
+            or metric["scope"] != scope
+            or cast(float, metric["value"]) < 0
+            or metric["method"].strip() in ("", "not_requested", "unavailable")
         ):
             incomplete = True
-            reasons.append(f"{label}: complete byte evidence with matching scope is required.")
+            reasons.append(f"{name}: missing, incomplete or incompatible evidence ({unit}, {scope}).")
         else:
-            exceeded = cast(float, memory["value"]) > max_bytes
+            exceeded = cast(float, metric["value"]) > ceiling
             failed |= exceeded
-            reasons.append(
-                f"{label}: {memory['value']} bytes {'exceeds' if exceeded else 'meets'} ceiling {max_bytes}."
-            )
+            reasons.append(f"{name} ({scope}): {metric['value']} {'>' if exceeded else '<='} {ceiling} {unit}.")
     return {"status": "failed" if failed else "inconclusive" if incomplete else "passed", "reasons": reasons}

@@ -40,12 +40,17 @@ C++ compiler (GCC/Clang or MSVC) compatible with the installed PyTorch,
 PyTorch and build tools first, then build against that environment:
 
 ```shell
-python -m pip install "setuptools>=68,<84" "boost-headers==1.85.0.post1" "nlohmann_json>=3.12,<3.13" wheel
+python -m pip install "setuptools>=68,<84" wheel
 python -m pip install --no-build-isolation "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
 ```
 
 Native wheels require the exact PyTorch release they were built against; source builds support PyTorch ≥2.1,<3.
 Reinstall TorchScan after changing PyTorch. Imports never compile code or fall back to a Python collector.
+
+Source builds fetch Boost and nlohmann JSON directly from their upstream releases, pinned by version and SHA-256
+in `native/count/dependencies.json`. Checksums are verified before using downloaded or cached files; a mismatch
+stops the build. Installed wheels do not download headers. For offline builds, put the two files named in that
+manifest into a directory and set `TORCHSCAN_DEPS_CACHE` to it. Cached files undergo the same verification.
 For PyTorch 2.1, use `setuptools>=68,<70` and `numpy<2` before building.
 
 For repeatable experiments, use the commit you tested and record it with the report. Start with
@@ -73,7 +78,7 @@ git clone https://github.com/frgfm/torch-scan.git
 cd torch-scan
 uv venv --python 3.11
 source .venv/bin/activate
-uv pip install torch "setuptools>=68,<84" "boost-headers==1.85.0.post1" "nlohmann_json>=3.12,<3.13" wheel
+uv pip install torch "setuptools>=68,<84" wheel
 uv pip install --no-build-isolation -e .
 ```
 

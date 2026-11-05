@@ -49,14 +49,15 @@ The collector, counting library and `torchscan-count` executable are built with 
 Wheels require the PyTorch release they were built against. To use another supported PyTorch version,
 [build from source](installing.md#development-version) against that installation. Rebuild after changing PyTorch. Source builds require a C++ compiler compatible with the installed PyTorch; wheels need no compiler.
 
-To build only the standalone counter, install CMake, Boost headers and nlohmann JSON headers, then run:
+To build only the standalone counter, install CMake ≥3.19 and a C++17 compiler, then run:
 
 ```shell
 cmake -S native/count -B /tmp/torchscan-count-build -DCMAKE_BUILD_TYPE=Release
 cmake --build /tmp/torchscan-count-build --config Release
 ```
 
-This build uses neither Python nor PyTorch. The executable is in the build directory (`Release/torchscan-count.exe` on Windows).
+This build verifies and prepares the same pinned upstream headers, using `TORCHSCAN_DEPS_CACHE` when set.
+It uses neither Python nor PyTorch. The executable is in the build directory (`Release/torchscan-count.exe` on Windows).
 
 `custom_mapping` remains per call. Shape callbacks receive `out_shape`; callbacks marked `_get_raw = True`
 receive live tensors and `out_val`, including nested tensors. Only explicitly overridden operators call

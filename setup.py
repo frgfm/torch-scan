@@ -8,9 +8,8 @@
 import sys
 from distutils.command.build_scripts import build_scripts
 from pathlib import Path
+from runpy import run_path
 
-import boost_headers
-import nlohmann_json
 import torch
 from setuptools import Extension, setup
 from torch.utils.cpp_extension import BuildExtension, CppExtension
@@ -34,6 +33,8 @@ class NativeBuild(BuildExtension):
         (generated / "tables.hpp").write_text(template, encoding="utf-8")
         analysis = next(ext for ext in self.extensions if ext.name == "torchscan._analysis")
         analysis.include_dirs.append(str(generated))
+        include = run_path("_build_deps.py")["prepare_headers"](Path(self.build_temp) / "dependencies")
+        analysis.include_dirs.append(str(include))
         super().build_extensions()
         objects = self.compiler.object_filenames(_COUNTER, output_dir=self.build_temp)
         objects += self.compiler.compile(
@@ -72,7 +73,6 @@ setup(
             "torchscan._analysis",
             [*_COUNTER, "native/count/python.cpp"],
             language="c++",
-            include_dirs=[str(boost_headers.get_include()), str(nlohmann_json.get_include())],
             extra_compile_args=_COUNTER_FLAGS.copy(),
         ),
     ],

@@ -10,6 +10,9 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Set up Rust
+      shell: bash
+      run: rustup toolchain install stable --profile minimal --component rustfmt,clippy
     - uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}

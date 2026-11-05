@@ -1,0 +1,3 @@
+include native/count/Cargo.toml native/count/Cargo.lock
+include native/count/rules.json native/count/ignored.json
+recursive-include native/count/src *.rs

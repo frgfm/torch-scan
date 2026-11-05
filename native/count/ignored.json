@@ -1,0 +1,8 @@
+[
+["Metadata-only tensor view.", "aten._unsafe_view aten._reshape_alias aten.alias aten.as_strided aten.detach aten.expand aten.expand_as aten.narrow aten.permute aten.select aten.slice aten.squeeze aten.squeeze_ aten.t aten.transpose aten.unbind aten.unflatten aten.chunk aten.unsqueeze aten.view aten.flatten aten.reshape aten.as_strided_ aten.transpose_ aten.unsafe_split"],
+["Data movement is excluded from FLOPs.", "aten._to_copy aten.cat aten.clone aten.contiguous aten.copy_ aten.pad aten.split aten.split_with_sizes aten.to aten.fill_ aten.zero_ aten.embedding aten.gather aten.index aten.index_select aten.masked_select aten.repeat aten.repeat_interleave aten.roll aten.stack aten.constant_pad_nd aten._local_scalar_dense aten.item aten.is_nonzero aten.pixel_shuffle aten.pixel_unshuffle aten.channel_shuffle aten.native_channel_shuffle aten.im2col aten._pad_circular aten.tril aten.tril_ aten.triu aten.triu_ aten.reflection_pad1d aten.reflection_pad2d aten.reflection_pad3d aten.replication_pad1d aten.replication_pad2d aten.replication_pad3d aten.upsample_nearest1d aten.upsample_nearest2d aten.upsample_nearest3d aten._upsample_nearest_exact1d aten._upsample_nearest_exact2d aten._upsample_nearest_exact3d"],
+["Tensor allocation is excluded from FLOPs.", "aten.empty aten.empty_strided aten.empty_like aten.new_empty aten.new_empty_strided"],
+["Tensor creation is excluded from FLOPs.", "aten.full aten.full_like aten.lift_fresh aten.lift_fresh_copy aten.ones aten.ones_like aten.scalar_tensor aten.zeros aten.zeros_like aten.arange aten.eye"],
+["Random sampling is excluded from FLOPs.", "aten.rand aten.rand_like aten.bernoulli aten.bernoulli_"],
+["Integer and boolean bitwise operations are excluded from FLOPs.", "aten.bitwise_not aten.bitwise_not_"]
+]

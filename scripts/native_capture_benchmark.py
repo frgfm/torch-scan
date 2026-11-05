@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--repeats", type=int, default=15)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--capture-output", type=Path)
     args = parser.parse_args()
     torch.set_num_threads(args.threads)
     torch.set_num_interop_threads(1)
@@ -56,6 +57,8 @@ def main():
             "capture": lambda: torchscan.capture_workload(workload, modules=model),
             "replay": lambda: torchscan.analyze_capture(capture),
         })
+    if args.capture_output is not None and capture is not None:
+        args.capture_output.write_text(json.dumps(capture), encoding="utf-8")
     for job in jobs.values():
         for _ in range(3):
             job()

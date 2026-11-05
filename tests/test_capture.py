@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 import weakref
@@ -9,6 +11,46 @@ import pytest
 import torch
 
 from torchscan import analyze_capture, capture_workload, measure_flops, measure_workload
+
+
+def test_native_counter_after_python_exits(tmp_path):
+    path = tmp_path / "capture.json"
+    script = (
+        "import json,sys,torch; from torchscan import capture_workload; "
+        "x=torch.ones(2,4); y=torch.ones(4,3); "
+        "capture=capture_workload(lambda:x@y); "
+        "assert 'torchscan._analysis' not in sys.modules; "
+        "open(sys.argv[1],'w').write(json.dumps(capture))"
+    )
+    subprocess.run([sys.executable, "-c", script, str(path)], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
+    counter = shutil.which("torchscan-count")
+    assert counter is not None
+    # A native executable must work without finding Python or its libraries.
+    environment = {**os.environ, "PATH": "", "PYTHONHOME": str(tmp_path / "no-python")}
+    output = tmp_path / "report.json"
+    capture = json.loads(path.read_text())
+    for change, code in [({}, 0), ({"dropped_events": 1}, 2), ({"schema_version": 2}, 2)]:
+        path.write_text(json.dumps({**capture, **change}))
+        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+            [counter, str(path), "-o", str(output)], env=environment, capture_output=True, check=False
+        )
+        assert result.returncode == code
+        if "schema_version" not in change:
+            assert json.loads(output.read_text()) == analyze_capture({**capture, **change})
+    path.write_text("{broken")
+    assert subprocess.run([counter, str(path)], env=environment, capture_output=True, check=False).returncode == 2  # ruff: ignore[subprocess-without-shell-equals-true]
+
+
+def test_exact_large_native_counts():
+    x, y = torch.ones(2, 4), torch.ones(4, 3)
+    capture = capture_workload(lambda: x @ y)
+    event = next(event for event in capture["operators"] if event["operator"] == "aten::mm")
+    event["inputs"][0]["shape"][0] = event["outputs"][0]["shape"][0] = 2**62
+    assert analyze_capture(capture)["total"]["value"] == 2**62 * 4 * 3 * 2
+    event["custom_flops"] = 10**100
+    assert analyze_capture(capture)["total"]["value"] == 10**100
+    event["custom_flops"] = True
+    assert analyze_capture(capture)["total"]["status"] == "partial"
 
 
 def test_replay_without_pytorch(tmp_path):
@@ -48,9 +90,16 @@ def test_replay_without_pytorch(tmp_path):
     subprocess.run([sys.executable, "-c", script, str(path)], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
     capture["dropped_events"] = 1
     assert analyze_capture(capture)["total"]["status"] == "partial"
-    capture["schema_version"] = 2
-    with pytest.raises(ValueError):
-        analyze_capture(capture)
+    for malformed in (
+        None,
+        {**capture, "schema_version": 2},
+        {**capture, "errors": True},
+        {**capture, "operators": [{}]},
+        {**capture, "inputs": {1: "invalid key"}},
+        {**capture, "inputs": {"value": float("nan")}},
+    ):
+        with pytest.raises(ValueError):
+            analyze_capture(malformed)
 
 
 @pytest.mark.parametrize("device", ["cpu", "cuda", "mps"])

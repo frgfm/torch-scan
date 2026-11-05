@@ -1,0 +1,24 @@
+[package]
+name = "torchscan-count"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+python = ["dep:pyo3"]
+
+[dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+pyo3 = { version = "0.27", optional = true, features = ["extension-module", "abi3-py311", "num-bigint"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

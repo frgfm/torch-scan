@@ -1,4 +1,4 @@
-.PHONY: install install-quality install-test install-docs deps-check ruff-lint-fix ruff-format-fix lint-check lint-format typing-check headers-check headers-fix precommit quality style test serve-docs build-docs set-version build publish
+.PHONY: install install-quality install-test install-docs deps-check ruff-lint-fix ruff-format-fix lint-check lint-format typing-check headers-check headers-fix precommit native-check quality style test serve-docs build-docs set-version build publish
 
 install:
 	uv pip install -e .
@@ -39,7 +39,11 @@ headers-fix:
 precommit:
 	prek run --all-files
 
-quality: deps-check lint-check typing-check headers-check
+native-check:
+	cargo fmt --manifest-path native/count/Cargo.toml --check
+	cargo clippy --manifest-path native/count/Cargo.toml --locked --all-targets --features python -- -D warnings
+
+quality: deps-check lint-check typing-check headers-check native-check
 
 style: lint-format
 

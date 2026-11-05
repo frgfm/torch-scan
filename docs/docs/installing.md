@@ -23,7 +23,7 @@ The API reference covers unreleased development APIs. **0.3.0** is proposed and 
 | One-call resource report and terminal summary with `measure_workload` | `main` only; unreleased |
 | The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
 | New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
-| C++ operator collection and offline FLOP replay | `main` only; unreleased |
+| C++ operator collection, Rust FLOP counting and a native saved-capture executable | `main` only; unreleased |
 
 See the [changelog](changelog.md) for other changes after 0.2.0.
 
@@ -35,11 +35,12 @@ python -m pip install torchscan==0.2.0
 
 ## Development version
 
-The development version builds a C++ collector against PyTorch. Install a C++ compiler (GCC/Clang or MSVC),
+The development version builds a C++ collector against PyTorch and a Rust counter. Install a C++ compiler
+(GCC/Clang or MSVC), [Rust ≥1.85](https://rustup.rs/),
 PyTorch and build tools first, then build against that environment:
 
 ```shell
-python -m pip install "setuptools>=68,<84" wheel
+python -m pip install "setuptools>=68,<84" "setuptools-rust>=1.13,<2" wheel
 python -m pip install --no-build-isolation "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
 ```
 
@@ -72,7 +73,7 @@ git clone https://github.com/frgfm/torch-scan.git
 cd torch-scan
 uv venv --python 3.11
 source .venv/bin/activate
-uv pip install torch "setuptools>=68,<84" wheel
+uv pip install torch "setuptools>=68,<84" "setuptools-rust>=1.13,<2" wheel
 uv pip install --no-build-isolation -e .
 ```
 

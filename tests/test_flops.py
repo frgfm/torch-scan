@@ -5,8 +5,6 @@ import pytest
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.utils import flop_counter
-from torch.utils.flop_counter import FlopCounterMode
 
 from scripts.benchmark import metric_cell
 from torchscan import IncompleteAnalysisError, crawl_module
@@ -28,8 +26,8 @@ def test_measure_flops_matmul_and_module_hierarchy():
         "value": 80,
         "known_value": 80,
         "unit": "FLOPs",
-        "scope": "workload",
-        "method": "torch.utils.flop_counter.FlopCounterMode",
+        "scope": "calling_thread_and_autograd_eager_ops",
+        "method": "ATen.RecordFunction/torchscan_flops_v1",
     }
     assert report["by_operator"] == {"aten.addmm": 32, "aten.mm": 48}
     assert report["by_module"]["Linear"] == 32
@@ -66,32 +64,6 @@ def test_measure_flops_custom_mapping():
     assert report["diagnostics"] == []
 
 
-def test_measure_flops_uses_explicit_modules_on_legacy_counter(monkeypatch):
-    calls = []
-
-    class LegacyCounter:
-        def __init__(self, mods=None, **_kwargs):
-            calls.append(mods)
-            self.flop_mapping = {}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-        def get_flop_counts(self):
-            return {}
-
-    monkeypatch.setattr("torchscan.flops.FlopCounterMode", LegacyCounter)
-    module = nn.Identity()
-
-    report = measure_flops(lambda: None, modules=module)
-
-    assert calls == [None, module]
-    assert report["total"]["value"] == 0
-
-
 def test_measure_flops_rejects_overload_custom_mapping_keys():
     calls = 0
 
@@ -103,16 +75,6 @@ def test_measure_flops_rejects_overload_custom_mapping_keys():
         measure_flops(workload, custom_mapping={torch.ops.aten.sin.default: lambda *_args, **_kwargs: 1})
 
     assert calls == 0
-
-
-def test_measure_flops_requires_an_inspectable_native_mapping(monkeypatch):
-    class OpaqueCounter:
-        def __init__(self, **_kwargs):
-            pass
-
-    monkeypatch.setattr("torchscan.flops.FlopCounterMode", OpaqueCounter)
-    with pytest.raises(NotImplementedError, match="does not expose its formula mapping"):
-        measure_flops(lambda: pytest.fail("Workload must not run without an inspectable mapping"))
 
 
 def test_measure_flops_custom_zero_is_complete():
@@ -130,6 +92,15 @@ def test_measure_flops_custom_zero_is_complete():
     assert report["total"]["value"] == 0
     assert report["by_operator"] == {"aten.sin": 0}
     assert mapping.keys() == {torch.ops.aten.sin}
+
+
+@pytest.mark.parametrize("value", [-1, True, None, 0.5, float("nan")])
+def test_invalid_custom_count_is_partial(value):
+    inputs = torch.ones(3)
+    report = measure_flops(lambda: inputs.sin(), custom_mapping={torch.ops.aten.sin: lambda *_args, **_kwargs: value})
+    assert report["total"]["status"] == "partial"
+    assert report["total"]["known_value"] == 0
+    assert report["diagnostics"]
 
 
 def test_custom_formula_tensor_ops_are_not_recorded_as_workload_ops():
@@ -674,13 +645,9 @@ def test_unregistered_nested_linear_executes_kernel_and_preserves_dense_counts(u
     assert _complete_count(lambda: F.linear(dense, weight)) == 36
 
 
-def test_nested_linear_caller_raw_override_has_priority_and_registry_is_scoped():
-    before = FlopCounterMode(display=False)
-    if not hasattr(before, "flop_registry"):
-        pytest.skip("This PyTorch counter supports shape callbacks only, without native raw tensor callbacks.")
+def test_nested_linear_raw_override():
     nested = torch.nested.nested_tensor([torch.ones(2, 3), torch.ones(1, 3)])
     weight = torch.ones(2, 3)
-    registry = dict(getattr(before, "flop_registry", getattr(before, "flop_mapping", {})))
     calls = 0
 
     def stored_rows(inputs, matrix, bias=None, *, out_val):
@@ -700,8 +667,6 @@ def test_nested_linear_caller_raw_override_has_priority_and_registry_is_scoped()
     assert report["total"]["status"] == "complete"
     assert report["total"]["value"] == 36
     assert report["by_operator"] == {"aten.linear": 36}
-    after = FlopCounterMode(display=False)
-    assert dict(getattr(after, "flop_registry", getattr(after, "flop_mapping", {}))) == registry
     assert mapping == {torch.ops.aten.linear: stored_rows}
 
 
@@ -741,13 +706,10 @@ def test_transformer_final_norm_boundary(stack, norm):
 
 @pytest.mark.parametrize("masked", [False, True])
 @pytest.mark.parametrize("custom_override", [False, True])
-def test_cpu_attention_replaces_native_core_only_formula(monkeypatch, masked, custom_override):
+def test_cpu_attention_arithmetic_and_override(masked, custom_override):
     operator = getattr(torch.ops.aten, "_scaled_dot_product_flash_attention_for_cpu", None)
     if operator is None:
         pytest.skip("This PyTorch release has no separate CPU attention operator.")
-    # Simulate newer PyTorch registering only the two matrix products (480 FLOPs).
-    native_formula = flop_counter.shape_wrapper(lambda *_args, **_kwargs: 480)
-    monkeypatch.setitem(flop_counter.flop_registry, operator, native_formula)
     query, memory = torch.ones(2, 2, 3, 2), torch.ones(2, 2, 5, 2)
     mask = torch.zeros(3, 5) if masked else None
     mapping = {operator: lambda *_args, **_kwargs: 123} if custom_override else None
@@ -759,7 +721,6 @@ def test_cpu_attention_replaces_native_core_only_formula(monkeypatch, masked, cu
     assert report["total"]["status"] == "complete"
     assert report["total"]["value"] == expected
     assert report["by_operator"] == {str(operator): expected}
-    assert flop_counter.flop_registry[operator] is native_formula
 
 
 def test_cpu_attention_unsupported_broadcast_batch_is_partial():
@@ -807,9 +768,12 @@ def test_empty_attention_source_is_visibly_incomplete():
     assert any("nonempty query and source" in item["message"] for item in report["diagnostics"])
 
 
-def test_forward_and_backward_matrix_work():
-    left = torch.ones(2, 3, requires_grad=True)
-    right = torch.ones(3, 4, requires_grad=True)
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_forward_and_backward_matrix_work(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA hardware unavailable")
+    left = torch.ones(2, 3, device=device, requires_grad=True)
+    right = torch.ones(3, 4, device=device, requires_grad=True)
     forward = measure_flops(lambda: left @ right)
     # Forward: 2x3x4 =24 MACs. dLeft and dRight each also require24
     # MACs. Scalar loss sum over8 outputs adds7. Total144+7=151.
@@ -817,17 +781,35 @@ def test_forward_and_backward_matrix_work():
     assert forward["total"]["value"] == 48
     assert training["total"]["status"] == "complete"
     assert training["total"]["value"] == 151
+    left.grad = None
+    model = nn.Linear(3, 4, bias=False, device=device)
+    labelled = measure_flops(lambda: model(left).sum().backward())
+    assert labelled["total"]["value"] == 151
+    assert labelled["by_module"] == {"Linear": 144}  # The loss is outside the module.
 
 
-def test_scoped_rules_preserve_native_registry_and_caller_override():
-    before = FlopCounterMode(display=False)
-    registry = dict(getattr(before, "flop_registry", getattr(before, "flop_mapping", {})))
+@pytest.mark.parametrize("transposed", [False, True])
+@pytest.mark.parametrize("groups", [1, 2])
+@pytest.mark.parametrize(("input_grad", "weight_grad"), [(False, True), (True, False), (True, True)])
+def test_convolution_backward_masks(transposed, groups, input_grad, weight_grad):
+    model = (nn.ConvTranspose2d if transposed else nn.Conv2d)(groups, groups, 2, groups=groups, bias=False)
+    model.weight.requires_grad_(weight_grad)
+    side = 2 if transposed else 3
+    inputs = torch.ones(1, groups, side, side, requires_grad=input_grad)
+    report = measure_flops(lambda: model(inputs).sum().backward())
+    # Four spatial positions x four kernel values x two operations per MAC.
+    # Groups are independent; the loss reduces four or nine outputs per group.
+    assert report["total"]["status"] == "complete"
+    assert (
+        report["total"]["value"] == 32 * groups * (1 + input_grad + weight_grad) + (9 if transposed else 4) * groups - 1
+    )
+
+
+def test_custom_rules_are_scoped_to_one_call():
     inputs = torch.ones(2, 3)
     custom = {torch.ops.aten.add: lambda *_args, **_kwargs: 99}
     assert measure_flops(lambda: inputs + inputs, custom_mapping=custom)["total"]["value"] == 99
     assert measure_flops(lambda: inputs + inputs)["total"]["value"] == 6
-    after = FlopCounterMode(display=False)
-    assert dict(getattr(after, "flop_registry", getattr(after, "flop_mapping", {}))) == registry
     assert len(custom) == 1
 
 

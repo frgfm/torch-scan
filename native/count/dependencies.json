@@ -1,0 +1,13 @@
+{
+  "boost": {
+    "filename": "boost-1.85.0-b2-nodocs.tar.xz",
+    "url": "https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-b2-nodocs.tar.xz",
+    "sha256": "09f0628bded81d20b0145b30925d7d7492fd99583671586525d5d66d4c28266a",
+    "prefix": "boost-1.85.0/boost/"
+  },
+  "json": {
+    "filename": "json-3.12.0.hpp",
+    "url": "https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp",
+    "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63"
+  }
+}

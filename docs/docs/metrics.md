@@ -39,9 +39,9 @@ mask handling, returned attention weights, and supported boundaries.
 
 ## Operator FLOPs
 
-Operator FLOPs use PyTorch's `torch.utils.flop_counter.FlopCounterMode`. This observes dispatcher operations, including
-functional calls and operations inside custom modules, but can count only operators with registered or caller-provided
-formulas. Counts are grouped globally, by module, and by operator.
+Operator FLOPs use the C++ collector followed by offline formulas. This observes calling-thread eager operations,
+including functional calls inside custom modules. Only supported or caller-provided formulas contribute to known
+counts, grouped globally, by module and by operator. See [collection and replay](native-capture.md).
 
 Operator and module FLOPs can differ because their formulas, boundaries, and decomposition differ. Report both with
 their method labels; do not average, add, or substitute one silently for the other.

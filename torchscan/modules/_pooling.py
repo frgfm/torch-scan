@@ -3,10 +3,12 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-from math import gcd, prod
-from typing import Any, cast
+from math import prod
+from typing import cast
 
 from torch import nn
+
+from .._formula_math import adaptive_visits as adaptive_visits
 
 
 def pool_rank(module: nn.Module) -> int:
@@ -21,12 +23,3 @@ def pool_kernel_volume(module: nn.Module) -> int:
     rank = pool_rank(module)
     kernel = cast(int | tuple[int, ...] | list[int], module.kernel_size)
     return kernel**rank if isinstance(kernel, int) else kernel[0] ** rank if len(kernel) == 1 else prod(kernel)
-
-
-def adaptive_visits(input_shape: Any, output_shape: Any, rank: int) -> int:
-    """Sum exact floor/ceil adaptive windows, including overlap and unbatched inputs."""
-    # Sum_i(ceil((i+1)L/O)-floor(iL/O)) = L+O-gcd(L,O).
-    return prod(input_shape[:-rank]) * prod(
-        length + output - gcd(length, output)
-        for length, output in zip(input_shape[-rank:], output_shape[-rank:], strict=True)
-    )

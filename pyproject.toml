@@ -1,6 +1,6 @@
 [build-system]
-requires = ["uv_build>=0.13.4,<1.0.0"]
-build-backend = "uv_build"
+requires = ["scikit-build-core>=1.1,<2", "torch>=2.1.0,<3.0.0"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "torchscan"
@@ -12,7 +12,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11,<4"
 license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "native/count/THIRD_PARTY_LICENSES.txt"]
 keywords = ["pytorch", "deep learning", "summary", "memory", "ram"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -21,7 +21,6 @@ classifiers = [
     "Natural Language :: English",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -30,9 +29,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-dependencies = [
-    "torch>=2.1.0,<3.0.0",
-]
+dynamic = ["dependencies"]
 
 [project.optional-dependencies]
 test = [
@@ -65,13 +62,28 @@ changelog = "https://frgfm.github.io/torch-scan/changelog.html"
 
 [tool.uv]
 required-version = ">=0.13.4,<1.0.0"
+cache-keys = [
+    {file = "pyproject.toml"}, {file = "_build_metadata.py"}, {file = "CMakeLists.txt"},
+    {file = "native/collector.cpp"}, {file = "native/count/CMakeLists.txt"},
+    {file = "native/count/*.cpp"}, {file = "native/count/*.hpp"},
+    {file = "native/count/*.in"}, {file = "native/count/*.json"}, {file = "native/count/*.cmake"},
+]
 
-[tool.uv.build-backend]
-module-name = "torchscan"
-module-root = ""
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+wheel.packages = ["torchscan"]
+sdist.include = [
+    "CMakeLists.txt", "_build_metadata.py", "native/*.cpp", "native/count/CMakeLists.txt",
+    "native/count/*.cpp", "native/count/*.hpp", "native/count/*.in",
+    "native/count/*.json", "native/count/*.cmake", "native/count/THIRD_PARTY_LICENSES.txt",
+]
+
+[[tool.dynamic-metadata]]
+provider = {path = ".", module = "_build_metadata"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests/"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["torchscan"]

@@ -23,6 +23,7 @@ The API reference covers unreleased development APIs. **0.3.0** is proposed and 
 | One-call resource report and terminal summary with `measure_workload` | `main` only; unreleased |
 | The `custom_modules` extension API and `custom_mapping` on `crawl_module`/`summary` | `main` only; unreleased |
 | New native Transformer MAC, DMA, and token-dependency estimates | `main` only; unreleased |
+| C++ operator collection and FLOP counting and a native saved-capture executable | `main` only; unreleased |
 
 See the [changelog](changelog.md) for other changes after 0.2.0.
 
@@ -34,11 +35,29 @@ python -m pip install torchscan==0.2.0
 
 ## Development version
 
-Install `main` without cloning the repository:
+The development version builds a C++ collector against PyTorch and an independent C++ counter. Install a
+C++ compiler (GCC/Clang or MSVC) compatible with the installed PyTorch,
+PyTorch and build tools first, then build against that environment:
 
 ```shell
-python -m pip install "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
+uv pip install "scikit-build-core>=1.1,<2" cmake ninja
+uv pip install --no-build-isolation "torchscan @ git+https://github.com/frgfm/torch-scan.git@main"
 ```
+
+uv drives [scikit-build-core and CMake](https://docs.astral.sh/uv/concepts/projects/init/#projects-with-extension-modules)
+to compile the extensions and executable. TorchScan does not use setuptools. `uv build` creates wheels and source archives;
+`uv pip install -e .` supports editable development without rebuilding on import.
+
+Native wheels require the PyTorch release and a compatible build ABI they were compiled against;
+source builds support PyTorch ≥2.1,<3. Switching CPU/CUDA/ROCm builds can also change the ABI within one release.
+After changing the PyTorch release or build, rebuild from the checkout with
+`uv pip install --no-build-isolation --reinstall --no-cache .` to avoid reusing a wheel built for another version.
+Imports never compile code or fall back to a Python collector.
+
+Source builds fetch Boost and nlohmann JSON directly from their upstream releases, pinned by version and SHA-256
+in `native/count/dependencies.json`. Checksums are verified before using downloaded or cached files; a mismatch
+stops the build. Installed wheels do not download headers. For offline builds, put the two files named in that
+manifest into a directory and set `TORCHSCAN_DEPS_CACHE` to it. Cached files undergo the same verification.
 
 For repeatable experiments, use the commit you tested and record it with the report. Start with
 the [quickstart](index.md), then [check an optimization](benchmark-comparison.md).
@@ -65,7 +84,8 @@ git clone https://github.com/frgfm/torch-scan.git
 cd torch-scan
 uv venv --python 3.11
 source .venv/bin/activate
-uv pip install -e .
+uv pip install torch "scikit-build-core>=1.1,<2" cmake ninja
+uv pip install --no-build-isolation -e .
 ```
 
 Install documentation or test dependencies only when needed:

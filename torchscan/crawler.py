@@ -26,7 +26,7 @@ from .extensions import (
     _resolve_handler,
     _validate_handlers,
 )
-from .flops import FlopReport, measure_flops
+from .flops import FlopReport, _suspend_collection, measure_flops
 from .modules import module_dmas, module_flops, module_macs, module_rf
 from .modules._layout import LAYOUT_TYPES
 from .modules._primitives import POINTWISE_TYPES, PRIMITIVE_TYPES
@@ -597,10 +597,7 @@ def crawl_module(
                 return
 
             ordered_inputs = _ordered_inputs(forward_signature, hook_args, hook_kwargs)
-            # Formula work must not appear in the operator report. Suspend dispatch
-            # only while calculating metadata-based estimates, then release all
-            # activation references before the next module executes.
-            # PyTorch exposes no public context for suspending dispatch modes.
+            # Exclude estimator work, then release activation references before the next module.
             call_diagnostics: list[Diagnostic] = []
 
             def run_handler(selected: ModuleHandler, names: set[str], *, custom: bool) -> dict[str, MetricResult]:
@@ -615,7 +612,7 @@ def crawl_module(
                     return results
                 return _handler_metrics(selected, call, names, call_diagnostics, path, custom=custom)
 
-            with torch._C._DisableTorchDispatch():
+            with _suspend_collection():
                 requested = set(_METRIC_UNITS) - layer.get("metric_owners", {}).keys()
                 if handler is not None and requested:
                     estimates = run_handler(handler, requested, custom=custom_handler is not None)

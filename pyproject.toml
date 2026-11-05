@@ -70,6 +70,7 @@ namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests/"]
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["torchscan"]

@@ -135,7 +135,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Install model test dependencies
-        run: uv pip install -e ".[test,model-test]"
+        run: |
+          python -c "import subprocess, tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['optional-dependencies']['model-test']; subprocess.run(['uv', 'pip', 'install', *deps, 'setuptools<84', 'wheel'], check=True)"
+          uv pip install --no-build-isolation -e ".[test,model-test]"
       - name: Run no-download model smokes
         run: pytest tests/test_model_zoo.py
 

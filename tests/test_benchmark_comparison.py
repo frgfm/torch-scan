@@ -1,19 +1,24 @@
 import json
+import math
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import sys
 from copy import deepcopy
 
 import pytest
 import torch
 
-from torchscan import compare_benchmarks, measure_latency, profile_workload, render_report
+from torchscan import check_performance, compare_benchmarks, measure_latency, profile_workload, render_report
+from torchscan.report import metric_result
 
 
-def reports():
+def reports(after_latency=0.01):
     inputs = torch.ones(8)
     before = measure_latency(lambda: inputs + 1, device="cpu", inputs=inputs, min_run_time=0.001, min_repeats=2)
     after = deepcopy(before)
-    for report, latency in ((before, 0.02), (after, 0.01)):
+    for report, latency in ((before, 0.02), (after, after_latency)):
         report["totals"]["latency"].update(value=latency, known_value=latency)
         report["totals"]["latency_iqr"].update(value=0.001, known_value=0.001)
+        report["measurement"].update(number_per_run=1, raw_times_seconds=[latency, latency], measured_calls=2)
     return before, after
 
 
@@ -35,6 +40,7 @@ def test_checked_comparison_and_safe_html():
     assert json.loads(json.dumps(result)) == result
     changed = deepcopy(result)
     changed["context_changes"].clear()
+    assert check_performance(changed, max_latency_regression=0)["status"] == "inconclusive"
     with pytest.raises(ValueError, match="Context changes"):
         render_report(changed)
     assert "No operator profile" in render_report(before)
@@ -53,6 +59,7 @@ def test_checked_comparison_and_safe_html():
     with pytest.raises(ValueError):
         render_report(after, format="svg")
     result["totals"]["latency"]["delta"] = 999
+    assert check_performance(result, max_latency_regression=0)["status"] == "inconclusive"
     with pytest.raises(ValueError, match="deltas"):
         render_report(result)
 
@@ -71,6 +78,7 @@ def test_failed_output_check_withholds_gains(assertion):
     assert result["latency_change"] == "unavailable"
     assert all(metric["delta"] is None for metric in result["totals"].values())
     assert "Output check failed" in render_report(result)
+    assert check_performance(result, max_latency_regression=0)["status"] == "failed"
     result["output_check"] = "unknown"
     with pytest.raises(ValueError, match="comparison"):
         render_report(result)
@@ -107,6 +115,10 @@ def test_context_status_and_checker_contract():
     result = compare_benchmarks(before, after, check=lambda: True)
     assert result["totals"]["latency"]["delta"] is None
     assert "lower bound" in render_report(result)
+    assert check_performance(result, max_latency_regression=0)["status"] == "inconclusive"
+    after["totals"]["latency"].update(status="unavailable", known_value=None)
+    result = compare_benchmarks(before, after, check=lambda: True)
+    assert check_performance(result, max_latency_regression=0)["status"] == "inconclusive"
 
 
 @pytest.mark.parametrize(("latency", "label"), [(0.0205, "within_variability"), (0.03, "slower")])
@@ -118,3 +130,63 @@ def test_latency_variability_labels(latency, label):
     result["latency_change"] = "faster"
     with pytest.raises(ValueError, match="Latency change"):
         render_report(result)
+
+
+def test_check_real_saved_timing(tmp_path):
+    inputs = torch.ones(8)
+    report = measure_latency(lambda: inputs + 1, device="cpu", inputs=inputs, min_run_time=0.001, min_repeats=2)
+    comparison = compare_benchmarks(report, report, check=lambda: True)
+    path = tmp_path / "comparison.json"
+    path.write_text(json.dumps(comparison), encoding="utf-8")
+    script = (
+        "import sys,json; sys.modules['torch']=None; from torchscan import check_performance; "
+        "result=check_performance(json.load(open(sys.argv[1])),max_latency_regression=0); "
+        "assert result['status']=='passed'"
+    )
+    subprocess.run([sys.executable, "-c", script, str(path)], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
+    comparison["after"]["measurement"].clear()
+    assert check_performance(comparison, max_latency_regression=0)["status"] == "inconclusive"
+
+
+@pytest.mark.parametrize(
+    ("factor", "limit", "status"),
+    [(1, 0, "passed"), (1.05, 0.05, "passed"), (math.nextafter(1.05, math.inf), 0.05, "failed")],
+)
+def test_performance_latency_limit(factor, limit, status):
+    before, after = reports(0.02 * factor)
+    result = check_performance(compare_benchmarks(before, after, check=lambda: True), max_latency_regression=limit)
+    assert result["status"] == status
+    assert result["reasons"]
+
+
+@pytest.mark.parametrize(
+    ("status", "value", "scope", "missing_blocks", "expected"),
+    [
+        ("complete", 100, "pytorch_tensor_bytes", False, "passed"),
+        ("complete", 101, "pytorch_tensor_bytes", True, "failed"),
+        ("missing", None, "pytorch_tensor_bytes", False, "inconclusive"),
+        ("unavailable", None, "pytorch_tensor_bytes", False, "inconclusive"),
+        ("partial", 90, "pytorch_tensor_bytes", False, "inconclusive"),
+        ("complete", 100, "child_process_lifetime", False, "inconclusive"),
+    ],
+)
+def test_performance_memory_limit(status, value, scope, missing_blocks, expected):
+    before, after = reports()
+    if missing_blocks:
+        after["measurement"].clear()
+    if status != "missing":
+        memory = metric_result(status=status, value=value, known_value=value, unit="bytes", scope=scope, method="test")
+        after["totals"]["peak_memory"] = memory
+    result = check_performance(
+        compare_benchmarks(before, after, check=lambda: True),
+        max_latency_regression=0,
+        memory_limit={"metric": "peak_memory", "scope": "pytorch_tensor_bytes", "max_bytes": 100},
+    )
+    assert result["status"] == expected
+
+
+@pytest.mark.parametrize("limit", [-1, math.inf, True])
+def test_performance_invalid_limit(limit):
+    before, after = reports()
+    with pytest.raises(ValueError):
+        check_performance(compare_benchmarks(before, after, check=lambda: True), max_latency_regression=limit)

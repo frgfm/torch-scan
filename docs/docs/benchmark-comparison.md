@@ -60,6 +60,31 @@ and alternate their order before claiming a small gain. Raw block durations rema
 See the [`compare_benchmarks`](torchscan.md#torchscan.compare_benchmarks) and
 [`BenchmarkComparison`](torchscan.md#torchscan.BenchmarkComparison) API reference.
 
+## Apply explicit limits
+
+Check a saved `BenchmarkComparison` or one autoresearch `trials` entry without running workloads or importing PyTorch.
+For an analysis-only environment, install the development wheel with `--no-deps`.
+
+```python
+import json
+from pathlib import Path
+from torchscan import check_performance
+
+comparison = json.loads(Path("comparison.json").read_text())
+result = check_performance(
+    comparison,
+    max_latency_regression=0.05,
+    memory_limit={"metric": "process_peak_rss", "scope": "child_process_lifetime", "max_bytes": 536870912},
+)
+print(result)  # passed, failed, or inconclusive, with reasons
+raise SystemExit(result["status"] != "passed")
+```
+
+The caller's `0.05` limit allows 5% latency regression; equality passes. Memory requires the exact metric and scope;
+RSS, tracked tensors and allocator memory are distinct. Failed output checks or exceeded usable limits fail;
+missing, partial, incompatible or insufficient evidence is inconclusive. Timing requires matching raw blocks.
+Invalid limits raise `ValueError`. Budget checks do not replace autoresearch's improvement decision or assess significance.
+
 ## Save the complete experiment
 
 `render_report` accepts one `BenchmarkReport` or the checked comparison above. HTML contains timing, any appended

@@ -1,5 +1,7 @@
 import copy
 import json
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import sys
 from typing import Any, cast
 
 import pytest
@@ -30,6 +32,15 @@ def test_compare_reports_numeric_totals_and_deterministic_order():
     assert list(result["totals"]) == ["flops", "parameters"]
     assert result["totals"]["flops"]["delta"] == 5
     assert result["totals"]["parameters"]["delta"] == 0
+
+
+def test_compare_reports_does_not_import_torch():
+    script = (
+        "import sys; sys.modules['torch']=None; import torchscan; "
+        "r={'schema_version':1,'totals':{},'layers':[]}; "
+        "assert torchscan.compare.compare_reports(r,r)==torchscan.compare_reports(r,r)"
+    )
+    subprocess.run([sys.executable, "-c", script], check=True)  # ruff: ignore[subprocess-without-shell-equals-true]
 
 
 def test_compare_reports_added_removed_and_reused_layer_calls():

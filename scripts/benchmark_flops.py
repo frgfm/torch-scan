@@ -98,6 +98,9 @@ def main():
                 start = time.perf_counter_ns()
                 measured = jobs[name]()
                 samples[name].append((time.perf_counter_ns() - start) / 1e6)
+                if name == "full_call":
+                    assert measured["total"]["status"] == "complete", measured["diagnostics"]
+                    assert measured["total"]["value"] == result["total"]["value"], "FLOP count changed between runs"
                 del measured
         result.update(
             samples_ms=samples, median_ms={name: statistics.median(values) for name, values in samples.items()}

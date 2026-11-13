@@ -31,6 +31,47 @@ TorchScan does not infer axes. Saved tensors retain their data and are never int
 Calls use `eval()` and inference mode, with autocast and CUDA TF32 disabled. Defaults are CPU, seed 0 and one
 PyTorch thread; override `device`, `seed` and `threads` at the top level. Floating inputs and model state must be FP32.
 
+## Fixed input cases
+
+For a small set of caller-chosen inputs, replace top-level `args`/`kwargs` or `inputs` with a named `cases` object:
+
+```json
+{
+  "model": "torchvision.models:resnet18",
+  "model_kwargs": {"weights": null},
+  "cases": {
+    "zeros": {"args": [{"shape": [1, 3, 224, 224], "fill": 0}]},
+    "saved-sample": {"inputs": "inputs.pt"}
+  },
+  "check": {"absolute_error": {"mean": 0.0001, "p99": 0.001}}
+}
+```
+
+Run this manifest with the same Python API or CLI command. Each case accepts only `args`/`kwargs` descriptors or
+one saved `inputs` file. Paths remain relative to the manifest. The original model, checkpoint, FP32 execution,
+seed, threads, numerical limits and timing/memory settings are shared. Supply batch size one in every case.
+The manifest must contain at least one case; cases cannot override models, settings or checks.
+
+Every case runs independently in fresh workers, including cases after a rejection. Each compares against its own
+fixed outputs from the original model, even with `--baseline-model`. Any `discard` discards the set. Otherwise any
+`inconclusive` keeps the set inconclusive. Only all `keep` results produce `keep`; probes return `measured` only
+when every case is measured. Gains on one case never offset a loss on another. An unchecked memory ceiling in any
+case prevents acceptance. Without numerical ceilings, all cases retain report-only fidelity semantics.
+
+The combined `report.json` contains `cases.<name>` with each full case result and its `report` path.
+Each `case-N/` directory retains the existing JSON, HTML, raw trials, confirmation, output errors and logs.
+Latency, scoped memory and errors remain separate for each case; unavailable or unmeasured evidence stays explicit.
+Initial output failures stop that case before timing, as in single-case evaluation. CLI output includes per-case
+decisions, feedback and report paths. Single-case contracts and their report layout remain supported.
+
+One shared identity set covers the manifest, model sources, checkpoint, every case's saved inputs, declared `files`
+and generated reference outputs. Files are checked between workers and cases; changed files cannot be rehashed
+as a fresh experiment halfway through the set. Preserve these identities across attempts, except for the edited
+candidate source. Only declared dependencies are covered. Dataset loaders, training, precision search and scheduling
+are outside this interface.
+
+## Checks and acceptance
+
 Each floating output reports mean, median, p90, p95, p99, maximum and count of absolute errors against the original
 model. Selected `check.absolute_error` ceilings apply separately to every output tensor; p99 can permit outliers.
 Without ceilings, `output_error_policy: report_only` means differences are measured without asserting equivalence.

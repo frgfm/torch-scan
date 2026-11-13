@@ -209,6 +209,11 @@ for same-schema reports and migrate stored reports explicitly when a future sche
 `MetricResult` values, and `measurement` timing blocks (`number_per_run`, `raw_times_seconds`, `measured_calls`).
 JSON retains seconds and bytes; terminal output converts to ms and MiB. Latency/IQR describes block averages.
 `context` preserves hardware/software, threads, timing options, and work-unit definitions; `inputs` is metadata.
+MPS reports additionally record `context.mps_fallback_env`: the literal `PYTORCH_ENABLE_MPS_FALLBACK`
+environment value before the workload runs, or JSON `null` when observed unset. A missing key means no snapshot
+was recorded. This field records requested configuration; PyTorch can cache the setting during initialization,
+so it does not establish effective backend policy or whether any operation actually fell back to CPU.
+Set the variable before starting Python and keep it fixed throughout the experiment.
 
 `measure_workload` adds `totals.operator_flops`, `totals.peak_memory`, and `totals.process_peak_rss`. Optional
 `operator_flops`, `memory`, and `profile` fields retain full collector evidence. `diagnostics` explains incomplete

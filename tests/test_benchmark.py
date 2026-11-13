@@ -7,7 +7,7 @@ import torch
 from torch.utils.benchmark import Measurement, Timer
 
 from torchscan import benchmark as timing
-from torchscan import measure_latency
+from torchscan import measure_latency, measure_workload
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps", "cuda"])
@@ -130,3 +130,39 @@ def test_missing_benchmark_dependencies(monkeypatch):
     with pytest.raises(ImportError, match="upgrade PyTorch"):
         measure_latency(workload, device="cpu")
     workload.assert_not_called()
+
+
+@pytest.mark.parametrize("fallback", [None, "0", "1", "unsupported"])
+def test_mps_fallback_provenance_precedes_workload(monkeypatch, fallback):
+    if fallback is None:
+        monkeypatch.delenv("PYTORCH_ENABLE_MPS_FALLBACK", raising=False)
+    else:
+        monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", fallback)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    spec = Timer(stmt="pass")._task_spec
+
+    def run_timing(workload, *_settings):
+        workload()
+        sample = Measurement(number_per_run=1, raw_times=[0.01, 0.02], task_spec=spec)
+        return 0.1, sample, torch.get_num_threads()
+
+    monkeypatch.setattr(timing, "_run_timing", run_timing)
+    report = measure_latency(
+        lambda: monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "changed"),
+        device="mps",
+        inputs=torch.ones(1),
+    )
+    assert report["context"]["mps_fallback_env"] == fallback
+    assert json.loads(json.dumps(report)) == report
+    # The metadata-only path also records the setting without executing a workload.
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+    workload = Mock()
+    report = measure_workload(workload, device="mps", metrics=(), print_summary=False)
+    assert report["context"]["mps_fallback_env"] == "1"
+    workload.assert_not_called()
+
+
+def test_cpu_does_not_record_mps_fallback(monkeypatch):
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+    report = measure_latency(lambda: None, device="cpu", min_run_time=0.001, min_repeats=2)
+    assert "mps_fallback_env" not in report["context"]

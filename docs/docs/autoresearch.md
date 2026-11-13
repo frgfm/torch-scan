@@ -67,7 +67,8 @@ decisions, feedback and report paths. Single-case contracts and their report lay
 One shared identity set covers the manifest, model sources, checkpoint, every case's saved inputs, declared `files`
 and generated reference outputs. Files are checked between workers and cases; changed files cannot be rehashed
 as a fresh experiment halfway through the set. Preserve these identities across attempts, except for the edited
-candidate source. Only declared dependencies are covered. Dataset loaders, training, precision search and scheduling
+candidate source. Caller paths are hashed too, so retargeting a symlink to changed content invalidates the run.
+Only declared dependencies are covered. Dataset loaders, training, precision search and scheduling
 are outside this interface.
 
 ## Checks and acceptance

@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from torchscan import autoresearch, measure_workload
-from torchscan._model_workload import _tensor
+from torchscan._model_workload import _tensor, model_worker
 
 
 def workload(tmp_path, **updates):
@@ -319,15 +319,8 @@ def case_worker(monkeypatch):
     def install(outcomes):
         def worker(request, _artifact, _timeout):
             autoresearch._verify_files(request["identities"])
-            contract = json.loads(Path(request["experiment"]).read_text())
             if request["mode"] == "inspect":
-                files = [Path(request["experiment"]).parent / "models.py"]
-                files.extend(
-                    Path(request["experiment"]).parent / case["inputs"]
-                    for case in contract["cases"].values()
-                    if "inputs" in case
-                )
-                return {"settings": autoresearch._settings(contract), "files": [str(path) for path in files]}
+                return model_worker(request)
             if request["mode"] == "reference":
                 Path(request["reference_outputs"]).write_bytes(b"reference")
                 return {}
@@ -412,3 +405,61 @@ def test_case_manifest_cannot_mix_top_level_inputs(tmp_path):
     path = workload(tmp_path, cases={"sample": {"args": []}})
     with pytest.raises(ValueError, match="top level"):
         autoresearch.evaluate_model(path, output=tmp_path / "run")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Symlink creation may require extra privileges on Windows.")
+@pytest.mark.parametrize("name", ["models.py", "inputs.pt", "extra.txt"])
+def test_retargeted_symlinks_cannot_change_the_fixed_cases(tmp_path, monkeypatch, case_worker, name):
+    path = case_manifest(tmp_path, settings={"trials": 2}, files=["extra.txt"])
+    contract = json.loads(path.read_text())
+    contract["cases"]["ones"] = {"inputs": "inputs.pt"}
+    path.write_text(json.dumps(contract))
+    (tmp_path / "inputs.pt").write_bytes(b"saved inputs")
+    (tmp_path / "extra.txt").write_bytes(b"declared dependency")
+    alias = tmp_path / name
+    original = alias.with_name("original-" + name)
+    alias.rename(original)
+    replacement = alias.with_name("changed-" + name)
+    replacement.write_bytes(original.read_bytes() + b" ")
+    alias.symlink_to(original)
+    worker = case_worker({"zeros": (0.8, 90), "ones": (0.8, 90)})
+
+    def mutate(request, artifact, timeout):
+        result = worker(request, artifact, timeout)
+        if request["case"] == "ones" and request["mode"] == "inspect":
+            alias.unlink()
+            alias.symlink_to(replacement)
+        return result
+
+    monkeypatch.setattr(autoresearch, "_run_worker", mutate)
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=tmp_path / "run")
+    assert report["cases"]["zeros"]["decision"] == "keep"
+    assert report["decision"] == "inconclusive"
+    assert "changed" in report["cases"]["ones"]["reasons"][0]
+
+
+@pytest.mark.parametrize("multiple", [False, True])
+def test_cli_preserves_feedback_and_case_report_paths(tmp_path, monkeypatch, capsys, multiple):
+    feedback = {"after": {"latency_ms": 2, "peak_rss_mib": 3, "output_errors": {"/": {"max": 0.2}}}}
+    result = {"decision": "discard", "reasons": ["Failed check"], "output_error_policy": "enforced"}
+    if multiple:
+        result["cases"] = {"sample": {**result, "feedback": feedback, "report": "case-1/report.json", "trials": []}}
+    else:
+        result["feedback"] = feedback
+    evaluate = MagicMock(return_value=result)
+    monkeypatch.setattr(autoresearch, "evaluate_model", evaluate)
+    monkeypatch.setattr(autoresearch.sys, "argv", ["autoresearch", "cases.json", "--output", str(tmp_path)])
+    autoresearch.main()
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["decision"] == "discard"
+    assert summary["report"] == str(tmp_path / "report.json")
+    if multiple:
+        assert summary["cases"]["sample"] == {
+            "decision": "discard",
+            "reasons": ["Failed check"],
+            "feedback": feedback,
+            "report": "case-1/report.json",
+        }
+    else:
+        assert summary["feedback"] == feedback
+        assert "cases" not in summary

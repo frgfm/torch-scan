@@ -34,7 +34,14 @@ def test_compare_reports_numeric_totals_and_deterministic_order():
     assert result["totals"]["parameters"]["delta"] == 0
 
 
-def test_compare_reports_does_not_import_torch():
+def test_report_api_is_lazy_and_discoverable():
+    import torchscan
+
+    assert "compare_reports" in dir(torchscan)
+    assert torchscan.__getattr__("compare").compare_reports is compare_reports
+    with pytest.raises(AttributeError, match="missing_api"):
+        _ = torchscan.missing_api
+
     script = (
         "import sys; sys.modules['torch']=None; import torchscan; "
         "r={'schema_version':1,'totals':{},'layers':[]}; "

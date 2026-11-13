@@ -5,13 +5,15 @@
 
 from collections.abc import Callable
 from copy import deepcopy
+from math import isclose
+from statistics import median
 from typing import Any, Literal, TypedDict, cast
 
-from .benchmark import BenchmarkReport
+from ._validation import _TIMING_METHOD, _json_tree, _metric, _metrics, _number, _object, _positive_finite
 from .compare import _diff_metrics, _MetricDiff
-from .render import _json_tree, _metrics, _object
+from .report import BenchmarkReport
 
-__all__ = ["BenchmarkComparison", "compare_benchmarks"]
+__all__ = ["BenchmarkComparison", "MemoryLimit", "PerformanceCheck", "check_performance", "compare_benchmarks"]
 
 LatencyChange = Literal["faster", "slower", "within_variability", "unavailable"]
 
@@ -27,6 +29,21 @@ class BenchmarkComparison(TypedDict):
     output_check: Literal["passed", "failed"]
     latency_change: LatencyChange
     context_changes: dict[str, Any]
+
+
+class MemoryLimit(TypedDict):
+    """Candidate byte ceiling for one named metric and exact measurement scope."""
+
+    metric: str
+    scope: str
+    max_bytes: int
+
+
+class PerformanceCheck(TypedDict):
+    """JSON-serializable decision with reasons for agents and other callers."""
+
+    status: Literal["passed", "failed", "inconclusive"]
+    reasons: list[str]
 
 
 def _validate_benchmark(report: object) -> BenchmarkReport:
@@ -96,6 +113,38 @@ def _context_changes(before: BenchmarkReport, after: BenchmarkReport) -> dict[st
     }
 
 
+def _validate_comparison(report: object) -> BenchmarkComparison:
+    report = _object(report, "comparison")
+    _json_tree(report, "comparison")
+    if (
+        type(report.get("schema_version")) is not int
+        or report["schema_version"] != 1
+        or report.get("report_type") != "benchmark_comparison"
+        or report.get("output_check") not in ("passed", "failed")
+    ):
+        raise ValueError("Invalid benchmark comparison.")
+    for name, difference in _object(report.get("totals"), "comparison.totals").items():
+        difference = _object(difference, f"comparison.totals.{name}")
+        if difference.get("delta") is not None:
+            _number(difference["delta"], f"comparison.totals.{name}.delta")
+        for side in ("before", "after"):
+            if difference.get(side) is not None:
+                _metric(difference[side], f"comparison.totals.{name}.{side}")
+    expected = compare_benchmarks(
+        cast(BenchmarkReport, report.get("before")),
+        cast(BenchmarkReport, report.get("after")),
+        check=lambda: report["output_check"] == "passed",
+    )
+    for field, label in (
+        ("totals", "Comparison deltas"),
+        ("latency_change", "Latency change"),
+        ("context_changes", "Context changes"),
+    ):
+        if report.get(field) != expected[field]:
+            raise ValueError(f"{label} do not match the stored measurements/check status.")
+    return cast(BenchmarkComparison, report)
+
+
 def compare_benchmarks(
     before: BenchmarkReport,
     after: BenchmarkReport,
@@ -144,3 +193,92 @@ def compare_benchmarks(
         "latency_change": _latency_change(before, after, differences),
         "context_changes": _context_changes(before, after),
     }
+
+
+def _has_timing_evidence(report: BenchmarkReport) -> bool:
+    latency, measurement = report["totals"]["latency"], report["measurement"]
+    number, samples = measurement.get("number_per_run"), measurement.get("raw_times_seconds")
+    repeats = report["context"].get("min_repeats")
+    return (
+        latency["status"] == "complete"
+        and _positive_finite(latency["value"])
+        and latency["scope"] == "warmed_block_average"
+        and latency["method"] == _TIMING_METHOD
+        and type(number) is int
+        and _positive_finite(number)
+        and isinstance(samples, list)
+        and type(repeats) is int
+        and repeats >= 2
+        and len(samples) >= repeats
+        and all(_positive_finite(sample) for sample in samples)
+        and type(measurement.get("measured_calls")) is int
+        and measurement["measured_calls"] == number * len(samples)
+        and isclose(median(sample / number for sample in samples), cast(float, latency["value"]), rel_tol=1e-12)
+    )
+
+
+def check_performance(
+    comparison: BenchmarkComparison,
+    *,
+    max_latency_regression: float,
+    memory_limit: MemoryLimit | None = None,
+) -> PerformanceCheck:
+    """Check saved comparison evidence against caller-supplied budgets.
+
+    Args:
+        comparison: In-memory or JSON-loaded BenchmarkComparison, including an autoresearch trial.
+        max_latency_regression: Nonnegative finite fraction; 0.05 allows 5% slower median latency.
+        memory_limit: Optional candidate ceiling naming the exact totals metric, scope, and max_bytes.
+
+    Returns:
+        Passed, failed, or inconclusive with reasons. Failed output checks and exceeded usable
+        limits fail; missing or incompatible evidence is inconclusive. Equality passes.
+        Timing requires matching raw blocks; memory requires the exact metric and scope.
+        No workloads execute.
+
+    Raises:
+        ValueError: If caller-supplied limits are invalid.
+    """
+    _number(max_latency_regression, "max_latency_regression")
+    if max_latency_regression != 0 and not _positive_finite(max_latency_regression):
+        raise ValueError("max_latency_regression must be finite and nonnegative.")
+    if memory_limit is not None:
+        limit = _object(memory_limit, "memory_limit")
+        for field in ("metric", "scope"):
+            if not isinstance(limit.get(field), str) or not limit[field].strip():
+                raise ValueError(f"memory_limit.{field} must be a non-empty string.")
+        _number(limit.get("max_bytes"), "memory_limit.max_bytes", integer=True)
+    try:
+        comparison = _validate_comparison(comparison)
+    except (ValueError, RecursionError) as error:
+        return {"status": "inconclusive", "reasons": [str(error)]}
+    if comparison["output_check"] == "failed":
+        return {"status": "failed", "reasons": ["Recorded output check failed."]}
+
+    ceiling = None
+    if all(_has_timing_evidence(comparison[side]) for side in ("before", "after")):
+        before = cast(float, comparison["before"]["totals"]["latency"]["value"])
+        ceiling = before * (1 + max_latency_regression)
+    limits = [("latency", "seconds", "warmed_block_average", ceiling)]
+    if memory_limit is not None:
+        limits.append((memory_limit["metric"], "bytes", memory_limit["scope"], memory_limit["max_bytes"]))
+    failed, incomplete = False, False
+    reasons = []
+    for name, unit, scope, ceiling in limits:
+        metric = comparison["after"]["totals"].get(name)
+        if (
+            ceiling is None
+            or metric is None
+            or metric["status"] != "complete"
+            or metric["unit"] != unit
+            or metric["scope"] != scope
+            or cast(float, metric["value"]) < 0
+            or metric["method"].strip() in ("", "not_requested", "unavailable")
+        ):
+            incomplete = True
+            reasons.append(f"{name}: missing, incomplete or incompatible evidence ({unit}, {scope}).")
+        else:
+            exceeded = cast(float, metric["value"]) > ceiling
+            failed |= exceeded
+            reasons.append(f"{name} ({scope}): {metric['value']} {'>' if exceeded else '<='} {ceiling} {unit}.")
+    return {"status": "failed" if failed else "inconclusive" if incomplete else "passed", "reasons": reasons}

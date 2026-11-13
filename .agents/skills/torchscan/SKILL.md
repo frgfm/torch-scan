@@ -26,6 +26,8 @@ Use the smallest API that answers the request:
   work-unit throughput. Unreleased; install `main`. The callable is invoked repeatedly and owns its state.
 - `compare_reports(before, after)`: pure same-schema comparison.
 - `compare_benchmarks(before, after, check=...)`: compatible workload comparison with an owner-supplied output check.
+- `check_performance(comparison, max_latency_regression=..., memory_limit=...)`: apply owner-supplied limits without PyTorch;
+  return `passed`, `failed`, or `inconclusive` with reasons for the agent to act on.
 - `python -m torchscan.autoresearch workload.json --output RUN`: start with the owner's model reference, args/kwargs
   descriptors or saved inputs with batch size one, and inference workload. Collect latency/throughput, scoped PyTorch peak memory and
   clean child-process RSS without writing an experiment script. Add `--candidate-model module:factory` for automatic

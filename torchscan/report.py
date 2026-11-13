@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict
 
 if TYPE_CHECKING:
     from .flops import FlopReport
+    from .profiler import ProfileReport
 
 __all__ = [
     "AnalysisReport",
+    "BenchmarkReport",
     "Diagnostic",
     "IncompleteAnalysisError",
     "LayerReport",
@@ -88,6 +90,20 @@ class LayerReport(TypedDict):
 
     metric_ownership: NotRequired[dict[str, Literal["module_call", "subtree"]]]
     metric_owners: NotRequired[dict[str, dict[str, str | int]]]
+
+
+class BenchmarkReport(TypedDict):
+    """JSON-serializable timing report for one caller-controlled workload."""
+
+    schema_version: int
+    context: dict[str, Any]
+    inputs: dict[str, Any]
+    totals: dict[str, MetricResult]
+    measurement: dict[str, Any]
+    profile: NotRequired["ProfileReport"]
+    operator_flops: NotRequired["FlopReport"]
+    memory: NotRequired[dict[str, str | int]]
+    diagnostics: NotRequired[list[Diagnostic]]
 
 
 class AnalysisReport(TypedDict):

@@ -34,6 +34,8 @@ Version 0.3.0 is the proposed next release, not a published package.
 
 ### Changed
 
+- Correct grouped convolution weight-gradient FLOPs and respect requested input/weight gradients.
+- Load workload dependencies on demand so saved model reports can be compared without importing PyTorch.
 - Start documentation with model cost, workload resource use, checked optimization, and saved report consumption.
 - Clarify installation tracks, compatibility checks, and the relationship between model summaries and workload reports.
 - Correct convolution, linear, pooling, normalization, and attention counts. Keep incomplete counts and diagnostics

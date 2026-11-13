@@ -293,12 +293,14 @@ def _scoped_mapping(
 
         return count
 
-    # PyTorch's native CPU attention formula omits scaling, softmax, and masks.
+    # Correct incomplete CPU attention and grouped convolution gradient counts.
     return {
         operator: guarded(operator, formula)
         for name, formula in FORMULAS.items()
         if (operator := getattr(torch.ops.aten, name, None)) is not None
-        and (operator not in registry or name == "_scaled_dot_product_flash_attention_for_cpu")
+        and (
+            operator not in registry or name in {"_scaled_dot_product_flash_attention_for_cpu", "convolution_backward"}
+        )
     }
 
 

@@ -819,6 +819,21 @@ def test_forward_and_backward_matrix_work():
     assert training["total"]["value"] == 151
 
 
+@pytest.mark.parametrize("transposed", [False, True])
+@pytest.mark.parametrize("groups", [1, 2])
+@pytest.mark.parametrize(("input_grad", "weight_grad"), [(False, True), (True, False), (True, True)])
+def test_convolution_backward_masks(transposed, groups, input_grad, weight_grad):
+    model = (nn.ConvTranspose2d if transposed else nn.Conv2d)(groups, groups, 2, groups=groups, bias=False)
+    model.weight.requires_grad_(weight_grad)
+    side = 2 if transposed else 3
+    inputs = torch.ones(1, groups, side, side, requires_grad=input_grad)
+    report = measure_flops(lambda: model(inputs).sum().backward())
+    # Four spatial positions x four kernel values x two operations per MAC, independently per group.
+    expected = 32 * groups * (1 + input_grad + weight_grad) + (9 if transposed else 4) * groups - 1
+    assert report["total"]["status"] == "complete"
+    assert report["total"]["value"] == expected
+
+
 def test_scoped_rules_preserve_native_registry_and_caller_override():
     before = FlopCounterMode(display=False)
     registry = dict(getattr(before, "flop_registry", getattr(before, "flop_mapping", {})))

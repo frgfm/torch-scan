@@ -89,6 +89,23 @@ def _verify_files(identities: dict[str, str]) -> None:
         raise ValueError("Experiment, implementation or declared dependency changed during evaluation.")
 
 
+def _case_contracts(contract: dict[str, Any]) -> dict[str | None, dict[str, Any]]:
+    if "cases" not in contract:
+        return {None: contract}
+    cases = contract["cases"]
+    if not isinstance(cases, dict) or not cases or any(not name for name in cases):
+        raise ValueError("cases must be a nonempty object of named input cases.")
+    if {"args", "kwargs", "inputs"} & contract.keys():
+        raise ValueError("Supply inputs in cases or at the top level, not both.")
+    common = {key: value for key, value in contract.items() if key != "cases"}
+    for case in cases.values():
+        if not isinstance(case, dict) or not case or case.keys() - {"args", "kwargs", "inputs"}:
+            raise ValueError("Each case accepts only args/kwargs descriptors or a saved inputs file.")
+        if "inputs" in case and case.keys() != {"inputs"}:
+            raise ValueError("Use args/kwargs descriptors or a saved inputs file, not both.")
+    return {name: common | case for name, case in cases.items()}
+
+
 def _write(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n", encoding="utf-8")
 
@@ -203,14 +220,57 @@ def evaluate_model(
     a new directory; it retains JSON, HTML, hashes and worker logs. Models execute as
     trusted code. Only declared dependencies are hashed. Without error ceilings, keep
     confirms resource gains and output compatibility, not numerical equivalence.
+    An optional cases object names fixed input cases sharing the model and settings.
+    Any discard discards the set; otherwise any inconclusive remains inconclusive.
     """
     experiment, destination = Path(workload).resolve(), Path(output).resolve()
+    identities = _identities([experiment])
     contract = json.loads(experiment.read_text(encoding="utf-8"))
     if not isinstance(contract, dict) or not isinstance(contract.get("model"), str):
         raise ValueError("The workload must name an existing model/factory.")
+    contracts = _case_contracts(contract)
+    if "cases" not in contract:
+        return _evaluate_model(experiment, destination, contract, candidate_model, baseline_model, identities)
+    destination.mkdir(parents=True, exist_ok=False)
+    report: dict[str, Any] = {
+        "schema_version": 1,
+        "workload": contract,
+        "identities": identities,
+        "cases": {},
+    }
+    for index, (name, case_contract) in enumerate(contracts.items(), 1):
+        case_output = destination / f"case-{index}"
+        result = _evaluate_model(
+            experiment, case_output, case_contract, candidate_model, baseline_model, identities, case=name
+        )
+        report["cases"][name] = {"report": str(case_output / "report.json"), **result}
+    decisions = {case["decision"] for case in report["cases"].values()}
+    if "discard" in decisions:
+        report["decision"] = "discard"
+    elif decisions == {"keep"}:
+        report["decision"] = "keep"
+    elif decisions == {"measured"}:
+        report["decision"] = "measured"
+    else:
+        report["decision"] = "inconclusive"
+    report["reasons"] = [f"{name}: {case['decision']}" for name, case in report["cases"].items()]
+    report["output_error_policy"] = "enforced" if contract.get("check") else "report_only"
+    _write(destination / "report.json", report)
+    return report
+
+
+def _evaluate_model(
+    experiment: Path,
+    destination: Path,
+    contract: dict[str, Any],
+    candidate_model: str | None,
+    baseline_model: str | None,
+    identities: dict[str, str],
+    *,
+    case: str | None = None,
+) -> dict[str, Any]:
     baseline = baseline_model or contract["model"]
     destination.mkdir(parents=True, exist_ok=False)
-    identities = _identities([experiment])
     report: dict[str, Any] = {
         "schema_version": 1,
         "decision": "inconclusive",
@@ -226,6 +286,7 @@ def evaluate_model(
     }
     request = {
         "experiment": str(experiment),
+        "case": case,
         "identities": identities,
         "baseline": baseline,
         "candidate": candidate_model or baseline,
@@ -276,7 +337,7 @@ def evaluate_model(
         try:
             inspected = run("inspect", baseline, "inspect")
             _verify_files(identities)
-            identities.update(_identities([Path(path) for path in inspected["files"]]))
+            identities.update(_identities([Path(path) for path in inspected["files"] if path not in identities]))
             report["settings"] = request["settings"] = inspected["settings"]
             if candidate_model is None:
                 report["measurement"] = run("measure", baseline, "measurement")
@@ -315,6 +376,7 @@ def evaluate_model(
             _verify_files(identities)
         except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
             report["decision"], report["reasons"] = "inconclusive", [str(error)]
+    report["identities"] = identities.copy()
     _write(destination / "report.json", report)
     return report
 
@@ -354,12 +416,14 @@ def main() -> None:
     result = evaluate_model(
         args.workload, output=args.output, candidate_model=args.candidate_model, baseline_model=args.baseline_model
     )
-    print(  # ruff: ignore[print]
-        json.dumps(
-            {key: result.get(key) for key in ("decision", "reasons", "output_error_policy", "feedback")}
-            | {"report": str(args.output.resolve() / "report.json")}
-        )
-    )
+    summary = {key: result.get(key) for key in ("decision", "reasons", "output_error_policy", "feedback")}
+    if "cases" in result:
+        summary["cases"] = {
+            name: {key: case.get(key) for key in ("decision", "reasons", "feedback", "report")}
+            for name, case in result["cases"].items()
+        }
+    summary["report"] = str(args.output.resolve() / "report.json")
+    print(json.dumps(summary))  # ruff: ignore[print]
 
 
 if __name__ == "__main__":

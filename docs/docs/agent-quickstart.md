@@ -20,6 +20,11 @@ The owner defines acceptable output quality and resource budgets.
 
 Use `strict=True` when incomplete model metrics must stop the task; it raises `IncompleteAnalysisError`.
 
+For script-free batch-one FP32 inference, use the [autoresearch contract](autoresearch.md). A named `cases` object
+accepts a small fixed set of caller-supplied inputs with shared models, settings and output-error ceilings.
+Preserve every case's report and hashes. Any discard discards the set; otherwise any inconclusive remains
+inconclusive. Promote only when all cases keep. Without numerical ceilings, fidelity remains report-only.
+
 ## Pick one API
 
 | Task | Use |

@@ -41,7 +41,10 @@ def _factory(reference: str, directory: Path) -> tuple[Any, list[Path]]:
     sources = {path for path in (source, module.__file__) if path is not None}
     if not sources:
         raise ValueError("Cannot locate the model factory's source for experiment identity.")
-    return factory, [Path(path).resolve() for path in sorted(sources)]
+    if module_name.endswith(".py"):
+        sources.add(str(directory / module_name))
+    # Keep caller paths so retargeted symlinks cannot silently change the experiment.
+    return factory, [Path(path).absolute() for path in sorted(sources)]
 
 
 def _require_fp32(value: torch.Tensor) -> None:
@@ -105,10 +108,12 @@ def _outputs(value: Any) -> Any:
 
 def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     """Load a model contract, construct inputs and execute one worker phase."""
-    from .autoresearch import _settings
+    from .autoresearch import _case_contracts, _settings
 
     path = Path(request["experiment"])
     contract = json.loads(path.read_text(encoding="utf-8"))
+    contracts = _case_contracts(contract)
+    contract = contracts[request.get("case")]
     if not isinstance(contract, dict) or contract.keys() - {
         "model",
         "model_kwargs",
@@ -158,8 +163,13 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     declared_files = contract.get("files", [])
     if not isinstance(declared_files, list) or any(not isinstance(item, str) for item in declared_files):
         raise ValueError("files must be a list of dependency paths.")
-    files = [str((path.parent / item).resolve()) for item in declared_files]
-    files.extend(str((path.parent / contract[name]).resolve()) for name in ("inputs", "checkpoint") if name in contract)
+    files = [str((path.parent / item).absolute()) for item in declared_files]
+    files.extend(
+        str((path.parent / case[name]).absolute())
+        for case in contracts.values()
+        for name in ("inputs", "checkpoint")
+        if name in case
+    )
     torch.set_num_threads(threads)
     torch.set_default_dtype(torch.float32)
     torch.backends.cuda.matmul.allow_tf32 = False

@@ -4,6 +4,7 @@
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
 import math
+import os
 import platform
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
@@ -159,7 +160,7 @@ def _benchmark_context(
 ) -> dict[str, Any]:
     processor = _processor()
     device_name = torch.cuda.get_device_name(device) if device.type == "cuda" else processor
-    return {
+    context = {
         "torchscan_version": _package_version(),
         "torch_version": str(torch.__version__),
         "python_version": platform.python_version(),
@@ -178,6 +179,9 @@ def _benchmark_context(
         "min_run_time": min_run_time,
         "min_repeats": min_repeats,
     }
+    if device.type == "mps":
+        context["mps_fallback_env"] = os.environ.get("PYTORCH_ENABLE_MPS_FALLBACK")
+    return context
 
 
 def measure_latency(
@@ -231,7 +235,11 @@ def measure_latency(
     _validate_timing_settings(workload, work_units, work_unit, warmup, min_run_time, min_repeats)
     input_metadata = _describe(inputs)
     normalized_device, synchronize = _synchronizer(torch.device(device))
+    context = _benchmark_context(
+        normalized_device, inputs, work_units, work_unit, warmup, min_run_time, min_repeats, torch.get_num_threads()
+    )
     first_call, measurement, threads = _run_timing(workload, synchronize, warmup, min_run_time, min_repeats)
+    context["num_threads"] = threads
     samples = measurement.raw_times
 
     if any(not _positive_finite(value) for value in [first_call, *samples]):
@@ -242,9 +250,7 @@ def measure_latency(
         raise RuntimeError("Throughput must be positive and finite; adjust work_units.")
     return {
         "schema_version": 1,
-        "context": _benchmark_context(
-            normalized_device, inputs, work_units, work_unit, warmup, min_run_time, min_repeats, threads
-        ),
+        "context": context,
         "inputs": input_metadata,
         "totals": {
             name: metric_result(status="complete", value=value, unit=unit, scope=scope, method=method)

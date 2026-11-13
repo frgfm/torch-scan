@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from unittest.mock import Mock
 
 import pytest
 import torch
@@ -118,3 +119,50 @@ def test_latency_variability_labels(latency, label):
     result["latency_change"] = "faster"
     with pytest.raises(ValueError, match="Latency change"):
         render_report(result)
+
+
+@pytest.mark.parametrize(
+    ("before_value", "after_value", "compatible"),
+    [
+        (None, None, True),
+        ("0", "0", True),
+        ("1", "1", True),
+        (None, "0", False),
+        ("0", "1", False),
+        ("unsupported", "unsupported", False),
+        (False, False, False),
+    ],
+)
+def test_mps_fallback_comparison(before_value, after_value, compatible):
+    before, after = reports()
+    # Synthetic saved contexts exercise compatibility without claiming MPS execution.
+    for report, value in ((before, before_value), (after, after_value)):
+        report["context"].update(device="mps", mps_fallback_env=value)
+    check = Mock(return_value=True)
+    if compatible:
+        result = compare_benchmarks(before, after, check=check)
+        assert result["totals"]["latency"]["delta"] == pytest.approx(-0.01)
+        assert "Output check passed" in render_report(result)
+        check.assert_called_once_with()
+    else:
+        with pytest.raises(ValueError, match="mps_fallback_env"):
+            compare_benchmarks(before, after, check=check)
+        check.assert_not_called()
+
+
+@pytest.mark.parametrize("missing", ["before", "after", "both"])
+def test_missing_mps_fallback_requires_new_measurements(missing):
+    before, after = reports()
+    archived = compare_benchmarks(before, after, check=lambda: True)
+    for name, report in (("before", before), ("after", after)):
+        report["context"]["device"] = "mps"
+        if missing not in (name, "both"):
+            report["context"]["mps_fallback_env"] = None
+    check = Mock(return_value=True)
+    with pytest.raises(ValueError, match="mps_fallback_env"):
+        compare_benchmarks(before, after, check=check)
+    check.assert_not_called()
+    for report in (archived["before"], archived["after"]):
+        report["context"]["device"] = "mps"
+    # Previously saved comparisons remain readable with their original evidence.
+    assert "Output check passed" in render_report(archived)

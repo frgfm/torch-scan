@@ -73,7 +73,7 @@ def render_benchmark(report: dict[str, Any], *, title: str) -> str:
     changes: dict[str, Any] = {}
     if comparison:
         before = _validate_benchmark(before)
-        _matching_context(before, after)
+        _matching_context(before, after, allow_legacy_mps=True)
         if (
             type(report.get("schema_version")) is not int
             or report["schema_version"] != 1

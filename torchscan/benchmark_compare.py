@@ -50,7 +50,7 @@ def _validate_benchmark(report: object) -> BenchmarkReport:
     return cast(BenchmarkReport, report)
 
 
-def _matching_context(before: BenchmarkReport, after: BenchmarkReport) -> None:
+def _matching_context(before: BenchmarkReport, after: BenchmarkReport, *, allow_legacy_mps: bool = False) -> None:
     required = (
         "device",
         "device_name",
@@ -65,6 +65,10 @@ def _matching_context(before: BenchmarkReport, after: BenchmarkReport) -> None:
         "work_unit",
         "inputs_source",
     )
+    mps = before["context"].get("device") == "mps"
+    legacy_mps = all("mps_fallback_env" not in report["context"] for report in (before, after))
+    if mps and not (allow_legacy_mps and legacy_mps):
+        required += ("mps_fallback_env",)
     for key in required:
         if (
             key not in before["context"]
@@ -72,6 +76,8 @@ def _matching_context(before: BenchmarkReport, after: BenchmarkReport) -> None:
             or before["context"][key] != after["context"][key]
         ):
             raise ValueError(f"Benchmark contexts differ or are missing: {key}.")
+    if mps and not legacy_mps and before["context"]["mps_fallback_env"] not in (None, "0", "1"):
+        raise ValueError("Unknown MPS fallback environment configuration: mps_fallback_env.")
     if before["context"]["inputs_source"] != "caller_supplied" or before["inputs"] != after["inputs"]:
         raise ValueError("Comparisons require matching caller-supplied input metadata.")
 

@@ -3,7 +3,7 @@
 # This program is licensed under the Apache License 2.0.
 # See LICENSE or go to <https://www.apache.org/licenses/LICENSE-2.0> for full license details.
 
-"""Small shape formulas used only when the installed PyTorch has no formula.
+"""Scoped shape formulas that fill gaps and correct upstream counting errors.
 
 These follow the shape-formula contract shared by PyTorch 2.1 and newer releases.
 They never register in PyTorch's process-global mapping.
@@ -12,6 +12,8 @@ They never register in PyTorch's process-global mapping.
 from functools import partial
 from math import prod
 from typing import Any
+
+from torch.utils.flop_counter import conv_flop_count
 
 from .modules._pooling import adaptive_visits
 from .modules._primitives import gelu_flops, rmsnorm_rows, softmax_counts
@@ -306,6 +308,24 @@ def _grouped_mm(input_shape: Any, weight: Any, *_args: Any, **_kwargs: Any) -> i
     return 2 * prod(input_shape) * weight[-1]
 
 
+def _convolution_backward(
+    grad_out_shape: Any,
+    input_shape: Any,
+    weight_shape: Any,
+    _bias: Any,
+    _stride: Any,
+    _padding: Any,
+    _dilation: Any,
+    transposed: bool,
+    _output_padding: Any,
+    _groups: int,
+    output_mask: Any,
+    **_kwargs: Any,
+) -> int:
+    # Each requested input/weight gradient has the forward MAC count; weights already encode groups.
+    return conv_flop_count(input_shape, weight_shape, grad_out_shape, transposed) * sum(output_mask[:2])
+
+
 def _add_product(*_args: Any, out_shape: Any, value: Any = 1, **_kwargs: Any) -> int:
     if len(_args) > 3:
         value = _args[3]
@@ -342,6 +362,7 @@ FORMULAS = {
     **dict.fromkeys(["norm", "linalg_vector_norm"], _norm),
     **dict.fromkeys(["dot", "vdot", "mv"], _dot),
     "_grouped_mm": _grouped_mm,
+    "convolution_backward": _convolution_backward,
     **dict.fromkeys(["addcmul", "addcmul_", "addcdiv", "addcdiv_"], _add_product),
     **dict.fromkeys(["clamp", "clamp_"], _clamp),
     **{f"max_pool{rank}d_with_indices": partial(_pool, rank=rank, maximum=True) for rank in (2, 3)},

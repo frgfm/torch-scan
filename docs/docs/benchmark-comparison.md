@@ -52,6 +52,13 @@ revisions, model revisions, precision, execution mode, transfers, and state in t
 counts and timing settings remain visible so a thread-count experiment is possible. Only complete metrics with the
 same method, scope, and unit receive `after - before` deltas. Missing or incomplete metrics keep unknown deltas.
 
+New MPS comparisons require matching recorded `mps_fallback_env` values (`"0"`, `"1"`, or observed-unset `null`).
+Missing provenance, differing values, and unsupported strings raise before the output check or numeric deltas.
+Explicit `"0"` and observed-unset `null` are distinct snapshots. Re-measure older MPS reports for new comparisons;
+previously saved comparisons still render with their original evidence. The snapshot records the environment before
+timing, and does not prove GPU-only execution: PyTorch can cache the option during initialization. Set
+`PYTORCH_ENABLE_MPS_FALLBACK` before starting Python and keep it unchanged during every measurement pass.
+
 `latency_change` is `faster`, `slower`, `within_variability`, or `unavailable`. A median change no larger than the larger
 run's interquartile range (IQR) is labelled `within_variability`. This rule describes observed spread; it is not a
 statistical significance test or protection against thermal drift, execution order, or background load. Repeat runs

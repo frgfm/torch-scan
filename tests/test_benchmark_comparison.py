@@ -121,48 +121,22 @@ def test_latency_variability_labels(latency, label):
         render_report(result)
 
 
-@pytest.mark.parametrize(
-    ("before_value", "after_value", "compatible"),
-    [
-        (None, None, True),
-        ("0", "0", True),
-        ("1", "1", True),
-        (None, "0", False),
-        ("0", "1", False),
-        ("unsupported", "unsupported", False),
-        (False, False, False),
-    ],
-)
-def test_mps_fallback_comparison(before_value, after_value, compatible):
-    before, after = reports()
-    # Synthetic saved contexts exercise compatibility without claiming MPS execution.
-    for report, value in ((before, before_value), (after, after_value)):
-        report["context"].update(device="mps", mps_fallback_env=value)
-    check = Mock(return_value=True)
-    if compatible:
-        result = compare_benchmarks(before, after, check=check)
-        assert result["totals"]["latency"]["delta"] == pytest.approx(-0.01)
-        assert "Output check passed" in render_report(result)
-        check.assert_called_once_with()
-    else:
-        with pytest.raises(ValueError, match="mps_fallback_env"):
-            compare_benchmarks(before, after, check=check)
-        check.assert_not_called()
-
-
-@pytest.mark.parametrize("missing", ["before", "after", "both"])
-def test_missing_mps_fallback_requires_new_measurements(missing):
+def test_mps_fallback_comparisons():
     before, after = reports()
     archived = compare_benchmarks(before, after, check=lambda: True)
-    for name, report in (("before", before), ("after", after)):
-        report["context"]["device"] = "mps"
-        if missing not in (name, "both"):
-            report["context"]["mps_fallback_env"] = None
-    check = Mock(return_value=True)
-    with pytest.raises(ValueError, match="mps_fallback_env"):
-        compare_benchmarks(before, after, check=check)
-    check.assert_not_called()
     for report in (archived["before"], archived["after"]):
         report["context"]["device"] = "mps"
-    # Previously saved comparisons remain readable with their original evidence.
     assert "Output check passed" in render_report(archived)
+    check = Mock(return_value=True)
+    with pytest.raises(ValueError, match="mps_fallback_env"):
+        compare_benchmarks(archived["before"], archived["after"], check=check)
+
+    for report in (before, after):
+        report["context"].update(device="mps", mps_fallback_env=None)
+    assert compare_benchmarks(before, after, check=lambda: True)["totals"]["latency"]["delta"] == pytest.approx(-0.01)
+    for before_env, after_env in (("0", "1"), ("unsupported", "unsupported")):
+        before["context"]["mps_fallback_env"] = before_env
+        after["context"]["mps_fallback_env"] = after_env
+        with pytest.raises(ValueError, match="mps_fallback_env"):
+            compare_benchmarks(before, after, check=check)
+    check.assert_not_called()

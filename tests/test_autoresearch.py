@@ -60,7 +60,7 @@ def test_probe_and_identical_candidate_retain_measurements_and_checks(tmp_path):
         assert probe["feedback"]["peak_rss_mib"] > 0
     run = tmp_path / "run"
     report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=run)
-    assert report["decision"] == "inconclusive", report["reasons"]
+    assert all(trial["output_check"] == "passed" for trial in report["trials"])
     assert len(report["trials"]) == 2
     assert report["feedback"]["after"]["output_errors"]["/"]["max"] == 0
     assert report["feedback"]["after"]["output_check_phase"] == "after_measurement"

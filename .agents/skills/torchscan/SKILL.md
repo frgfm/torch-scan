@@ -58,6 +58,13 @@ Use the smallest API that answers the request:
 
 For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Prefer a JSON model/input
 contract. Preserve the contract, inputs and original baseline; edit the candidate model and keep it only on `keep`.
+For several fixed inputs, use the same contract with a named `cases` object instead of top-level inputs. Cases
+accept only args/kwargs or saved inputs; the model, FP32 execution, settings and numerical limits stay shared.
+Retain every case's feedback and report path. Any discard discards the set; otherwise any inconclusive remains
+inconclusive. Only all keeps permit promotion. Never average gains across cases or treat incomplete memory as zero.
+The manifest, all saved inputs, sources and declared dependencies share hashes across the run. A changed contract
+or source starts a different experiment; it cannot refresh the identity midway through a set. Keep the set small
+and caller supplied; do not add dataset loaders, training, precision search or a scheduler.
 An initial `measured` result is feedback, not an optimization verdict.
 Optimize batch-one inference latency at fixed FP32 precision. Do not change the batch size, precision or quantize candidates.
 Large-batch training is a separate future workflow. First, warmed and post-measurement output checks must all pass;

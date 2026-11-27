@@ -60,4 +60,34 @@ The checked-in `examples/autoresearch/workload.json` and `models.py` demonstrate
 fusion without downloading weights. Install `.[model-test]`, then run the same command with
 `--candidate-model models.py:candidate` and the example contract.
 
+## Release control pack
+
+From a checkout with `.[model-test]` installed, run the fixed control pack on an idle target:
+
+```shell
+python examples/autoresearch/control_pack.py --device cpu --output /tmp/torchscan-controls-cpu
+python examples/autoresearch/control_pack.py --device cuda --output /tmp/torchscan-controls-cuda
+```
+
+Use a new output directory outside the checkout. The pack runs ten identical-model controls, a redundant FP32
+toy against an equivalent single ReLU, a wrong-output candidate, a compiled toy, and the ResNet18 fusion example.
+Toys require zero maximum error. ResNet limits mean error to 0.0001 and p99 and maximum error to 0.001.
+Each comparison uses batch one, seed 0, one PyTorch compute thread, and three alternating process pairs plus
+confirmation for tentative keeps.
+
+`summary.json` records every verdict and both release gates: zero false keeps and rejection of incorrect values.
+A failed gate exits nonzero. Review inconclusive gates before relying on a run. `native.json` compares
+independent PyTorch timing with the median across TorchScan pairs, including confirmation. It saves raw blocks
+and labels differences over 20% inconclusive. CUDA timing synchronizes each clock boundary. The compiled toy
+saves construction, compiler diagnostics, and first-call time (including lazy compilation) separately from warmed timing.
+
+Keep the contracts, configuration, worker logs, JSON/HTML, and compiler cache outside Git. Missing CUDA is
+recorded as unvalidated. Wheel and source-distribution checks exercise baseline measurement and wrong-output
+rejection through the installed CLI outside the checkout.
+
+In two prior runs on a shared Apple M3 Pro CPU, both gates passed and the exact toy optimization was kept.
+Native warmed latency fell from about 45–46 µs to 6 µs. ResNet fusion remained inconclusive in both runs,
+and the compiled toy was inconclusive on the combined revision. See the
+[PR results](https://github.com/frgfm/torch-scan/pull/213) for revision-specific measurements.
+
 ::: torchscan.autoresearch.evaluate_model

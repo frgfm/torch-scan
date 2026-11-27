@@ -205,6 +205,9 @@ jobs:
           assert 'Output check passed' in torchscan.render_report(comparison);
           assert callable(torchscan.compare_reports);
           assert callable(torchscan.process.measure_peak_memory)"
+      - name: Smoke-test installed autoresearch subprocesses
+        working-directory: ${{ runner.temp }}
+        run: python "$GITHUB_WORKSPACE/.github/verify_autoresearch.py"
 
   publish:
     if: github.event_name == 'release' && !github.event.release.prerelease

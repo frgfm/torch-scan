@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from unittest.mock import Mock
 
 import pytest
 import torch
@@ -118,3 +119,24 @@ def test_latency_variability_labels(latency, label):
     result["latency_change"] = "faster"
     with pytest.raises(ValueError, match="Latency change"):
         render_report(result)
+
+
+def test_mps_fallback_comparisons():
+    before, after = reports()
+    archived = compare_benchmarks(before, after, check=lambda: True)
+    for report in (archived["before"], archived["after"]):
+        report["context"]["device"] = "mps"
+    assert "Output check passed" in render_report(archived)
+    check = Mock(return_value=True)
+    with pytest.raises(ValueError, match="mps_fallback_env"):
+        compare_benchmarks(archived["before"], archived["after"], check=check)
+
+    for report in (before, after):
+        report["context"].update(device="mps", mps_fallback_env=None)
+    assert compare_benchmarks(before, after, check=lambda: True)["totals"]["latency"]["delta"] == pytest.approx(-0.01)
+    for before_env, after_env in (("0", "1"), ("unsupported", "unsupported")):
+        before["context"]["mps_fallback_env"] = before_env
+        after["context"]["mps_fallback_env"] = after_env
+        with pytest.raises(ValueError, match="mps_fallback_env"):
+            compare_benchmarks(before, after, check=check)
+    check.assert_not_called()

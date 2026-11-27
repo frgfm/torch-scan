@@ -7,7 +7,7 @@ import torch
 from torch.utils.benchmark import Measurement, Timer
 
 from torchscan import benchmark as timing
-from torchscan import measure_latency
+from torchscan import measure_latency, measure_workload
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps", "cuda"])
@@ -33,6 +33,7 @@ def test_workload_report(device):
     assert report["inputs"]["shape"] == [8, 64]
     assert report["context"]["num_threads"] == threads == torch.get_num_threads()
     assert not model.training
+    assert ("mps_fallback_env" in report["context"]) == (device == "mps")
     assert json.loads(json.dumps(report, allow_nan=False)) == report
 
 
@@ -55,12 +56,15 @@ def test_completed_timing_and_statistics(monkeypatch, device, invalid):
     monkeypatch.setattr(timing, "_benchmark_tools", lambda: (factory, Measurement))
     ticks = iter([1.0, 1.0 if invalid == "duration" else 1.5, 2.0])
     monkeypatch.setattr(timing.time, "perf_counter", lambda: next(ticks))
+    monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     options = {"device": device, "warmup": 0, "work_units": 1e308 if invalid == "throughput" else 8}
     if invalid:
         with pytest.raises(RuntimeError, match=r"durations|Throughput"):
             measure_latency(lambda: None, **options)
         return
-    report = measure_latency(lambda: None, **options)
+    report = measure_latency(lambda: monkeypatch.setenv("PYTORCH_ENABLE_MPS_FALLBACK", "0"), **options)
+    if device == "mps":
+        assert report["context"]["mps_fallback_env"] == "1"
     factory.call_args.kwargs["timer"]()  # The native timer receives the selected-device completion clock.
     assert sync.call_count == 3
     assert sync.call_args.args == ((torch.device("cuda:1"),) if device == "cuda" else ())
@@ -130,3 +134,10 @@ def test_missing_benchmark_dependencies(monkeypatch):
     with pytest.raises(ImportError, match="upgrade PyTorch"):
         measure_latency(workload, device="cpu")
     workload.assert_not_called()
+
+
+def test_mps_metadata_without_timing(monkeypatch):
+    monkeypatch.delenv("PYTORCH_ENABLE_MPS_FALLBACK", raising=False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    report = measure_workload(Mock(side_effect=AssertionError), device="mps", metrics=(), print_summary=False)
+    assert report["context"]["mps_fallback_env"] is None

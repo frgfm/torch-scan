@@ -64,7 +64,7 @@ def test_probe_and_identical_candidate_retain_measurements_and_checks(tmp_path):
         assert probe["feedback"]["peak_rss_mib"] > 0
     run = tmp_path / "run"
     report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=run)
-    assert report["decision"] == "inconclusive", report["reasons"]
+    assert all(trial["output_check"] == "passed" for trial in report["trials"])
     assert len(report["trials"]) == 2
     assert report["feedback"]["after"]["output_errors"]["/"]["max"] == 0
     assert report["feedback"]["after"]["output_check_phase"] == "after_measurement"
@@ -138,6 +138,43 @@ def test_saved_inputs_and_integer_descriptors(tmp_path):
 def test_fp32_input_contract(dtype):
     with pytest.raises(ValueError, match="FP32"):
         _tensor(torch.ones(1, dtype=dtype), "cpu", descriptors=False)
+
+
+def test_seeded_float_distributions():
+    shape = {"shape": [1, 32_768]}
+    torch.manual_seed(42)
+    legacy = _tensor(shape, "cpu")
+    torch.manual_seed(42)
+    assert torch.equal(_tensor(shape | {"distribution": "normal"}, "cpu"), legacy)
+    normal = _tensor(shape | {"distribution": "normal", "mean": 2, "std": 0.5}, "cpu")
+    assert normal.mean().item() == pytest.approx(2, abs=0.02)
+    assert normal.std().item() == pytest.approx(0.5, abs=0.02)
+    recipe = shape | {"distribution": "uniform", "low": -2, "high": 3}
+    torch.manual_seed(42)
+    uniform = _tensor(recipe, "cpu")
+    assert uniform.dtype == torch.float32
+    assert -2 <= uniform.min() < uniform.max() < 3
+    torch.manual_seed(42)
+    assert torch.equal(_tensor(recipe, "cpu"), uniform)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"distribution": "unknown"},
+        {"distribution": "uniform", "std": 1},
+        {"fill": 1, "distribution": "normal"},
+        {"dtype": "int64", "distribution": "normal"},
+        {"std": 0},
+        {"std": True},
+        {"mean": float("inf")},
+        {"distribution": "uniform", "low": 2, "high": 1},
+        {"distribution": "uniform", "high": 1e100},
+    ],
+)
+def test_invalid_float_recipe(options):
+    with pytest.raises(ValueError):
+        _tensor({"shape": [1, 4], **options}, "cpu")
 
 
 def test_stale_bytecode_and_mid_run_source_changes_are_not_accepted(tmp_path):
@@ -269,7 +306,8 @@ def test_candidate_passing_one_input_but_failing_another(tmp_path, enforced):
     if enforced:
         assert report["decision"] == "discard", report["reasons"]
     assert report["output_error_policy"] == ("enforced" if enforced else "report_only")
-    zeros, ones = report["cases"].values()
+    assert set(report["cases"]) == {"zeros", "ones"}
+    zeros, ones = (json.loads(Path(item["report"]).read_text()) for item in report["cases"].values())
     assert all(pair["output_check"] == "passed" for pair in zeros["trials"])
     assert zeros["feedback"]["after"]["latency_ms"] > 0
     assert zeros["feedback"]["after"]["pytorch_memory_scope"] == "pytorch_tensor_bytes"
@@ -281,15 +319,17 @@ def test_candidate_passing_one_input_but_failing_another(tmp_path, enforced):
         assert all(pair["output_check"] == "passed" for pair in ones["trials"])
     assert ones["feedback"]["after"]["output_errors"]["/"]["max"] == pytest.approx(0.2)
     assert str(tmp_path / "inputs.pt") in zeros["identities"]
-    for index, case in enumerate(report["cases"].values(), 1):
-        saved = json.loads(Path(case["report"]).read_text())
-        assert saved == {key: value for key, value in case.items() if key != "report"}
-        assert (tmp_path / "run" / f"case-{index}" / "reference.pt").is_file()
+    assert report["cases"]["ones"]["feedback"] == ones["feedback"]
+    assert len(list((tmp_path / "run").glob("case-*/reference.pt"))) == 2
+    assert len(list((tmp_path / "run").glob("case-*/inspect.json"))) == 1
     assert json.loads((tmp_path / "run" / "report.json").read_text()) == report
 
 
 def test_case_probe_and_fixed_original_reference(tmp_path):
     path = case_manifest(tmp_path, check={"absolute_error": {"max": 0.1}})
+    contract = json.loads(path.read_text())
+    contract["cases"]["ones"] = {"args": [{"shape": [1, 4], "distribution": "uniform", "low": -2, "high": 2}]}
+    path.write_text(json.dumps(contract))
     probe = autoresearch.evaluate_model(path, output=tmp_path / "probe")
     assert probe["decision"] == "measured", probe["reasons"]
     assert all(case["feedback"]["latency_ms"] > 0 for case in probe["cases"].values())
@@ -352,7 +392,7 @@ def test_all_case_performance_and_memory_gates(tmp_path, case_worker, second, de
     assert report["decision"] == decision, report
     assert report["cases"]["zeros"]["decision"] == "keep", report["cases"]["zeros"]["reasons"]
     assert report["cases"]["ones"]["decision"] == decision
-    assert len(report["cases"]["ones"]["trials"]) == 2
+    assert len(json.loads(Path(report["cases"]["ones"]["report"]).read_text())["trials"]) == 2
 
 
 def test_discard_dominates_inconclusive_and_later_cases_still_run(tmp_path, case_worker):
@@ -363,21 +403,37 @@ def test_discard_dominates_inconclusive_and_later_cases_still_run(tmp_path, case
     assert report["decision"] == "discard"
 
 
-@pytest.mark.parametrize("changed", ["workload.json", "models.py", "inputs.pt", "reference.pt"])
-def test_changes_between_cases_cannot_become_a_new_fixed_experiment(tmp_path, monkeypatch, case_worker, changed):
-    path = case_manifest(tmp_path, settings={"trials": 2})
+@pytest.mark.parametrize(
+    ("changed", "symlink"),
+    [(name, False) for name in ("workload.json", "models.py", "inputs.pt", "reference.pt")]
+    + [
+        pytest.param(name, True, marks=pytest.mark.skipif(os.name != "posix", reason="Needs symlink support."))
+        for name in ("models.py", "inputs.pt", "extra.txt")
+    ],
+)
+def test_changes_between_cases_invalidate_the_experiment(tmp_path, monkeypatch, case_worker, changed, symlink):
+    path = case_manifest(tmp_path, settings={"trials": 2}, files=["extra.txt"])
     contract = json.loads(path.read_text())
     contract["cases"]["ones"] = {"inputs": "inputs.pt"}
     path.write_text(json.dumps(contract))
     (tmp_path / "inputs.pt").write_bytes(b"saved inputs")
+    (tmp_path / "extra.txt").write_bytes(b"declared dependency")
+    target = tmp_path / "run" / "case-1" / changed if changed == "reference.pt" else tmp_path / changed
+    if symlink:
+        original = target.rename(target.with_name("original-" + changed))
+        replacement = target.with_name("changed-" + changed)
+        replacement.write_bytes(original.read_bytes() + b" ")
+        target.symlink_to(original)
     worker = case_worker({"zeros": (0.8, 90), "ones": (0.8, 90)})
 
     def mutate(request, artifact, timeout):
-        result = worker(request, artifact, timeout)
-        if request["case"] == "ones" and request["mode"] == "inspect":
-            target = tmp_path / "run" / "case-1" / changed if changed == "reference.pt" else tmp_path / changed
-            target.write_bytes(target.read_bytes() + b" ")
-        return result
+        if request["case"] == "ones" and request["mode"] == "reference":
+            if symlink:
+                target.unlink()
+                target.symlink_to(replacement)
+            else:
+                target.write_bytes(target.read_bytes() + b" ")
+        return worker(request, artifact, timeout)
 
     monkeypatch.setattr(autoresearch, "_run_worker", mutate)
     report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=tmp_path / "run")
@@ -407,35 +463,26 @@ def test_case_manifest_cannot_mix_top_level_inputs(tmp_path):
         autoresearch.evaluate_model(path, output=tmp_path / "run")
 
 
-@pytest.mark.skipif(os.name != "posix", reason="Symlink creation may require extra privileges on Windows.")
-@pytest.mark.parametrize("name", ["models.py", "inputs.pt", "extra.txt"])
-def test_retargeted_symlinks_cannot_change_the_fixed_cases(tmp_path, monkeypatch, case_worker, name):
-    path = case_manifest(tmp_path, settings={"trials": 2}, files=["extra.txt"])
-    contract = json.loads(path.read_text())
-    contract["cases"]["ones"] = {"inputs": "inputs.pt"}
-    path.write_text(json.dumps(contract))
-    (tmp_path / "inputs.pt").write_bytes(b"saved inputs")
-    (tmp_path / "extra.txt").write_bytes(b"declared dependency")
-    alias = tmp_path / name
-    original = alias.with_name("original-" + name)
-    alias.rename(original)
-    replacement = alias.with_name("changed-" + name)
-    replacement.write_bytes(original.read_bytes() + b" ")
-    alias.symlink_to(original)
-    worker = case_worker({"zeros": (0.8, 90), "ones": (0.8, 90)})
-
-    def mutate(request, artifact, timeout):
-        result = worker(request, artifact, timeout)
-        if request["case"] == "ones" and request["mode"] == "inspect":
-            alias.unlink()
-            alias.symlink_to(replacement)
-        return result
-
-    monkeypatch.setattr(autoresearch, "_run_worker", mutate)
-    report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=tmp_path / "run")
-    assert report["cases"]["zeros"]["decision"] == "keep"
-    assert report["decision"] == "inconclusive"
-    assert "changed" in report["cases"]["ones"]["reasons"][0]
+def test_worker_rejects_new_model_source(tmp_path, monkeypatch):
+    path = workload(tmp_path, model="recipe_model:baseline")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    source = (tmp_path / "models.py").rename(tmp_path / "recipe_model.py")
+    request = {"experiment": str(path), "baseline": "recipe_model:baseline", "candidate": None}
+    inspected = model_worker({**request, "mode": "inspect"})
+    package = tmp_path / "recipe_model"
+    package.mkdir()
+    (package / "__init__.py").write_bytes(source.read_bytes())
+    monkeypatch.delitem(autoresearch.sys.modules, "recipe_model")
+    with pytest.raises(ValueError, match="Model source changed"):
+        model_worker(
+            request
+            | {
+                "mode": "measure",
+                "implementation": request["baseline"],
+                "settings": inspected["settings"],
+                "identities": autoresearch._identities([Path(file) for file in inspected["files"]]),
+            }
+        )
 
 
 @pytest.mark.parametrize("multiple", [False, True])
@@ -443,7 +490,14 @@ def test_cli_preserves_feedback_and_case_report_paths(tmp_path, monkeypatch, cap
     feedback = {"after": {"latency_ms": 2, "peak_rss_mib": 3, "output_errors": {"/": {"max": 0.2}}}}
     result = {"decision": "discard", "reasons": ["Failed check"], "output_error_policy": "enforced"}
     if multiple:
-        result["cases"] = {"sample": {**result, "feedback": feedback, "report": "case-1/report.json", "trials": []}}
+        result["cases"] = {
+            "sample": {
+                "decision": "discard",
+                "reasons": ["Failed check"],
+                "feedback": feedback,
+                "report": "case-1/report.json",
+            }
+        }
     else:
         result["feedback"] = feedback
     evaluate = MagicMock(return_value=result)
@@ -454,12 +508,8 @@ def test_cli_preserves_feedback_and_case_report_paths(tmp_path, monkeypatch, cap
     assert summary["decision"] == "discard"
     assert summary["report"] == str(tmp_path / "report.json")
     if multiple:
-        assert summary["cases"]["sample"] == {
-            "decision": "discard",
-            "reasons": ["Failed check"],
-            "feedback": feedback,
-            "report": "case-1/report.json",
-        }
+        assert summary["cases"] == result["cases"]
+        assert "feedback" not in summary
     else:
         assert summary["feedback"] == feedback
         assert "cases" not in summary

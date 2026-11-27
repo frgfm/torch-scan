@@ -54,7 +54,7 @@ def _require_fp32(value: torch.Tensor) -> None:
 
 def _tensor(value: Any, device: str, *, descriptors: bool = True) -> Any:
     if descriptors and isinstance(value, dict) and "shape" in value:
-        if value.keys() - {"shape", "dtype", "fill", "low", "high"}:
+        if value.keys() - {"shape", "dtype", "fill", "low", "high", "distribution", "mean", "std"}:
             raise ValueError("Unknown tensor descriptor fields.")
         shape = value["shape"]
         if not isinstance(shape, list) or any(type(size) is not int or size < 1 for size in shape):
@@ -67,22 +67,42 @@ def _tensor(value: Any, device: str, *, descriptors: bool = True) -> Any:
         }.get(value.get("dtype", "float32"))
         if dtype is None:
             raise ValueError("Input dtype must be float32, int64, int32 or bool for fixed-FP32 comparisons.")
-        if "fill" in value:
-            if "low" in value or "high" in value:
-                raise ValueError("Choose fill or integer low/high bounds.")
+        options = value.keys() - {"shape", "dtype"}
+        if "fill" in options:
+            if options != {"fill"}:
+                raise ValueError("Choose fill or a random distribution.")
             return torch.full(shape, value["fill"], dtype=dtype, device=device)
-        if (dtype.is_floating_point or dtype == torch.bool) and ("low" in value or "high" in value):
-            raise ValueError(
-                "low/high bounds apply to integer descriptors; floating tensors use normal samples or fill."
-            )
+        if dtype.is_floating_point:
+            distribution = value.get("distribution", "normal")
+            if distribution == "normal" and options <= {"distribution", "mean", "std"}:
+                mean, std = value.get("mean", 0), value.get("std", 1)
+                if (
+                    not all(type(arg) in (int, float) and abs(arg) <= torch.finfo(dtype).max for arg in (mean, std))
+                    or std <= 0
+                ):
+                    raise ValueError("Normal inputs require a finite FP32 mean and a positive finite FP32 std.")
+                if (mean, std) == (0, 1):
+                    return torch.randn(shape, dtype=dtype, device=device)
+                return torch.empty(shape, dtype=dtype, device=device).normal_(mean, std)
+            if distribution == "uniform" and options <= {"distribution", "low", "high"}:
+                low, high = value.get("low", 0), value.get("high", 1)
+                limit = torch.finfo(dtype).max
+                if (
+                    all(type(arg) in (int, float) for arg in (low, high))
+                    and -limit <= low < high <= limit
+                    and high - low <= limit
+                ):
+                    return torch.empty(shape, dtype=dtype, device=device).uniform_(low, high)
+                raise ValueError("Uniform inputs require finite FP32 bounds with low < high and a finite FP32 range.")
+            raise ValueError("Floating inputs accept normal (mean/std) or uniform (low/high) distributions.")
+        if options - {"low", "high"} or (dtype == torch.bool and options):
+            raise ValueError("Explicit distributions require float32; low/high bounds also work for integers.")
         if dtype == torch.bool:
             return torch.ones(shape, dtype=dtype, device=device)
-        if not dtype.is_floating_point:
-            low, high = value.get("low"), value.get("high")
-            if type(low) is not int or type(high) is not int or low >= high:
-                raise ValueError("Integer tensors require explicit integer low < high bounds, or fill.")
-            return torch.randint(low, high, shape, dtype=dtype, device=device)
-        return torch.randn(shape, dtype=dtype, device=device)
+        low, high = value.get("low"), value.get("high")
+        if type(low) is not int or type(high) is not int or low >= high:
+            raise ValueError("Integer tensors require explicit integer low < high bounds, or fill.")
+        return torch.randint(low, high, shape, dtype=dtype, device=device)
     if isinstance(value, torch.Tensor):
         _require_fp32(value)
         return value.to(device)
@@ -108,13 +128,16 @@ def _outputs(value: Any) -> Any:
 
 def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     """Load a model contract, construct inputs and execute one worker phase."""
-    from .autoresearch import _case_contracts, _settings
+    from .autoresearch import _settings
 
     path = Path(request["experiment"])
     contract = json.loads(path.read_text(encoding="utf-8"))
-    contracts = _case_contracts(contract)
-    contract = contracts[request.get("case")]
-    if not isinstance(contract, dict) or contract.keys() - {
+    if not isinstance(contract, dict):
+        raise ValueError("The model workload must be a JSON object.")
+    cases = contract.pop("cases", None)
+    if cases is not None:
+        contract.update(cases[request["case"]])
+    if contract.keys() - {
         "model",
         "model_kwargs",
         "checkpoint",
@@ -161,26 +184,31 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
     if request["mode"] != "inspect" and settings != request["settings"]:
         raise ValueError("Model workload settings changed between workers.")
     declared_files = contract.get("files", [])
-    if not isinstance(declared_files, list) or any(not isinstance(item, str) for item in declared_files):
-        raise ValueError("files must be a list of dependency paths.")
-    files = [str((path.parent / item).absolute()) for item in declared_files]
-    files.extend(
-        str((path.parent / case[name]).absolute())
-        for case in contracts.values()
-        for name in ("inputs", "checkpoint")
-        if name in case
-    )
     torch.set_num_threads(threads)
     torch.set_default_dtype(torch.float32)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.manual_seed(seed)
-    factory, _ = _factory(request["implementation"], path.parent)
     if request["mode"] == "inspect":
-        for reference in (contract["model"], request["baseline"], request["candidate"]):
+        if not isinstance(declared_files, list) or any(not isinstance(item, str) for item in declared_files):
+            raise ValueError("files must be a list of dependency paths.")
+        files = [str((path.parent / item).absolute()) for item in declared_files]
+        if "checkpoint" in contract:
+            files.append(str((path.parent / contract["checkpoint"]).absolute()))
+        files.extend(
+            str((path.parent / entry["inputs"]).absolute())
+            for entry in (cases.values() if cases is not None else (contract,))
+            if "inputs" in entry
+        )
+        for reference in dict.fromkeys((contract["model"], request["baseline"], request["candidate"])):
+            if reference is None:
+                continue
             _, model_sources = _factory(reference, path.parent)
             files.extend(str(source) for source in model_sources)
         return {"settings": settings, "files": files}
+    factory, sources = _factory(request["implementation"], path.parent)
+    if any(str(source) not in request["identities"] for source in sources):
+        raise ValueError("Model source changed after inspection.")
     model_kwargs = contract.get("model_kwargs", {})
     if not isinstance(model_kwargs, dict):
         raise ValueError("model_kwargs must be an object.")

@@ -24,7 +24,18 @@ An optional `checkpoint` loads a local state dict with `weights_only=True`.
 
 Use `args`/`kwargs` descriptors or `"inputs": "inputs.pt"`, saved with
 `torch.save({"args": (sample,), "kwargs": {...}}, "inputs.pt")`. Paths are relative to the contract.
-Descriptors accept `shape`, `dtype`, `fill` and integer `low`/`high` bounds; dtypes are float32, int64, int32 or bool.
+Descriptors accept `shape` and `dtype` (float32 by default, or int64, int32 or bool). Use one of these recipes:
+
+| Recipe | Descriptor fields in addition to `shape` |
+| --- | --- |
+| Constant tensor | `"fill": 0` for zeros, `"fill": 1` for ones, or another constant |
+| Normal FP32 samples | `"distribution": "normal"`, optional `mean` (default 0) and positive `std` (default 1) |
+| Uniform FP32 samples | `"distribution": "uniform"`, optional `low` (default 0) and `high` (default 1), with `low < high` |
+| Uniform integer samples | `"dtype": "int64"` or `"int32"`, with integer `low` (inclusive) and `high` (exclusive) |
+
+Float descriptors without recipe fields use the standard normal distribution. Random recipes use the contract seed
+and regenerate the same inputs for each implementation on the same device. Identical recipes with the same seed
+generate identical tensors when they are the only input in their case.
 Nested containers and scalar arguments are supported. Supply batch size one on your model's batch axis;
 TorchScan does not infer axes. Saved tensors retain their data and are never interpreted as descriptors.
 
@@ -33,14 +44,18 @@ PyTorch thread; override `device`, `seed` and `threads` at the top level. Floati
 
 ## Fixed input cases
 
-For a small set of caller-chosen inputs, replace top-level `args`/`kwargs` or `inputs` with a named `cases` object:
+Use a named `cases` object for a small set of input recipes or saved samples. For example, a classifier with a
+fixed execution path can benchmark generated tensors at the input sizes it serves. Use saved, preprocessed samples
+to exercise behavior that depends on image content, such as a detector's output filtering.
 
 ```json
 {
   "model": "torchvision.models:resnet18",
   "model_kwargs": {"weights": null},
+  "seed": 42,
   "cases": {
-    "zeros": {"args": [{"shape": [1, 3, 224, 224], "fill": 0}]},
+    "classifier-224": {"args": [{"shape": [1, 3, 224, 224], "distribution": "normal"}]},
+    "classifier-320": {"args": [{"shape": [1, 3, 320, 320], "distribution": "uniform", "low": -1, "high": 1}]},
     "saved-sample": {"inputs": "inputs.pt"}
   },
   "check": {"absolute_error": {"mean": 0.0001, "p99": 0.001}}
@@ -58,8 +73,9 @@ fixed outputs from the original model, even with `--baseline-model`. Any `discar
 when every case is measured. Gains on one case never offset a loss on another. An unchecked memory ceiling in any
 case prevents acceptance. Without numerical ceilings, all cases retain report-only fidelity semantics.
 
-The combined `report.json` contains `cases.<name>` with each full case result and its `report` path.
-Each `case-N/` directory retains the existing JSON, HTML, raw trials, confirmation, output errors and logs.
+The combined `report.json` contains `cases.<name>` with the decision, reasons, feedback and `report` path
+for each input. Follow that path for full evidence. Each `case-N/` directory retains the existing JSON, HTML,
+raw trials, confirmation, output errors and logs.
 Latency, scoped memory and errors remain separate for each case; unavailable or unmeasured evidence stays explicit.
 Initial output failures stop that case before timing, as in single-case evaluation. CLI output includes per-case
 decisions, feedback and report paths. Single-case contracts and their report layout remain supported.

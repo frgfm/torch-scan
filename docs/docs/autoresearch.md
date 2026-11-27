@@ -69,59 +69,25 @@ python examples/autoresearch/control_pack.py --device cpu --output /tmp/torchsca
 python examples/autoresearch/control_pack.py --device cuda --output /tmp/torchscan-controls-cuda
 ```
 
-The output directory must be new and outside the checkout. The pack runs ten identical-model controls,
-a redundant FP32 toy (64 ReLUs) against an exactly equivalent single ReLU, a same-shape wrong-output candidate,
-an Inductor-compiled toy, and the existing ResNet18 fusion example. It downloads no weights. All toy error ceilings
-are zero; ResNet uses mean ≤ 0.0001, p99 ≤ 0.001 and max ≤ 0.001. Batch size, FP32 precision, seed 0 and one
-PyTorch compute thread stay fixed. Three alternating process pairs use five warmups, at least five timing blocks,
-at least 0.2 seconds per measurement and the existing >3% improvement rule; a tentative keep needs confirmation.
+Use a new output directory outside the checkout. The pack runs ten identical-model controls, a redundant FP32
+toy against an equivalent single ReLU, a wrong-output candidate, a compiled toy, and the ResNet18 fusion example.
+Toys require zero maximum error. ResNet limits mean error to 0.0001 and p99 and maximum error to 0.001.
+Each comparison uses batch one, seed 0, one PyTorch compute thread, and three alternating process pairs plus
+confirmation for tentative keeps.
 
-`summary.json` records two release gates: **zero false keeps in all ten completed controls** and **rejection of
-incorrect output**. A failed gate exits nonzero. An unfinished control leaves its gate inconclusive; exit zero alone
-does not mean release approval. Inspect all positive controls and native cross-checks too. Preserve every discard
-and inconclusive verdict; do not rerun selectively until a candidate passes.
+`summary.json` records every verdict and both release gates: zero false keeps and rejection of incorrect values.
+A failed gate exits nonzero. Review inconclusive gates before relying on a run. `native.json` compares
+independent PyTorch timing with the median across TorchScan pairs, including confirmation. It saves raw blocks
+and labels differences over 20% inconclusive. CUDA timing synchronizes each clock boundary. The compiled toy
+saves construction, compiler diagnostics, and first-call time (including lazy compilation) separately from warmed timing.
 
-Native PyTorch controls time the identical toy, faster toy, compiled toy and ResNet independently using
-`torch.utils.benchmark.Timer`, with CUDA synchronization before each clock boundary. `native.json` retains raw block
-times and compares native medians with the median of autoresearch pair medians, including confirmation when present.
-A difference over 20% is a diagnostic inconclusive result, not a significance test. Native checks use the explicit
-maximum absolute-error ceiling. Construction and the first call are separate from warmed timing. The compiled
-candidate also saves PyTorch compiler timing diagnostics; its first-call wall time includes lazy compilation/cache
-loading and execution, rather than claiming pure compiler time. A new compiler cache is shared only within each pack.
+Keep the contracts, configuration, worker logs, JSON/HTML, and compiler cache outside Git. Missing CUDA is
+recorded as unvalidated. Wheel and source-distribution checks exercise baseline measurement and wrong-output
+rejection through the installed CLI outside the checkout.
 
-Keep `configuration.json`, generated contracts, `summary.json`, `native.json`, worker JSON/logs, reference tensors,
-and comparison HTML outside Git. Configuration includes the revision, tracked diff, Python/PyTorch build and device;
-CUDA also records `nvidia-smi -q`. Missing CUDA writes an explicit unvalidated result without substituting CPU.
-`cuda_gate: measured` means hardware was exercised, not that all results passed review. Ten clean controls do not
-establish a general false-positive rate. These synthetic inputs do not establish task accuracy.
-
-Wheel and source-distribution verification also runs the CLI and its child workers outside the checkout,
-checking exact identical outputs, wrong-value rejection, JSON feedback and saved HTML from the installed package.
-
-### CPU observations, 2026-11-14
-
-Revision `f5b59c6` (based on `be11b7b`) ran on an Apple M3 Pro with 36 GiB RAM, macOS 15.8.3,
-Python 3.11.13, PyTorch 2.13.0 and torchvision 0.28.0. The host was shared and under variable load;
-these are observations, not stable performance estimates or CUDA validation. Use the commands above to reproduce.
-
-All ten identical-model controls were **inconclusive**, with **zero false keeps**. The same-shape wrong-output
-candidate was **discarded** at its first reference check. Both release control gates passed on CPU.
-
-| Candidate | TorchScan before → after (ms) | Native before → after (ms) | Autoresearch decision |
-| --- | ---: | ---: | --- |
-| Single ReLU | 0.04115 → 0.00425 | 0.04646 → 0.00601 | keep, confirmed |
-| Compiled redundant toy | 0.04232 → 0.02625 | 0.04237 → 0.02689 | keep, confirmed |
-| ResNet18 fusion | 18.116 → 16.689 | 22.294 → 17.282 | inconclusive |
-
-TorchScan values are medians of pair medians, including confirmation for keeps. Native values come from separate
-warmed blocks. Two of eight native side comparisons exceeded the 20% diagnostic band: the single-ReLU candidate
-(41.6%) and the ResNet baseline (23.1%). Those cross-checks remain inconclusive. ResNet had two pairs within timing
-spread and one faster pair, so its lower aggregate median does not establish a keep. No selective reruns were made.
-Toy outputs had zero absolute error. Native fused ResNet maximum error was 0.0000023544, within its explicit ceiling.
-
-The compiled native first call took 5.842 seconds, including compilation and execution, after 0.729 seconds of
-construction/wrapping; warmed calls took 0.02689 ms. Compiler phase diagnostics were saved separately from warmed
-samples. The full contracts, hardware/configuration, JSON, reference tensors, HTML, logs and compiler cache were
-retained outside Git. **CUDA remains unvalidated**; this run supplies no accelerator speed or accuracy claim.
+In two prior runs on a shared Apple M3 Pro CPU, both gates passed and the exact toy optimization was kept.
+Native warmed latency fell from about 45–46 µs to 6 µs. ResNet fusion remained inconclusive in both runs,
+and the compiled toy was inconclusive on the combined revision. See the
+[PR results](https://github.com/frgfm/torch-scan/pull/213) for revision-specific measurements.
 
 ::: torchscan.autoresearch.evaluate_model

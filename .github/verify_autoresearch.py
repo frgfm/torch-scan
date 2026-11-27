@@ -10,45 +10,33 @@ import os
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 import tempfile
+from importlib.metadata import distribution
 from pathlib import Path
 
 import torchscan
 
-checkout = Path(__file__).resolve().parents[1]
-assert not Path(torchscan.__file__).resolve().is_relative_to(checkout), (
-    "Expected a distribution, not an editable install."
-)
+# An artifact can be installed in a virtual environment inside the checkout.
+installed = Path(distribution("torchscan").locate_file("torchscan/__init__.py")).resolve()
+assert Path(torchscan.__file__).resolve() == installed, "Expected the installed distribution."
+environment = os.environ.copy()
+environment.pop("PYTHONPATH", None)
 with tempfile.TemporaryDirectory(prefix="torchscan-artifact-") as directory:
     root = Path(directory)
-    (root / "models.py").write_text(
-        "import torch\ndef baseline(): return torch.nn.ReLU()\n"
-        "class Wrong(torch.nn.Module):\n"
-        "    def forward(self, inputs): return inputs.relu() + 1\n",
-        encoding="utf-8",
-    )
+    (root / "models.py").write_text("from torch.nn import ReLU, Sigmoid\n", encoding="utf-8")
     (root / "workload.json").write_text(
         json.dumps({
-            "model": "models.py:baseline",
-            "args": [{"shape": [1, 4]}],
+            "model": "models.py:ReLU",
+            "args": [{"shape": [1, 4], "fill": 0}],
             "check": {"absolute_error": {"max": 0}},
-            "settings": {"trials": 2, "warmup": 1, "min_run_time": 0.01, "min_repeats": 2, "min_improvement": 0.99},
+            "settings": {"warmup": 1, "min_run_time": 0.01, "min_repeats": 2},
         }),
         encoding="utf-8",
     )
-    for name, candidate in (("identical", "baseline"), ("incorrect", "Wrong")):
+    for name, candidate in (("baseline", []), ("incorrect", ["--candidate-model", "models.py:Sigmoid"])):
         completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
-            [
-                sys.executable,
-                "-m",
-                "torchscan.autoresearch",
-                "workload.json",
-                "--candidate-model",
-                f"models.py:{candidate}",
-                "--output",
-                name,
-            ],
+            [sys.executable, "-m", "torchscan.autoresearch", "workload.json", "--output", name, *candidate],
             cwd=root,
-            env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
+            env=environment,
             capture_output=True,
             text=True,
             check=True,
@@ -56,12 +44,10 @@ with tempfile.TemporaryDirectory(prefix="torchscan-artifact-") as directory:
         )
         assert json.loads(completed.stdout)["output_error_policy"] == "enforced"
         report = json.loads((root / name / "report.json").read_text())
-        if name == "identical":
-            assert report["decision"] in {"discard", "inconclusive"}, report["reasons"]
-            assert len(report["trials"]) == 2
-            assert all(trial["output_check"] == "passed" for trial in report["trials"])
-            assert (root / name / "trial-2.html").is_file()
-            assert report["feedback"]["after"]["output_errors"]["/"]["max"] == 0
+        if name == "baseline":
+            assert report["decision"] == "measured", report["reasons"]
+            assert report["feedback"]["latency_ms"] > 0
+            assert (root / name / "measurement.html").is_file()
         else:
             assert report["decision"] == "discard", report["reasons"]
             assert report["initial_checks"]["candidate"]["output_check"] == "failed"

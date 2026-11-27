@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import platform
+import shutil
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 import time
@@ -22,6 +23,7 @@ from torchscan._model_workload import _factory
 from torchscan.autoresearch import evaluate_model
 
 SETTINGS = {"trials": 3, "warmup": 5, "min_run_time": 0.2, "min_repeats": 5, "timeout": 300, "min_improvement": 0.03}
+CONTROL_COUNT = 10
 
 
 class Redundant(torch.nn.Module):
@@ -42,19 +44,9 @@ class Wrong(torch.nn.Module):
         return inputs.relu() + 1
 
 
-def baseline() -> torch.nn.Module:
-    """Build the deliberately redundant baseline."""
-    return Redundant()
-
-
-def faster() -> torch.nn.Module:
-    """Remove all redundant ReLUs, preserving exact finite FP32 outputs."""
-    return torch.nn.ReLU()
-
-
 def compiled() -> torch.nn.Module:
     """Compile the redundant baseline with the default Inductor backend."""
-    return torch.compile(baseline(), fullgraph=True)
+    return torch.compile(Redundant(), fullgraph=True)
 
 
 def write_json(path: Path, value: object) -> None:
@@ -108,7 +100,6 @@ def native_timing(contract: dict, reference: str) -> dict:
         "construction_seconds": construction,
         "first_call_seconds": first_call,
         "compilation_metrics": torch._dynamo.utils.compile_times() if reference.endswith(":compiled") else None,
-        "first_call_boundary": "synchronized model call; includes lazy compilation/cache loading when compiled",
         "raw_times_seconds": samples,
         "number_per_run": measurement.number_per_run,
         "median_seconds": median(samples) / measurement.number_per_run,
@@ -119,14 +110,19 @@ def native_timing(contract: dict, reference: str) -> dict:
 
 def release_gates(reports: dict) -> dict:
     """Keep incomplete controls distinct from passed release gates."""
-    controls = [reports[f"identical-{index:02}"] for index in range(10)]
+    controls = [reports[f"identical-{index:02}"] for index in range(CONTROL_COUNT)]
     complete = all(
         len(report["trials"]) == SETTINGS["trials"]
         and report["output_error_policy"] == "enforced"
-        and all(trial["output_check"] == "passed" for trial in report["trials"])
+        and all(
+            trial["output_check"] == "passed" and trial["totals"]["latency"]["delta"] is not None
+            for trial in report["trials"]
+        )
         for report in controls
     )
     wrong = reports["incorrect"]
+    checks = wrong.get("initial_checks", {})
+    candidate_check = checks.get("candidate", {}).get("output_check")
     return {
         "zero_false_keeps": "failed"
         if any(report["decision"] == "keep" for report in controls)
@@ -135,9 +131,11 @@ def release_gates(reports: dict) -> dict:
         else "inconclusive",
         "incorrect_output_rejected": "passed"
         if wrong["decision"] == "discard"
-        and wrong.get("initial_checks", {}).get("candidate", {}).get("output_check") == "failed"
+        and wrong["output_error_policy"] == "enforced"
+        and checks.get("baseline", {}).get("output_check") == "passed"
+        and candidate_check == "failed"
         else "failed"
-        if wrong["decision"] == "keep"
+        if wrong["decision"] == "keep" or candidate_check == "passed"
         else "inconclusive",
     }
 
@@ -149,18 +147,15 @@ def run_pack(destination: Path, device: str) -> dict:
     if destination.is_relative_to(checkout):
         raise ValueError("Evidence must be outside the checkout.")
     destination.mkdir(parents=True, exist_ok=False)
-    os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(destination / "inductor-cache")
-    os.environ["TRITON_CACHE_DIR"] = str(destination / "triton-cache")
+    cuda_available = torch.cuda.is_available()
     configuration = {
         "device": device,
         "platform": platform.platform(),
         "python": sys.version,
         "torch": str(torch.__version__),
         "cuda": torch.version.cuda,
-        "cuda_available": torch.cuda.is_available(),
-        "device_name": torch.cuda.get_device_name()
-        if device == "cuda" and torch.cuda.is_available()
-        else platform.processor(),
+        "cuda_available": cuda_available,
+        "device_name": torch.cuda.get_device_name() if device == "cuda" and cuda_available else platform.processor(),
         "torch_config": torch.__config__.show(),
         "revision": subprocess.check_output(["git", "-C", str(checkout), "rev-parse", "HEAD"], text=True).strip(),  # ruff: ignore[subprocess-without-shell-equals-true, start-process-with-partial-path]
         "diff": subprocess.check_output(["git", "-C", str(checkout), "diff", "HEAD"], text=True),  # ruff: ignore[subprocess-without-shell-equals-true, start-process-with-partial-path]
@@ -168,29 +163,32 @@ def run_pack(destination: Path, device: str) -> dict:
         "compiler_cache": "new directory shared by this pack; native compiled control runs before autoresearch",
     }
     write_json(destination / "configuration.json", configuration)
-    if device == "cuda":
-        if not torch.cuda.is_available():
-            summary = {"cuda_gate": "unvalidated", "reason": "CUDA is unavailable; no CPU substitution."}
-            write_json(destination / "summary.json", summary)
-            return summary
-        hardware = subprocess.run(["nvidia-smi", "-q"], capture_output=True, text=True, check=False)  # ruff: ignore[start-process-with-partial-path]
+    if device == "cuda" and not cuda_available:
+        summary = {"cuda_gate": "unvalidated", "reason": "CUDA is unavailable."}
+        write_json(destination / "summary.json", summary)
+        return summary
+    os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(destination / "inductor-cache")
+    os.environ["TRITON_CACHE_DIR"] = str(destination / "triton-cache")
+    if device == "cuda" and (nvidia_smi := shutil.which("nvidia-smi")):
+        hardware = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+            [nvidia_smi, "-q"], capture_output=True, text=True, check=False
+        )
         (destination / "nvidia-smi.txt").write_text(hardware.stdout + hardware.stderr, encoding="utf-8")
+    execution = {"device": device, "threads": 1, "seed": 0}
     toy = {
-        "model": f"{script}:baseline",
+        "model": f"{script}:Redundant",
         "args": [{"shape": [1, 4096], "dtype": "float32"}],
-        "device": device,
-        "threads": 1,
-        "seed": 0,
-        "check": {"absolute_error": dict.fromkeys(("mean", "median", "p90", "p95", "p99", "max"), 0)},
+        **execution,
+        "check": {"absolute_error": {"max": 0}},
         "settings": SETTINGS,
     }
     resnet = json.loads((script.parent / "workload.json").read_text())
-    resnet.update(model=f"{script.parent / 'models.py'}:baseline", device=device, threads=1, seed=0)
+    resnet.update(model=f"{script.parent / 'models.py'}:baseline", **execution)
     resnet["settings"] = {**SETTINGS, **resnet["settings"]}
     reports, native = {}, {}
     cases = [
-        *((f"identical-{index:02}", toy, toy["model"]) for index in range(10)),
-        ("faster", toy, f"{script}:faster"),
+        *((f"identical-{index:02}", toy, toy["model"]) for index in range(CONTROL_COUNT)),
+        ("faster", toy, "torch.nn:ReLU"),
         ("incorrect", toy, f"{script}:Wrong"),
         ("compiled", toy, f"{script}:compiled"),
         ("resnet-fusion", resnet, f"{script.parent / 'models.py'}:candidate"),
@@ -198,34 +196,33 @@ def run_pack(destination: Path, device: str) -> dict:
     for name, contract, candidate in cases:
         contract_path = destination / f"{name}.json"
         write_json(contract_path, contract)
-        if name in ("identical-00", "faster", "compiled", "resnet-fusion"):
+        if name in {"identical-00", "faster", "compiled", "resnet-fusion"}:
             native[name] = {}
             for side, reference in (("before", contract["model"]), ("after", candidate)):
                 try:
                     native[name][side] = native_timing(contract, reference)
                 except Exception as error:  # ruff: ignore[blind-except] -- Retain failed compiler/device evidence.
                     native[name][side] = {"error": f"{type(error).__name__}: {error}"}
-            write_json(destination / f"{name}-native.json", native[name])
-        reports[name] = evaluate_model(contract_path, candidate_model=candidate, output=destination / name)
+            write_json(destination / "native.json", native)
+        report = reports[name] = evaluate_model(contract_path, candidate_model=candidate, output=destination / name)
+        trials = report["trials"] + ([report["confirmation"]] if report["confirmation"] else [])
         for side, timing in native.get(name, {}).items():
-            trials = reports[name]["trials"] + (
-                [reports[name]["confirmation"]] if reports[name]["confirmation"] else []
-            )
-            if trials and "median_seconds" in timing:
-                value = median(trial[side]["totals"]["latency"]["value"] for trial in trials)
+            latencies = [trial[side]["totals"]["latency"]["value"] for trial in trials]
+            if latencies and all(latencies) and "median_seconds" in timing:
+                value = median(latencies)
                 timing["autoresearch_median_seconds"] = value
                 timing["relative_difference"] = abs(timing["median_seconds"] / value - 1)
                 timing["agreement"] = "within_20_percent" if timing["relative_difference"] <= 0.2 else "inconclusive"
-        write_json(destination / "native.json", native)
+        if name in native:
+            write_json(destination / "native.json", native)
         print(  # ruff: ignore[print]
-            json.dumps({"case": name, "decision": reports[name]["decision"], "reasons": reports[name]["reasons"]}),
+            json.dumps({"case": name, "decision": report["decision"], "reasons": report["reasons"]}),
             flush=True,
         )
     summary = {
         "release_gates": release_gates(reports),
         "cuda_gate": "unvalidated" if device != "cuda" else "measured",
         "decisions": {name: report["decision"] for name, report in reports.items()},
-        "native": native,
     }
     write_json(destination / "summary.json", summary)
     return summary

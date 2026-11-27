@@ -15,7 +15,7 @@ import sys
 import tempfile
 import traceback
 from collections.abc import Mapping
-from math import isclose
+from math import isclose, isfinite
 from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
@@ -27,6 +27,8 @@ from .render import render_report
 from .report import metric_result
 
 __all__ = ["evaluate_model"]
+
+_SUMMARY_FIELDS = ("decision", "reasons", "feedback", "report")
 
 
 def _load(path: Path, name: str) -> ModuleType:
@@ -87,6 +89,39 @@ def _identities(paths: list[Path]) -> dict[str, str]:
 def _verify_files(identities: dict[str, str]) -> None:
     if _identities([Path(path) for path in identities]) != identities:
         raise ValueError("Experiment, implementation or declared dependency changed during evaluation.")
+
+
+def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate workload key: {key!r}.")
+        result[key] = value
+    return result
+
+
+def _finite_float(raw: str) -> float:
+    value = float(raw)
+    if not isfinite(value):
+        raise ValueError("Workload numbers must be finite.")
+    return value
+
+
+def _case_contracts(contract: dict[str, Any]) -> dict[str | None, dict[str, Any]]:
+    if "cases" not in contract:
+        return {None: contract}
+    cases = contract["cases"]
+    if not isinstance(cases, dict) or not cases or any(not name for name in cases):
+        raise ValueError("cases must be a nonempty object of named input cases.")
+    if {"args", "kwargs", "inputs"} & contract.keys():
+        raise ValueError("Supply inputs in cases or at the top level, not both.")
+    common = {key: value for key, value in contract.items() if key != "cases"}
+    for case in cases.values():
+        if not isinstance(case, dict) or not case or case.keys() - {"args", "kwargs", "inputs"}:
+            raise ValueError("Each case accepts only args/kwargs descriptors or a saved inputs file.")
+        if "inputs" in case and case.keys() != {"inputs"}:
+            raise ValueError("Use args/kwargs descriptors or a saved inputs file, not both.")
+    return {name: common | case for name, case in cases.items()}
 
 
 def _write(path: Path, value: object) -> None:
@@ -203,14 +238,76 @@ def evaluate_model(
     a new directory; it retains JSON, HTML, hashes and worker logs. Models execute as
     trusted code. Only declared dependencies are hashed. Without error ceilings, keep
     confirms resource gains and output compatibility, not numerical equivalence.
+    An optional cases object names fixed input cases sharing the model and settings.
+    Any discard discards the set; otherwise any inconclusive remains inconclusive.
     """
     experiment, destination = Path(workload).resolve(), Path(output).resolve()
-    contract = json.loads(experiment.read_text(encoding="utf-8"))
+    identities = _identities([experiment])
+    contract = json.loads(
+        experiment.read_text(encoding="utf-8"),
+        object_pairs_hook=_unique_keys,
+        parse_float=_finite_float,
+        parse_constant=_finite_float,
+    )
     if not isinstance(contract, dict) or not isinstance(contract.get("model"), str):
         raise ValueError("The workload must name an existing model/factory.")
-    baseline = baseline_model or contract["model"]
+    contracts = _case_contracts(contract)
     destination.mkdir(parents=True, exist_ok=False)
-    identities = _identities([experiment])
+    input_errors = {}
+    for name, case_contract in contracts.items():
+        if "inputs" in case_contract:
+            try:
+                if not isinstance(case_contract["inputs"], str):
+                    raise ValueError("inputs must name a saved inputs file.")
+                path = experiment.parent / case_contract["inputs"]
+                if str(path) not in identities:
+                    identities.update(_identities([path]))
+            except (OSError, ValueError) as error:
+                input_errors[name] = str(error)
+    request = {
+        "experiment": str(experiment),
+        "identities": identities,
+        "baseline": baseline_model or contract["model"],
+        "candidate": candidate_model,
+        "check_outputs": candidate_model is not None,
+    }
+    # Isolate bytecode between experiments and reuse it across their fresh workers.
+    with tempfile.TemporaryDirectory(prefix="torchscan-imports-") as cache:
+        request["bytecode_cache"] = cache
+        if None in contracts:
+            return _evaluate_case(contracts[None], destination, request, None, input_errors.get(None))
+        cases = {}
+        for index, (name, case_contract) in enumerate(contracts.items(), 1):
+            case_output = destination / f"case-{index}"
+            case_output.mkdir()
+            result = _evaluate_case(case_contract, case_output, request, name, input_errors.get(name))
+            result["report"] = str(case_output / "report.json")
+            cases[name] = {key: result.get(key) for key in _SUMMARY_FIELDS}
+    decisions = {case["decision"] for case in cases.values()}
+    decision = "inconclusive"
+    if "discard" in decisions:
+        decision = "discard"
+    elif len(decisions) == 1:
+        decision = decisions.pop()
+    report = {
+        "schema_version": 1,
+        "workload": contract,
+        "identities": identities,
+        "cases": cases,
+        "decision": decision,
+        "reasons": [f"{name}: {case['decision']}" for name, case in cases.items()],
+        "output_error_policy": "enforced" if contract.get("check") else "report_only",
+    }
+    _write(destination / "report.json", report)
+    return report
+
+
+def _evaluate_case(
+    contract: dict[str, Any], destination: Path, request: dict[str, Any], case: str | None, input_error: str | None
+) -> dict[str, Any]:
+    baseline, candidate_model = request["baseline"], request["candidate"]
+    identities = request["identities"]
+    reference = destination / "reference.pt"
     report: dict[str, Any] = {
         "schema_version": 1,
         "decision": "inconclusive",
@@ -220,22 +317,20 @@ def evaluate_model(
         "candidate": candidate_model,
         "identities": identities,
         "output_error_policy": "enforced" if contract.get("check") else "report_only",
-        "settings": {},
+        "settings": request.get("settings", {}),
         "trials": [],
         "confirmation": None,
-    }
-    request = {
-        "experiment": str(experiment),
-        "identities": identities,
-        "baseline": baseline,
-        "candidate": candidate_model or baseline,
-        "check_outputs": candidate_model is not None,
-        "reference_outputs": str(destination / "reference.pt"),
     }
 
     def run(mode: str, implementation: str, label: str) -> dict[str, Any]:
         result = _run_worker(
-            {**request, "mode": mode, "implementation": implementation},
+            {
+                **request,
+                "case": case,
+                "reference_outputs": str(reference),
+                "mode": mode,
+                "implementation": implementation,
+            },
             destination / f"{label}.json",
             report["settings"].get("timeout", 120),
         )
@@ -270,51 +365,58 @@ def evaluate_model(
         (destination / f"{label}.html").write_text(render_report(comparison, title=label))
         return comparison
 
-    # Fresh bytecode avoids running stale imports after rapid, same-size agent edits.
-    with tempfile.TemporaryDirectory(prefix="torchscan-imports-") as cache:
-        request["bytecode_cache"] = cache
-        try:
-            inspected = run("inspect", baseline, "inspect")
-            _verify_files(identities)
-            identities.update(_identities([Path(path) for path in inspected["files"]]))
-            report["settings"] = request["settings"] = inspected["settings"]
-            if candidate_model is None:
-                report["measurement"] = run("measure", baseline, "measurement")
-                report["decision"] = "measured"
-                report["feedback"] = _feedback(report["measurement"])
-                (destination / "measurement.html").write_text(
-                    render_report(cast(BenchmarkReport, report["measurement"]))
-                )
-            else:
-                run("reference", contract["model"], "reference")
-                identities.update(_identities([Path(request["reference_outputs"])]))
-                initial = report["initial_checks"] = {
-                    name: run("check", model, "initial-" + name)
-                    for name, model in (("baseline", baseline), ("candidate", candidate_model))
-                }
-                if checked(initial):
-                    for index in range(report["settings"]["trials"]):
-                        report["trials"].append(pair(index, f"trial-{index + 1}"))
-                        if report["trials"][-1]["output_check"] == "failed":
-                            break
-                    else:
-                        report["decision"], report["reasons"] = _decide(report["trials"], report["settings"])
-                        if report["decision"] == "keep":
-                            report["confirmation"] = pair(len(report["trials"]), "confirmation")
-                            if report["confirmation"]["output_check"] == "passed":
-                                report["decision"], report["reasons"] = _decide(
-                                    [*report["trials"], report["confirmation"]], report["settings"]
-                                )
-                last = report["confirmation"] or (report["trials"][-1] if report["trials"] else None)
-                evidence = (
-                    {"before": last["before"], "after": last["after"]}
-                    if last
-                    else {"before": initial["baseline"], "after": initial["candidate"]}
-                )
-                report["feedback"] = {name: _feedback(value) for name, value in evidence.items()}
-            _verify_files(identities)
-        except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
-            report["decision"], report["reasons"] = "inconclusive", [str(error)]
+    try:
+        if input_error is not None:
+            raise ValueError(input_error)
+        if "settings" not in request:
+            sources = {}
+            implementations = dict.fromkeys(
+                ref for ref in (contract["model"], baseline, candidate_model) if ref is not None
+            )
+            for index, implementation in enumerate(implementations):
+                inspected = run("inspect", implementation, f"inspect-{index + 1}" if index else "inspect")
+                _verify_files(identities)
+                paths = dict.fromkeys([*inspected["files"], *inspected["sources"]])
+                identities.update(_identities([Path(path) for path in paths if path not in identities]))
+                sources[implementation] = inspected["sources"]
+                report["settings"] = inspected["settings"]
+            request.update(settings=report["settings"], sources=sources)
+        if candidate_model is None:
+            report["measurement"] = run("measure", baseline, "measurement")
+            report["decision"] = "measured"
+            report["feedback"] = _feedback(report["measurement"])
+            (destination / "measurement.html").write_text(render_report(cast(BenchmarkReport, report["measurement"])))
+        else:
+            run("reference", contract["model"], "reference")
+            identities.update(_identities([reference]))
+            initial = report["initial_checks"] = {
+                name: run("check", model, "initial-" + name)
+                for name, model in (("baseline", baseline), ("candidate", candidate_model))
+            }
+            if checked(initial):
+                for index in range(report["settings"]["trials"]):
+                    report["trials"].append(pair(index, f"trial-{index + 1}"))
+                    if report["trials"][-1]["output_check"] == "failed":
+                        break
+                else:
+                    report["decision"], report["reasons"] = _decide(report["trials"], report["settings"])
+                    if report["decision"] == "keep":
+                        report["confirmation"] = pair(len(report["trials"]), "confirmation")
+                        if report["confirmation"]["output_check"] == "passed":
+                            report["decision"], report["reasons"] = _decide(
+                                [*report["trials"], report["confirmation"]], report["settings"]
+                            )
+            last = report["confirmation"] or (report["trials"][-1] if report["trials"] else None)
+            evidence = (
+                {"before": last["before"], "after": last["after"]}
+                if last
+                else {"before": initial["baseline"], "after": initial["candidate"]}
+            )
+            report["feedback"] = {name: _feedback(value) for name, value in evidence.items()}
+        _verify_files(identities)
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+        report["decision"], report["reasons"] = "inconclusive", [str(error)]
+    report["identities"] = identities.copy()
     _write(destination / "report.json", report)
     return report
 
@@ -354,12 +456,10 @@ def main() -> None:
     result = evaluate_model(
         args.workload, output=args.output, candidate_model=args.candidate_model, baseline_model=args.baseline_model
     )
-    print(  # ruff: ignore[print]
-        json.dumps(
-            {key: result.get(key) for key in ("decision", "reasons", "output_error_policy", "feedback")}
-            | {"report": str(args.output.resolve() / "report.json")}
-        )
-    )
+    details = "cases" if "cases" in result else "feedback"
+    summary = {key: result.get(key) for key in ("decision", "reasons", "output_error_policy", details)}
+    summary["report"] = str(args.output.resolve() / "report.json")
+    print(json.dumps(summary))  # ruff: ignore[print]
 
 
 if __name__ == "__main__":

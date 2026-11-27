@@ -24,12 +24,73 @@ An optional `checkpoint` loads a local state dict with `weights_only=True`.
 
 Use `args`/`kwargs` descriptors or `"inputs": "inputs.pt"`, saved with
 `torch.save({"args": (sample,), "kwargs": {...}}, "inputs.pt")`. Paths are relative to the contract.
-Descriptors accept `shape`, `dtype`, `fill` and integer `low`/`high` bounds; dtypes are float32, int64, int32 or bool.
+Descriptors accept `shape` and `dtype` (float32 by default, or int64, int32 or bool). Use one of these recipes:
+
+| Recipe | Descriptor fields in addition to `shape` |
+| --- | --- |
+| Constant tensor | `"fill": 0` for zeros, `"fill": 1` for ones, or another constant |
+| Normal FP32 samples | `"distribution": "normal"`, optional `mean` (default 0) and positive `std` (default 1) |
+| Uniform FP32 samples | `"distribution": "uniform"`, optional `low` (default 0) and `high` (default 1), with `low < high` |
+| Uniform integer samples | `"dtype": "int64"` or `"int32"`, with integer `low` (inclusive) and `high` (exclusive) |
+
+Float descriptors without recipe fields use the standard normal distribution. Each case resets the contract seed,
+then draws its random inputs in order. An implementation receives the same draws as its comparison partner on the
+same device. Repeating a recipe at the same position in two otherwise identical cases repeats the sample.
 Nested containers and scalar arguments are supported. Supply batch size one on your model's batch axis;
 TorchScan does not infer axes. Saved tensors retain their data and are never interpreted as descriptors.
 
 Calls use `eval()` and inference mode, with autocast and CUDA TF32 disabled. Defaults are CPU, seed 0 and one
 PyTorch thread; override `device`, `seed` and `threads` at the top level. Floating inputs and model state must be FP32.
+
+## Fixed input cases
+
+Use a named `cases` object for a small set of input recipes or saved samples. For example, a classifier with a
+fixed execution path can benchmark generated tensors at the input sizes it serves. Use saved, preprocessed samples
+to exercise behavior that depends on image content, such as a detector's output filtering.
+
+```json
+{
+  "model": "torchvision.models:resnet18",
+  "model_kwargs": {"weights": null},
+  "seed": 42,
+  "cases": {
+    "classifier-224": {"args": [{"shape": [1, 3, 224, 224], "distribution": "normal"}]},
+    "classifier-320": {"args": [{"shape": [1, 3, 320, 320], "distribution": "uniform", "low": -1, "high": 1}]},
+    "saved-sample": {"inputs": "inputs.pt"}
+  },
+  "check": {"absolute_error": {"mean": 0.0001, "p99": 0.001}}
+}
+```
+
+Run this manifest with the same Python API or CLI command. Each case accepts only `args`/`kwargs` descriptors or
+one saved `inputs` file. Paths remain relative to the manifest. The original model, checkpoint, FP32 execution,
+seed, threads, numerical limits and timing/memory settings are shared. Supply batch size one in every case.
+The manifest must contain at least one case. Use unique JSON keys and finite numbers. Cases cannot override models,
+settings or checks.
+
+Every case runs independently in fresh workers, including cases after a rejection. A saved input that is missing or
+unreadable at setup marks only its case inconclusive. Each comparison uses its own fixed outputs from the original
+model, even with `--baseline-model`. Any `discard` discards the set. Otherwise any
+`inconclusive` keeps the set inconclusive. Only all `keep` results produce `keep`; probes return `measured` only
+when every case is measured. Gains on one case never offset a loss on another. An unchecked memory ceiling in any
+case prevents acceptance. Without numerical ceilings, all cases retain report-only fidelity semantics.
+
+The combined `report.json` contains `cases.<name>` with the decision, reasons, feedback and `report` path
+for each input. Follow that path for full evidence. Each `case-N/` directory retains the existing JSON, HTML,
+raw trials, confirmation, output errors and logs.
+Latency, scoped memory and errors remain separate for each case; unavailable or unmeasured evidence stays explicit.
+Initial output failures stop that case before timing, as in single-case evaluation. CLI output includes per-case
+decisions, feedback and report paths. Single-case contracts and their report layout remain supported.
+
+TorchScan inspects each distinct model reference in a separate worker and reuses the result across cases.
+One shared identity set covers the manifest, model sources, checkpoint, readable saved inputs, declared `files`
+and generated reference outputs. Files are checked between workers and cases; changed files cannot be rehashed
+as a fresh experiment halfway through the set. Preserve these identities across attempts, except for the edited
+candidate source. Caller paths are hashed too, so retargeting a symlink to changed content invalidates the run.
+Only declared dependencies are covered. Dataset loaders, training, precision search and scheduling
+are outside this interface.
+
+## Checks and acceptance
 
 Each floating output reports mean, median, p90, p95, p99, maximum and count of absolute errors against the original
 model. Selected `check.absolute_error` ceilings apply separately to every output tensor; p99 can permit outliers.

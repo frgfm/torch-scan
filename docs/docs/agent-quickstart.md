@@ -20,6 +20,8 @@ The owner defines acceptable output quality and resource budgets.
 
 Use `strict=True` when incomplete model metrics must stop the task; it raises `IncompleteAnalysisError`.
 
+Use the [autoresearch contract](autoresearch.md) to check a candidate against a fixed set of batch-one FP32 inputs.
+
 ## Pick one API
 
 | Task | Use |

@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from torchscan import autoresearch, measure_workload
-from torchscan._model_workload import _tensor
+from torchscan._model_workload import _tensor, model_worker
 
 
 def workload(tmp_path, **updates):
@@ -27,6 +27,10 @@ def shifted():
 def drifted():
     model = baseline()
     model.register_forward_hook(lambda m, a, out: out + 0.18)
+    return model
+def selective():
+    model = baseline()
+    model.register_forward_hook(lambda m, a, out: out + a[0][:, :2] * 0.2)
     return model
 class Stateful(torch.nn.Module):
     def __init__(self, fails_at):
@@ -136,6 +140,45 @@ def test_fp32_input_contract(dtype):
         _tensor(torch.ones(1, dtype=dtype), "cpu", descriptors=False)
 
 
+def test_seeded_float_distributions():
+    shape = {"shape": [1, 32_768]}
+    torch.manual_seed(42)
+    legacy = torch.randn(shape["shape"], dtype=torch.float32)
+    torch.manual_seed(42)
+    assert torch.equal(_tensor(shape, "cpu"), legacy)
+    torch.manual_seed(42)
+    assert torch.equal(_tensor(shape | {"distribution": "normal"}, "cpu"), legacy)
+    normal = _tensor(shape | {"distribution": "normal", "mean": 2, "std": 0.5}, "cpu")
+    assert normal.mean().item() == pytest.approx(2, abs=0.02)
+    assert normal.std().item() == pytest.approx(0.5, abs=0.02)
+    recipe = shape | {"distribution": "uniform", "low": -2, "high": 3}
+    torch.manual_seed(42)
+    uniform = _tensor(recipe, "cpu")
+    assert uniform.dtype == torch.float32
+    assert -2 <= uniform.min() < uniform.max() < 3
+    torch.manual_seed(42)
+    assert torch.equal(_tensor(recipe, "cpu"), uniform)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"distribution": "unknown"},
+        {"distribution": "uniform", "std": 1},
+        {"fill": 1, "distribution": "normal"},
+        {"dtype": "int64", "distribution": "normal"},
+        {"std": 0},
+        {"std": True},
+        {"mean": float("inf")},
+        {"distribution": "uniform", "low": 2, "high": 1},
+        {"distribution": "uniform", "high": 1e100},
+    ],
+)
+def test_invalid_float_recipe(options):
+    with pytest.raises(ValueError):
+        _tensor({"shape": [1, 4], **options}, "cpu")
+
+
 def test_stale_bytecode_and_mid_run_source_changes_are_not_accepted(tmp_path):
     path = workload(tmp_path)
     source = tmp_path / "models.py"
@@ -191,7 +234,7 @@ def test_confirmation_failure_overrides_tentative_keep(monkeypatch, tmp_path):
 
     def worker(request, artifact, _timeout):
         if request["mode"] == "inspect":
-            return {"settings": autoresearch._settings(json.loads(path.read_text())), "files": []}
+            return {"settings": autoresearch._settings(json.loads(path.read_text())), "files": [], "sources": []}
         if request["mode"] == "reference":
             Path(request["reference_outputs"]).write_bytes(b"reference")
             return {}
@@ -240,3 +283,280 @@ def test_latency_and_memory_gates(after, label, memory, changes, decision):
         "context_changes": changes,
     }
     assert autoresearch._decide([trial, trial], {"min_improvement": 0.03, "max_memory_bytes": 100})[0] == decision
+
+
+def case_manifest(tmp_path, **updates):
+    path = workload(tmp_path, **updates)
+    contract = json.loads(path.read_text())
+    contract.pop("args")
+    contract["cases"] = {
+        "zeros": {"args": [{"shape": [1, 4], "fill": 0}]},
+        "ones": {"args": [{"shape": [1, 4], "fill": 1}]},
+    }
+    path.write_text(json.dumps(contract))
+    return path
+
+
+@pytest.mark.parametrize("enforced", [True, False])
+def test_candidate_passing_one_input_but_failing_another(tmp_path, enforced):
+    path = case_manifest(tmp_path, **({"check": {"absolute_error": {"max": 0}}} if enforced else {}))
+    torch.save({"args": (torch.ones(1, 4),)}, tmp_path / "inputs.pt")
+    contract = json.loads(path.read_text())
+    contract["cases"]["ones"] = {"inputs": "inputs.pt"}
+    path.write_text(json.dumps(contract))
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:selective", output=tmp_path / "run")
+    if enforced:
+        assert report["decision"] == "discard", report["reasons"]
+    assert report["output_error_policy"] == ("enforced" if enforced else "report_only")
+    assert set(report["cases"]) == {"zeros", "ones"}
+    zeros, ones = (json.loads(Path(item["report"]).read_text()) for item in report["cases"].values())
+    assert all(pair["output_check"] == "passed" for pair in zeros["trials"])
+    assert zeros["feedback"]["after"]["latency_ms"] > 0
+    assert zeros["feedback"]["after"]["pytorch_memory_scope"] == "pytorch_tensor_bytes"
+    assert zeros["feedback"]["after"]["output_errors"]["/"]["max"] == 0
+    if enforced:
+        assert ones["decision"] == "discard"
+    else:
+        assert len(ones["trials"]) == 2
+        assert all(pair["output_check"] == "passed" for pair in ones["trials"])
+    assert ones["feedback"]["after"]["output_errors"]["/"]["max"] == pytest.approx(0.2)
+    assert str(tmp_path / "inputs.pt") in zeros["identities"]
+    assert report["cases"]["ones"]["feedback"] == ones["feedback"]
+    assert len(list((tmp_path / "run").glob("case-*/reference.pt"))) == 2
+    assert len(list((tmp_path / "run").glob("case-*/inspect.json"))) == 1
+    assert json.loads((tmp_path / "run" / "report.json").read_text()) == report
+
+
+def test_case_probe_and_fixed_original_reference(tmp_path):
+    path = case_manifest(tmp_path, check={"absolute_error": {"max": 0.1}})
+    contract = json.loads(path.read_text())
+    contract["cases"]["ones"] = {"args": [{"shape": [1, 4], "distribution": "uniform", "low": -2, "high": 2}]}
+    path.write_text(json.dumps(contract))
+    probe = autoresearch.evaluate_model(path, output=tmp_path / "probe")
+    assert probe["decision"] == "measured", probe["reasons"]
+    assert all(case["feedback"]["latency_ms"] > 0 for case in probe["cases"].values())
+    report = autoresearch.evaluate_model(
+        path, baseline_model="models.py:shifted", candidate_model="models.py:drifted", output=tmp_path / "run"
+    )
+    assert report["decision"] == "discard", report["reasons"]
+    for case in report["cases"].values():
+        assert case["feedback"]["before"]["output_errors"]["/"]["max"] == pytest.approx(0.09)
+        assert case["feedback"]["after"]["output_errors"]["/"]["max"] == pytest.approx(0.18)
+
+
+def test_missing_saved_input_does_not_hide_discard_in_other_case(tmp_path):
+    path = case_manifest(tmp_path, check={"absolute_error": {"max": 0}})
+    contract = json.loads(path.read_text())
+    contract["cases"]["zeros"] = {"inputs": "missing.pt"}
+    path.write_text(json.dumps(contract))
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:selective", output=tmp_path / "run")
+    assert report["cases"]["zeros"]["decision"] == "inconclusive"
+    assert "missing.pt" in report["cases"]["zeros"]["reasons"][0]
+    assert report["cases"]["ones"]["decision"] == report["decision"] == "discard"
+
+
+def test_model_inspection_keeps_sibling_imports_isolated(tmp_path):
+    for directory, module in (("original", "Identity"), ("candidate", "ReLU")):
+        model_dir = tmp_path / directory
+        model_dir.mkdir()
+        (model_dir / "model.py").write_text("from layers import factory\n")
+        (model_dir / "layers.py").write_text(f"import torch\ndef factory(): return torch.nn.{module}()\n")
+    path = workload(
+        tmp_path,
+        model="original/model.py:factory",
+        args=[{"shape": [1, 4], "fill": -1}],
+        check={"absolute_error": {"max": 0}},
+    )
+    report = autoresearch.evaluate_model(path, candidate_model="candidate/model.py:factory", output=tmp_path / "run")
+    assert report["decision"] == "discard", report["reasons"]
+    assert report["feedback"]["after"]["output_errors"]["/"]["max"] == 1
+    assert all(str(tmp_path / name / "layers.py") in report["identities"] for name in ("original", "candidate"))
+
+
+@pytest.fixture
+def case_worker(monkeypatch):
+    measured = dict(
+        measure_workload(
+            lambda: torch.ones(1) + 1,
+            device="cpu",
+            inputs=torch.ones(1),
+            metrics=("latency", "memory"),
+            min_run_time=0.001,
+            min_repeats=2,
+            print_summary=False,
+        )
+    )
+
+    def install(outcomes):
+        def worker(request, _artifact, _timeout):
+            autoresearch._verify_files(request["identities"])
+            if request["mode"] == "inspect":
+                return model_worker(request)
+            if request["mode"] == "reference":
+                Path(request["reference_outputs"]).write_bytes(b"reference")
+                return {}
+            latency, memory = outcomes[request["case"]]
+            result = deepcopy(measured)
+            result.update(output_check="passed", _process_peak_rss=result["totals"]["process_peak_rss"])
+            value = 1 if request["implementation"] == request["baseline"] else latency
+            result["totals"]["latency"].update(value=value, known_value=value)
+            result["totals"]["latency_iqr"].update(value=0.001, known_value=0.001)
+            result["totals"]["peak_memory"].update(
+                status="complete" if memory is not None else "unavailable", value=memory, known_value=memory
+            )
+            return result
+
+        monkeypatch.setattr(autoresearch, "_run_worker", worker)
+        return worker
+
+    return install
+
+
+@pytest.mark.parametrize(
+    ("second", "decision"),
+    [((0.8, 90), "keep"), ((1.2, 90), "discard"), ((1, 90), "inconclusive"), ((0.8, None), "inconclusive")],
+)
+def test_all_case_performance_and_memory_gates(tmp_path, case_worker, second, decision):
+    path = case_manifest(tmp_path, settings={"trials": 2, "min_improvement": 0.03, "max_memory_bytes": 100})
+    case_worker({"zeros": (0.8, 90), "ones": second})
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=tmp_path / "run")
+    assert report["decision"] == decision, report
+    assert report["cases"]["zeros"]["decision"] == "keep", report["cases"]["zeros"]["reasons"]
+    assert report["cases"]["ones"]["decision"] == decision
+    assert len(json.loads(Path(report["cases"]["ones"]["report"]).read_text())["trials"]) == 2
+
+
+def test_discard_dominates_inconclusive_and_later_cases_still_run(tmp_path, case_worker):
+    path = case_manifest(tmp_path, settings={"trials": 2, "max_memory_bytes": 100})
+    case_worker({"zeros": (1.2, 90), "ones": (0.8, None)})
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=tmp_path / "run")
+    assert [case["decision"] for case in report["cases"].values()] == ["discard", "inconclusive"]
+    assert report["decision"] == "discard"
+
+
+@pytest.mark.parametrize(
+    ("changed", "symlink"),
+    [(name, False) for name in ("workload.json", "models.py", "inputs.pt", "reference.pt")]
+    + [
+        pytest.param(name, True, marks=pytest.mark.skipif(os.name != "posix", reason="Needs symlink support."))
+        for name in ("models.py", "inputs.pt", "extra.txt")
+    ],
+)
+def test_changes_between_cases_invalidate_the_experiment(tmp_path, monkeypatch, case_worker, changed, symlink):
+    path = case_manifest(tmp_path, settings={"trials": 2}, files=["extra.txt"])
+    contract = json.loads(path.read_text())
+    contract["cases"]["ones"] = {"inputs": "inputs.pt"}
+    path.write_text(json.dumps(contract))
+    (tmp_path / "inputs.pt").write_bytes(b"saved inputs")
+    (tmp_path / "extra.txt").write_bytes(b"declared dependency")
+    target = tmp_path / "run" / "case-1" / changed if changed == "reference.pt" else tmp_path / changed
+    if symlink:
+        original = target.rename(target.with_name("original-" + changed))
+        replacement = target.with_name("changed-" + changed)
+        replacement.write_bytes(original.read_bytes() + b" ")
+        target.symlink_to(original)
+    worker = case_worker({"zeros": (0.8, 90), "ones": (0.8, 90)})
+
+    def mutate(request, artifact, timeout):
+        if request["case"] == "ones" and request["mode"] == "reference":
+            if symlink:
+                target.unlink()
+                target.symlink_to(replacement)
+            else:
+                target.write_bytes(target.read_bytes() + b" ")
+        return worker(request, artifact, timeout)
+
+    monkeypatch.setattr(autoresearch, "_run_worker", mutate)
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:candidate", output=tmp_path / "run")
+    assert report["cases"]["zeros"]["decision"] == "keep"
+    assert report["cases"]["ones"]["decision"] == "inconclusive"
+    assert "changed" in report["cases"]["ones"]["reasons"][0]
+    assert report["decision"] == "inconclusive"
+
+
+@pytest.mark.parametrize(
+    "cases",
+    [{}, [], {"": {"args": []}}, {"sample": {}}, {"sample": {"seed": 1}}, {"sample": {"inputs": "a.pt", "args": []}}],
+)
+def test_invalid_case_manifests(tmp_path, cases):
+    path = workload(tmp_path)
+    contract = json.loads(path.read_text())
+    contract.pop("args")
+    path.write_text(json.dumps(contract | {"cases": cases}))
+    with pytest.raises(ValueError):
+        autoresearch.evaluate_model(path, output=tmp_path / "run")
+    assert not (tmp_path / "run").exists()
+
+
+def test_case_manifest_cannot_mix_top_level_inputs(tmp_path):
+    path = workload(tmp_path, cases={"sample": {"args": []}})
+    with pytest.raises(ValueError, match="top level"):
+        autoresearch.evaluate_model(path, output=tmp_path / "run")
+
+
+@pytest.mark.parametrize(
+    ("cases", "error"),
+    [
+        ('{"sample": {"args": []}, "sample": {"kwargs": {}}}', "Duplicate workload key: 'sample'"),
+        ('{"sample": {"args": [{"shape": [1, 4], "std": 1e999}]}}', "Workload numbers must be finite"),
+        ('{"sample": {"args": [{"shape": [1, 4], "std": NaN}]}}', "Workload numbers must be finite"),
+    ],
+)
+def test_manifest_rejects_ambiguous_or_nonfinite_json_before_running(tmp_path, cases, error):
+    path = tmp_path / "workload.json"
+    path.write_text('{"model": "torch.nn:Identity", "cases": ' + cases + "}")
+    output = tmp_path / "run"
+    with pytest.raises(ValueError, match=error):
+        autoresearch.evaluate_model(path, output=output)
+    assert not output.exists()
+
+
+def test_worker_rejects_new_model_source(tmp_path, monkeypatch):
+    path = workload(tmp_path, model="recipe_model:baseline")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    source = (tmp_path / "models.py").rename(tmp_path / "recipe_model.py")
+    request = {"experiment": str(path), "implementation": "recipe_model:baseline"}
+    inspected = model_worker({**request, "mode": "inspect"})
+    package = tmp_path / "recipe_model"
+    package.mkdir()
+    (package / "__init__.py").write_bytes(source.read_bytes())
+    monkeypatch.delitem(autoresearch.sys.modules, "recipe_model")
+    with pytest.raises(ValueError, match="Model source changed"):
+        model_worker(
+            request
+            | {
+                "mode": "measure",
+                "settings": inspected["settings"],
+                "sources": {request["implementation"]: inspected["sources"]},
+            }
+        )
+
+
+@pytest.mark.parametrize("multiple", [False, True])
+def test_cli_preserves_feedback_and_case_report_paths(tmp_path, monkeypatch, capsys, multiple):
+    feedback = {"after": {"latency_ms": 2, "peak_rss_mib": 3, "output_errors": {"/": {"max": 0.2}}}}
+    result = {"decision": "discard", "reasons": ["Failed check"], "output_error_policy": "enforced"}
+    if multiple:
+        result["cases"] = {
+            "sample": {
+                "decision": "discard",
+                "reasons": ["Failed check"],
+                "feedback": feedback,
+                "report": "case-1/report.json",
+            }
+        }
+    else:
+        result["feedback"] = feedback
+    evaluate = MagicMock(return_value=result)
+    monkeypatch.setattr(autoresearch, "evaluate_model", evaluate)
+    monkeypatch.setattr(autoresearch.sys, "argv", ["autoresearch", "cases.json", "--output", str(tmp_path)])
+    autoresearch.main()
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["decision"] == "discard"
+    assert summary["report"] == str(tmp_path / "report.json")
+    if multiple:
+        assert summary["cases"] == result["cases"]
+        assert "feedback" not in summary
+    else:
+        assert summary["feedback"] == feedback
+        assert "cases" not in summary

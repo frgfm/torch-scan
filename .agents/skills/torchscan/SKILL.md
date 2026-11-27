@@ -58,6 +58,8 @@ Use the smallest API that answers the request:
 
 For autoresearch, follow the [autoresearch recipe](../../../docs/docs/autoresearch.md). Prefer a JSON model/input
 contract. Preserve the contract, inputs and original baseline; edit the candidate model and keep it only on `keep`.
+Use a named `cases` object for several fixed inputs. Retain every case's feedback and report path, and promote
+only when all cases return `keep`.
 An initial `measured` result is feedback, not an optimization verdict.
 Optimize batch-one inference latency at fixed FP32 precision. Do not change the batch size, precision or quantize candidates.
 Large-batch training is a separate future workflow. First, warmed and post-measurement output checks must all pass;

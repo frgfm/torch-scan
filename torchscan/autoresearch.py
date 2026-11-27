@@ -15,7 +15,7 @@ import sys
 import tempfile
 import traceback
 from collections.abc import Mapping
-from math import isclose
+from math import isclose, isfinite
 from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
@@ -89,6 +89,22 @@ def _identities(paths: list[Path]) -> dict[str, str]:
 def _verify_files(identities: dict[str, str]) -> None:
     if _identities([Path(path) for path in identities]) != identities:
         raise ValueError("Experiment, implementation or declared dependency changed during evaluation.")
+
+
+def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Duplicate workload key: {key!r}.")
+        result[key] = value
+    return result
+
+
+def _finite_float(raw: str) -> float:
+    value = float(raw)
+    if not isfinite(value):
+        raise ValueError("Workload numbers must be finite.")
+    return value
 
 
 def _case_contracts(contract: dict[str, Any]) -> dict[str | None, dict[str, Any]]:
@@ -227,10 +243,27 @@ def evaluate_model(
     """
     experiment, destination = Path(workload).resolve(), Path(output).resolve()
     identities = _identities([experiment])
-    contract = json.loads(experiment.read_text(encoding="utf-8"))
+    contract = json.loads(
+        experiment.read_text(encoding="utf-8"),
+        object_pairs_hook=_unique_keys,
+        parse_float=_finite_float,
+        parse_constant=_finite_float,
+    )
     if not isinstance(contract, dict) or not isinstance(contract.get("model"), str):
         raise ValueError("The workload must name an existing model/factory.")
     contracts = _case_contracts(contract)
+    destination.mkdir(parents=True, exist_ok=False)
+    input_errors = {}
+    for name, case_contract in contracts.items():
+        if "inputs" in case_contract:
+            try:
+                if not isinstance(case_contract["inputs"], str):
+                    raise ValueError("inputs must name a saved inputs file.")
+                path = experiment.parent / case_contract["inputs"]
+                if str(path) not in identities:
+                    identities.update(_identities([path]))
+            except (OSError, ValueError) as error:
+                input_errors[name] = str(error)
     request = {
         "experiment": str(experiment),
         "identities": identities,
@@ -242,12 +275,12 @@ def evaluate_model(
     with tempfile.TemporaryDirectory(prefix="torchscan-imports-") as cache:
         request["bytecode_cache"] = cache
         if None in contracts:
-            return _evaluate_case(contracts[None], destination, request, None)
-        destination.mkdir(parents=True, exist_ok=False)
+            return _evaluate_case(contracts[None], destination, request, None, input_errors.get(None))
         cases = {}
         for index, (name, case_contract) in enumerate(contracts.items(), 1):
             case_output = destination / f"case-{index}"
-            result = _evaluate_case(case_contract, case_output, request, name)
+            case_output.mkdir()
+            result = _evaluate_case(case_contract, case_output, request, name, input_errors.get(name))
             result["report"] = str(case_output / "report.json")
             cases[name] = {key: result.get(key) for key in _SUMMARY_FIELDS}
     decisions = {case["decision"] for case in cases.values()}
@@ -270,12 +303,11 @@ def evaluate_model(
 
 
 def _evaluate_case(
-    contract: dict[str, Any], destination: Path, request: dict[str, Any], case: str | None
+    contract: dict[str, Any], destination: Path, request: dict[str, Any], case: str | None, input_error: str | None
 ) -> dict[str, Any]:
     baseline, candidate_model = request["baseline"], request["candidate"]
     identities = request["identities"]
     reference = destination / "reference.pt"
-    destination.mkdir(parents=True, exist_ok=False)
     report: dict[str, Any] = {
         "schema_version": 1,
         "decision": "inconclusive",
@@ -334,13 +366,21 @@ def _evaluate_case(
         return comparison
 
     try:
+        if input_error is not None:
+            raise ValueError(input_error)
         if "settings" not in request:
-            inspected = run("inspect", baseline, "inspect")
-            _verify_files(identities)
-            identities.update(
-                _identities([Path(path) for path in dict.fromkeys(inspected["files"]) if path not in identities])
+            sources = {}
+            implementations = dict.fromkeys(
+                ref for ref in (contract["model"], baseline, candidate_model) if ref is not None
             )
-            report["settings"] = request["settings"] = inspected["settings"]
+            for index, implementation in enumerate(implementations):
+                inspected = run("inspect", implementation, f"inspect-{index + 1}" if index else "inspect")
+                _verify_files(identities)
+                paths = dict.fromkeys([*inspected["files"], *inspected["sources"]])
+                identities.update(_identities([Path(path) for path in paths if path not in identities]))
+                sources[implementation] = inspected["sources"]
+                report["settings"] = inspected["settings"]
+            request.update(settings=report["settings"], sources=sources)
         if candidate_model is None:
             report["measurement"] = run("measure", baseline, "measurement")
             report["decision"] = "measured"

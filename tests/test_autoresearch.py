@@ -143,7 +143,9 @@ def test_fp32_input_contract(dtype):
 def test_seeded_float_distributions():
     shape = {"shape": [1, 32_768]}
     torch.manual_seed(42)
-    legacy = _tensor(shape, "cpu")
+    legacy = torch.randn(shape["shape"], dtype=torch.float32)
+    torch.manual_seed(42)
+    assert torch.equal(_tensor(shape, "cpu"), legacy)
     torch.manual_seed(42)
     assert torch.equal(_tensor(shape | {"distribution": "normal"}, "cpu"), legacy)
     normal = _tensor(shape | {"distribution": "normal", "mean": 2, "std": 0.5}, "cpu")
@@ -232,7 +234,7 @@ def test_confirmation_failure_overrides_tentative_keep(monkeypatch, tmp_path):
 
     def worker(request, artifact, _timeout):
         if request["mode"] == "inspect":
-            return {"settings": autoresearch._settings(json.loads(path.read_text())), "files": []}
+            return {"settings": autoresearch._settings(json.loads(path.read_text())), "files": [], "sources": []}
         if request["mode"] == "reference":
             Path(request["reference_outputs"]).write_bytes(b"reference")
             return {}
@@ -340,6 +342,35 @@ def test_case_probe_and_fixed_original_reference(tmp_path):
     for case in report["cases"].values():
         assert case["feedback"]["before"]["output_errors"]["/"]["max"] == pytest.approx(0.09)
         assert case["feedback"]["after"]["output_errors"]["/"]["max"] == pytest.approx(0.18)
+
+
+def test_missing_saved_input_does_not_hide_discard_in_other_case(tmp_path):
+    path = case_manifest(tmp_path, check={"absolute_error": {"max": 0}})
+    contract = json.loads(path.read_text())
+    contract["cases"]["zeros"] = {"inputs": "missing.pt"}
+    path.write_text(json.dumps(contract))
+    report = autoresearch.evaluate_model(path, candidate_model="models.py:selective", output=tmp_path / "run")
+    assert report["cases"]["zeros"]["decision"] == "inconclusive"
+    assert "missing.pt" in report["cases"]["zeros"]["reasons"][0]
+    assert report["cases"]["ones"]["decision"] == report["decision"] == "discard"
+
+
+def test_model_inspection_keeps_sibling_imports_isolated(tmp_path):
+    for directory, module in (("original", "Identity"), ("candidate", "ReLU")):
+        model_dir = tmp_path / directory
+        model_dir.mkdir()
+        (model_dir / "model.py").write_text("from layers import factory\n")
+        (model_dir / "layers.py").write_text(f"import torch\ndef factory(): return torch.nn.{module}()\n")
+    path = workload(
+        tmp_path,
+        model="original/model.py:factory",
+        args=[{"shape": [1, 4], "fill": -1}],
+        check={"absolute_error": {"max": 0}},
+    )
+    report = autoresearch.evaluate_model(path, candidate_model="candidate/model.py:factory", output=tmp_path / "run")
+    assert report["decision"] == "discard", report["reasons"]
+    assert report["feedback"]["after"]["output_errors"]["/"]["max"] == 1
+    assert all(str(tmp_path / name / "layers.py") in report["identities"] for name in ("original", "candidate"))
 
 
 @pytest.fixture
@@ -463,11 +494,28 @@ def test_case_manifest_cannot_mix_top_level_inputs(tmp_path):
         autoresearch.evaluate_model(path, output=tmp_path / "run")
 
 
+@pytest.mark.parametrize(
+    ("cases", "error"),
+    [
+        ('{"sample": {"args": []}, "sample": {"kwargs": {}}}', "Duplicate workload key: 'sample'"),
+        ('{"sample": {"args": [{"shape": [1, 4], "std": 1e999}]}}', "Workload numbers must be finite"),
+        ('{"sample": {"args": [{"shape": [1, 4], "std": NaN}]}}', "Workload numbers must be finite"),
+    ],
+)
+def test_manifest_rejects_ambiguous_or_nonfinite_json_before_running(tmp_path, cases, error):
+    path = tmp_path / "workload.json"
+    path.write_text('{"model": "torch.nn:Identity", "cases": ' + cases + "}")
+    output = tmp_path / "run"
+    with pytest.raises(ValueError, match=error):
+        autoresearch.evaluate_model(path, output=output)
+    assert not output.exists()
+
+
 def test_worker_rejects_new_model_source(tmp_path, monkeypatch):
     path = workload(tmp_path, model="recipe_model:baseline")
     monkeypatch.syspath_prepend(str(tmp_path))
     source = (tmp_path / "models.py").rename(tmp_path / "recipe_model.py")
-    request = {"experiment": str(path), "baseline": "recipe_model:baseline", "candidate": None}
+    request = {"experiment": str(path), "implementation": "recipe_model:baseline"}
     inspected = model_worker({**request, "mode": "inspect"})
     package = tmp_path / "recipe_model"
     package.mkdir()
@@ -478,9 +526,8 @@ def test_worker_rejects_new_model_source(tmp_path, monkeypatch):
             request
             | {
                 "mode": "measure",
-                "implementation": request["baseline"],
                 "settings": inspected["settings"],
-                "identities": autoresearch._identities([Path(file) for file in inspected["files"]]),
+                "sources": {request["implementation"]: inspected["sources"]},
             }
         )
 

@@ -33,9 +33,9 @@ Descriptors accept `shape` and `dtype` (float32 by default, or int64, int32 or b
 | Uniform FP32 samples | `"distribution": "uniform"`, optional `low` (default 0) and `high` (default 1), with `low < high` |
 | Uniform integer samples | `"dtype": "int64"` or `"int32"`, with integer `low` (inclusive) and `high` (exclusive) |
 
-Float descriptors without recipe fields use the standard normal distribution. Random recipes use the contract seed
-and regenerate the same inputs for each implementation on the same device. Identical recipes with the same seed
-generate identical tensors when they are the only input in their case.
+Float descriptors without recipe fields use the standard normal distribution. Each case resets the contract seed,
+then draws its random inputs in order. An implementation receives the same draws as its comparison partner on the
+same device. Repeating a recipe at the same position in two otherwise identical cases repeats the sample.
 Nested containers and scalar arguments are supported. Supply batch size one on your model's batch axis;
 TorchScan does not infer axes. Saved tensors retain their data and are never interpreted as descriptors.
 
@@ -65,10 +65,12 @@ to exercise behavior that depends on image content, such as a detector's output 
 Run this manifest with the same Python API or CLI command. Each case accepts only `args`/`kwargs` descriptors or
 one saved `inputs` file. Paths remain relative to the manifest. The original model, checkpoint, FP32 execution,
 seed, threads, numerical limits and timing/memory settings are shared. Supply batch size one in every case.
-The manifest must contain at least one case; cases cannot override models, settings or checks.
+The manifest must contain at least one case. Use unique JSON keys and finite numbers. Cases cannot override models,
+settings or checks.
 
-Every case runs independently in fresh workers, including cases after a rejection. Each compares against its own
-fixed outputs from the original model, even with `--baseline-model`. Any `discard` discards the set. Otherwise any
+Every case runs independently in fresh workers, including cases after a rejection. A saved input that is missing or
+unreadable at setup marks only its case inconclusive. Each comparison uses its own fixed outputs from the original
+model, even with `--baseline-model`. Any `discard` discards the set. Otherwise any
 `inconclusive` keeps the set inconclusive. Only all `keep` results produce `keep`; probes return `measured` only
 when every case is measured. Gains on one case never offset a loss on another. An unchecked memory ceiling in any
 case prevents acceptance. Without numerical ceilings, all cases retain report-only fidelity semantics.
@@ -80,7 +82,8 @@ Latency, scoped memory and errors remain separate for each case; unavailable or 
 Initial output failures stop that case before timing, as in single-case evaluation. CLI output includes per-case
 decisions, feedback and report paths. Single-case contracts and their report layout remain supported.
 
-One shared identity set covers the manifest, model sources, checkpoint, every case's saved inputs, declared `files`
+TorchScan inspects each distinct model reference in a separate worker and reuses the result across cases.
+One shared identity set covers the manifest, model sources, checkpoint, readable saved inputs, declared `files`
 and generated reference outputs. Files are checked between workers and cases; changed files cannot be rehashed
 as a fresh experiment halfway through the set. Preserve these identities across attempts, except for the edited
 candidate source. Caller paths are hashed too, so retargeting a symlink to changed content invalidates the run.

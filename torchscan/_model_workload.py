@@ -183,31 +183,22 @@ def model_worker(request: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Output tolerances must be finite nonnegative numbers.")
     if request["mode"] != "inspect" and settings != request["settings"]:
         raise ValueError("Model workload settings changed between workers.")
-    declared_files = contract.get("files", [])
     torch.set_num_threads(threads)
     torch.set_default_dtype(torch.float32)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.manual_seed(seed)
+    factory, model_sources = _factory(request["implementation"], path.parent)
+    sources = [str(source) for source in model_sources]
     if request["mode"] == "inspect":
+        declared_files = contract.get("files", [])
         if not isinstance(declared_files, list) or any(not isinstance(item, str) for item in declared_files):
             raise ValueError("files must be a list of dependency paths.")
         files = [str((path.parent / item).absolute()) for item in declared_files]
         if "checkpoint" in contract:
             files.append(str((path.parent / contract["checkpoint"]).absolute()))
-        files.extend(
-            str((path.parent / entry["inputs"]).absolute())
-            for entry in (cases.values() if cases is not None else (contract,))
-            if "inputs" in entry
-        )
-        for reference in dict.fromkeys((contract["model"], request["baseline"], request["candidate"])):
-            if reference is None:
-                continue
-            _, model_sources = _factory(reference, path.parent)
-            files.extend(str(source) for source in model_sources)
-        return {"settings": settings, "files": files}
-    factory, sources = _factory(request["implementation"], path.parent)
-    if any(str(source) not in request["identities"] for source in sources):
+        return {"settings": settings, "files": files, "sources": sources}
+    if sources != request["sources"][request["implementation"]]:
         raise ValueError("Model source changed after inspection.")
     model_kwargs = contract.get("model_kwargs", {})
     if not isinstance(model_kwargs, dict):
